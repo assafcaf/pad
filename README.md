@@ -92,3 +92,11 @@ watch and interrupt, instead of in-process subagents you cannot. Neither needs t
 
 MIT — see [LICENSE](LICENSE). Third-party attribution is in [NOTICE](NOTICE), with upstream's
 licence at [vendor/mattpocock-skills/LICENSE](vendor/mattpocock-skills/LICENSE).
+
+### A Windows note
+
+Git Bash rewrites POSIX-looking arguments into Windows paths before a native program sees them,
+so `--vault /home/me/vault` reaches `node` already mangled to `C:/Program Files/Git/home/me/vault`.
+The launchers stop the second conversion, but not that first one — it happens before they run.
+From Git Bash, either pass a Windows-style path (`--vault D:/vaults/work`) or prefix the command
+with `MSYS_NO_PATHCONV=1`. From PowerShell, cmd, macOS or Linux there is nothing to do.

@@ -63,7 +63,13 @@ def main() -> int:
 
     try:
         # stdio is inherited, which is what keeps the --wire prompt interactive.
-        return subprocess.call([_find_bash(), str(script), *sys.argv[1:]])
+        env = dict(os.environ)
+        if sys.platform == "win32":
+            # Git Bash rewrites POSIX-looking arguments into Windows paths before the script
+            # sees them: `--vault /home/me/vault` arrives as `C:/Program Files/Git/home/...`.
+            env["MSYS_NO_PATHCONV"] = "1"
+            env["MSYS2_ARG_CONV_EXCL"] = "*"
+        return subprocess.call([_find_bash(), str(script), *sys.argv[1:]], env=env)
     except OSError as exc:
         print(f"dispatch-skills: {exc}", file=sys.stderr)
         return 1

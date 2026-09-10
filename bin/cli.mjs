@@ -44,7 +44,17 @@ function findBash() {
   return "bash";
 }
 
+// Git Bash rewrites arguments that look like POSIX paths into Windows ones before the script
+// sees them: `--vault /home/me/vault` arrives as `C:/Program Files/Git/home/me/vault`. These
+// are values, not paths this process opens, so the conversion is never wanted.
+const env = { ...process.env };
+if (process.platform === "win32") {
+  env.MSYS_NO_PATHCONV = "1";     // Git for Windows
+  env.MSYS2_ARG_CONV_EXCL = "*";  // MSYS2
+}
+
 const result = spawnSync(findBash(), [script, ...process.argv.slice(2)], {
+  env,
   stdio: "inherit",   // keeps the --wire prompt interactive
   cwd: process.cwd(), // so `--project` with no argument means the caller's directory
 });
