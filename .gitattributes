@@ -1,0 +1,13 @@
+# These scripts are authored on Windows but run on any machine this setup lands on. A bash
+# script checked out with CRLF fails on Linux and macOS with `\r: command not found`, so the
+# line endings are pinned rather than left to core.autocrlf.
+*.sh    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+
+# PowerShell stays CRLF; it is Windows-only anyway.
+*.ps1   text eol=crlf
+*.mjs   text eol=lf
+*.js    text eol=lf
+*.py    text eol=lf

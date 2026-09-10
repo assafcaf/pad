@@ -1,0 +1,47 @@
+dispatch-skills
+Copyright (c) 2026 assafcaf
+Licensed under the MIT License — see LICENSE.
+
+================================================================================
+Third-party material
+================================================================================
+
+Four of the skills distributed here come from Matt Pocock's skill collection:
+
+    mattpocock/skills — "Skills for Real Engineers"
+    https://github.com/mattpocock/skills
+    Copyright (c) 2026 Matt Pocock
+    MIT License — full text in vendor/mattpocock-skills/LICENSE
+
+They are included because the two dispatch skills depend on them directly, and a
+dispatch run that cannot find them stops partway through:
+
+    payload/claude/skills/review-standards-spec/     MODIFIED — renamed, see below
+    payload/claude/skills/implement/                 MODIFIED — one reference retargeted
+    payload/claude/skills/tdd/                       MODIFIED — one reference retargeted
+    payload/claude/skills/resolving-merge-conflicts/ unmodified
+
+--------------------------------------------------------------------------------
+Modifications
+--------------------------------------------------------------------------------
+
+`review-standards-spec` is upstream's `code-review` skill, renamed.
+
+Claude Code ships a built-in `/code-review` — the one that takes `ultra`, `--fix`,
+`--comment` and a PR number. Installing upstream's skill under its own name shadows
+that built-in, replacing a documented workflow with a different tool that answers a
+different question. Renaming keeps both reachable: the built-in hunts correctness
+bugs in a diff; this one checks a diff against a repo's documented standards and
+against the ticket it came from.
+
+The rename touches three things — the skill's directory, its frontmatter `name`,
+and every sibling that calls it. `implement` and `tdd` are modified for that reason
+alone: one reference each, retargeted from `code-review` to `review-standards-spec`.
+Their substance is upstream's, unchanged.
+
+Upstream also ships `ask-matt`, which calls `code-review` and would need the same
+edit. It is not a dispatch dependency and is not redistributed here.
+
+If you want the upstream skills unmodified, take them from the source above. This
+repository does not attempt to track it: no upstream commit is pinned, and the
+copies here will drift as Matt changes his.

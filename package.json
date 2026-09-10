@@ -1,0 +1,39 @@
+{
+  "name": "dispatch-skills",
+  "version": "0.1.0",
+  "description": "Dispatch a batch of related work across many Claude Code agents, with evidence instead of opinions",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "dispatch-skills": "bin/cli.mjs"
+  },
+  "files": [
+    "bin/",
+    "payload/",
+    "install.sh",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "vendor/"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "win32",
+    "linux",
+    "darwin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/assafcaf/dispatch-skills.git"
+  },
+  "keywords": [
+    "claude-code",
+    "skills",
+    "dispatch",
+    "agents",
+    "tdd"
+  ],
+  "private": false
+}
