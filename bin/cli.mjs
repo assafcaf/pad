@@ -45,7 +45,7 @@ function findBash() {
 }
 
 // Git Bash rewrites arguments that look like POSIX paths into Windows ones before the script
-// sees them: `--vault /home/me/vault` arrives as `C:/Program Files/Git/home/me/vault`. These
+// sees them: `--project /home/me/app` arrives as `C:/Program Files/Git/home/me/app`. These
 // are values, not paths this process opens, so the conversion is never wanted.
 const env = { ...process.env };
 if (process.platform === "win32") {

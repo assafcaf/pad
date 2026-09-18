@@ -1,0 +1,28 @@
+# Tracker adapter: local files
+
+For repos without a tracker, or for work you don't want in one. Tickets are Markdown files
+under `.work/tickets/` (gitignored), so they stay on this machine.
+
+- **Epic:** `.work/tickets/<EPIC>/epic.md`. `<EPIC>` is `E<n>`, the next unused number.
+- **Task:** `.work/tickets/<EPIC>/<EPIC>-T<n>.md`. Key `<EPIC>-T<n>`.
+- **Every file starts with frontmatter,** followed by the ticket body:
+
+  ```yaml
+  ---
+  key: E3-T2
+  title: <summary>
+  status: todo        # todo | doing | review | done
+  blocked_by: [E3-T1]
+  labels: [agent-planned]
+  ---
+  ```
+
+| Operation | How |
+|---|---|
+| Read one | read the file |
+| List an epic's tasks | glob `.work/tickets/<EPIC>/<EPIC>-T*.md` |
+| Create | write the file |
+| Blocked-by edge | `blocked_by` in frontmatter |
+| Update a ticket | rewrite the body below the frontmatter |
+| Move status | edit `status` |
+| Comment | append under a `## Log` heading: `- <yyyy-mm-dd>: <comment>` |

@@ -1,18 +1,47 @@
 # dispatch-skills
 
-Two Claude Code skills for running a batch of related work across many agents, plus the four
-skills they depend on and the checks they rely on.
+A Claude Code workflow that takes an idea to merged, tested code: a spec of testable outcomes,
+tickets in your tracker, then parallel implementation where every task's tests are written
+first, proven to fail, and made to pass by a different agent that cannot edit them. The tracker
+is updated as agents work, so progress is visible there.
 
-| Skill | What it is |
-|---|---|
-| `/dispatch` | A manager holds a task graph, spawns a task agent per task, and rules on what reaches it. Each agent gets its own worktree; the manager writes no code. |
-| `/evidence-dispatch` | The same shape, with every acceptance criterion an **executable probe, proven red before the work and green after**. A reviewer is replaced by a falsifier that must ship a failing command; a task whose diff touches no executable file skips review entirely. |
+```
+/setup-workflow          →  config + tracker agent     once per machine: connection, metadata, status line
+/spec [grill] <idea>     →  .work/specs/…md            outcomes: Given/When/Then, each testable
+/tickets <spec>          →  epic + tasks in tracker    outcome-sliced, blocking edges, waves
+/batch-implement <epic>  →  epic branch + draft PR     tests designed, then code, in parallel
+```
 
-Both are user-invoked only (`disable-model-invocation`), so nothing starts a run on its own.
+Every skill is user-invoked only (`disable-model-invocation`), so nothing starts on its own.
 
-Evidence-dispatch came out of measuring a real dispatch run: 37% of ticket wall-clock went to
-review and rework, and reviewers withdrew 21 of their own 25 findings. Its bet is that a probe
-that can be run beats a reviewer's opinion that cannot.
+> **Status: new, and not yet run end to end.** Each gate script is behavior-tested and the
+> installer is tested per tracker, but no epic has yet gone all the way through
+> `/batch-implement`. Try it on a small epic first. What is unverified is listed
+> [below](#not-yet-verified).
+
+## How a run works
+
+`/batch-implement` orchestrates four agents and writes no product code itself:
+
+| Agent | Tools | Does |
+|---|---|---|
+| `tracker` | the tracker's only | Every ticket read and write. Moves tasks To Do → In Progress → Done, with an evidence comment at each step |
+| `task-planner` | read-only | Before wave 1: waves, file conflicts, interface mismatches, gaps |
+| `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red |
+| `code-writer` | its own worktree | Cherry-picks that red commit, makes the tests pass, cannot change them |
+
+Each wave of unblocked tasks runs in parallel. A task merges into the epic branch only when:
+
+- `verify-red.sh` shows its tests failing at the test-only commit, on an assertion rather than
+  an import error;
+- the code-writer's commits changed no test file, and `weakened-tests.sh` finds no added skip,
+  xfail or TODO and no deleted test;
+- the full suite and lint pass on the epic branch after the merge.
+
+There is no per-task code review. The tests are the contract, which is why they are written by
+a different agent from the one satisfying them, and proven to fail before any code exists.
+Outcomes that need a shared resource (a GPU machine, a device) run one task at a time, after
+merge.
 
 ## Install
 
@@ -23,80 +52,89 @@ npx github:assafcaf/dispatch-skills
 uvx --from git+https://github.com/assafcaf/dispatch-skills dispatch-skills
 ```
 
-It installs the skills, the checks, and then **asks where your issues live** — because these
-skills file work as issues and cite them in every ruling, and they cannot guess that.
+It installs the skills and agents, then asks where your tickets live:
 
 ```
 1) Jira            — via the atlassian MCP server        [default]
 2) GitHub Issues   — via the gh CLI
-3) Obsidian vault  — markdown notes, one file per issue
-4) something else  — writes a skeleton for you to fill in
+3) local files     — markdown under .work/tickets/, not committed
 ```
 
-Then a key prefix, and whatever that tracker needs (Jira site and cloud id; `owner/repo`,
-defaulted from `gh`; the vault path). Every question has a flag, so an unattended install
-answers them up front:
+Every question has a flag, so an unattended install answers them up front:
 
 ```bash
-npx github:assafcaf/dispatch-skills --tracker github --key ENG --gh-repo acme/widgets
-npx github:assafcaf/dispatch-skills --tracker obsidian --key NOTE --vault /home/me/vault
-npx github:assafcaf/dispatch-skills --no-config          # skills only
+npx github:assafcaf/dispatch-skills --tracker jira --key ENG --jira-site acme
+npx github:assafcaf/dispatch-skills --tracker github --gh-repo acme/widgets
+npx github:assafcaf/dispatch-skills --tracker local
 ```
 
 `--dry-run` shows every action without taking one. Re-running is safe: identical files are
-skipped, and **existing `docs/agents/*.md` are never overwritten** — they are yours once
-written. Delete one to have it regenerated.
+skipped, and files that are yours once written are never overwritten.
+
+Then restart Claude Code and run **`/setup-workflow`**. It checks the tracker connection,
+discovers what the installer can't (statuses, transition ids, how tasks attach to epics), runs
+the config's commands, installs the status line, and offers a short section for your
+`CLAUDE.md`.
 
 ## What lands where
 
 ```
-.claude/skills/dispatch/              SKILL.md + 5 role prompts
-.claude/skills/evidence-dispatch/     SKILL.md + 4 role prompts
-.claude/skills/implement/             \
-.claude/skills/tdd/                    |  the four these depend on
-.claude/skills/review-standards-spec/  |  (see NOTICE — Matt Pocock, MIT)
-.claude/skills/resolving-merge-conflicts/ /
-scripts/checks/                       run-checks.sh + 7 checks the runs enforce
-scripts/jira-attach.sh                Jira only
-docs/agents/dispatch.md               \  the configuration. Generated from your
-docs/agents/evidence-dispatch.md       |  answers, then yours to edit — these are
-docs/agents/issue-tracker.md          /   read by every agent in a run.
+.claude/skills/{spec,tickets,batch-implement,setup-workflow}/
+.claude/agents/{tracker,task-planner,test-designer,code-writer}.md
+.claude/workflow/config.md              ← yours: tracker, commands, paths, models, resources
+.claude/workflow/definition-of-done.md
+.claude/workflow/ticket-template.md
+.claude/workflow/testing.md             how outcome tests are written
+.claude/workflow/trackers/{jira,github,local}.md
+.claude/workflow/bin/{verify-red,weakened-tests}.sh
+.claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
+.claude/statusline.py                   model, branch, context, cost, live run progress
+.claude/settings.json                   ← yours: worktree.baseRef + permissions (never overwritten)
+docs/decisions/README.md                ← yours: the committed development record
+.gitignore                              + .work/ .claude/worktrees/ CLAUDE.local.md .claude/settings.local.json
 ```
 
-`docs/agents/*.md` is configuration, not documentation. A wrong one sends every agent in a run
-down the wrong path, so read them before the first run.
+`.claude/workflow/config.md` is configuration, not documentation. Its **Commands** section is
+what every gate runs; the defaults assume Python with pytest, so make it true of your repo.
 
-## Dependencies, and why they ship with it
+Working specs, plans and run logs live in gitignored `.work/`. Decisions a future reader would
+otherwise reverse-engineer go in `docs/decisions/`. Facts true of one machine go in a
+gitignored `CLAUDE.local.md`, which `/setup-workflow` writes.
 
-```
-dispatch ──┬─ implement ──┬─ review-standards-spec
-           │              └─ tdd
-           ├─ review-standards-spec         worker-prompt.md
-           └─ resolving-merge-conflicts     integrator-prompt.md
+## Settings it needs
 
-evidence-dispatch ── tdd                    planner + worker prompts
-```
+`worktree.baseRef: head` is required. Without it, implementer worktrees branch from your
+default branch instead of the epic branch and miss every earlier task. The shipped
+`settings.json` also allows the git commands a run uses unattended, and denies branch
+switching, stash, `reset --hard`, force-push and pushes to `main`/`master`. If you already have
+a settings file, the installer leaves it alone and `/setup-workflow` merges these in with your
+approval.
 
-Those four are Matt Pocock's, MIT, and three carry a local modification — see
-[NOTICE](NOTICE), which names each one and says exactly what was changed and why. Shipping
-them together is deliberate: a dispatch run that reaches `implement/SKILL.md` and finds nothing
-stops halfway through a task graph, having already made branches.
+## Not yet verified
 
-## Works with, but does not require
+- An epic run end to end through `/batch-implement`.
+- That an isolated subagent's worktree branches from the orchestrating session's worktree HEAD
+  (the Claude Code docs say it does; untested here).
+- That the `tracker` subagent can use the parent session's MCP tools (the docs say `tools:`
+  accepts `mcp__<server>`; if not, `tracker` reports it and a run stops rather than letting
+  the tracker drift from the code).
+- The GitHub and local adapters.
 
-[herdr-claude-setup](https://github.com/assafcaf/herdr-claude-setup) makes delegated agents run
-as visible terminal panes. Install both and a dispatch run's task agents become panes you can
-watch and interrupt, instead of in-process subagents you cannot. Neither needs the other.
+## Upgrading from 0.1
+
+0.1 shipped `/dispatch`, `/evidence-dispatch` and four of Matt Pocock's skills, configured
+through `docs/agents/*.md`. 0.2 replaces them. The installer does not remove the old files:
+delete `.claude/skills/{dispatch,evidence-dispatch,implement,tdd,review-standards-spec,resolving-merge-conflicts}/`,
+`scripts/checks/` and `docs/agents/` if nothing else uses them. 0.1 is still installable from
+its last commit: `npx github:assafcaf/dispatch-skills#ccdd421`.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Third-party attribution is in [NOTICE](NOTICE), with upstream's
-licence at [vendor/mattpocock-skills/LICENSE](vendor/mattpocock-skills/LICENSE).
+MIT — see [LICENSE](LICENSE). Third-party attribution is in [NOTICE](NOTICE).
 
 ### A Windows note
 
 Git Bash rewrites POSIX-looking arguments into Windows paths before a native program sees them,
-so `--vault /home/me/vault` reaches `node` already mangled to `C:/Program Files/Git/home/me/vault`.
-The launchers stop the second conversion, but not that first one — it happens before they run.
-From Git Bash, either pass a Windows-style path (`--vault D:/vaults/work`) or prefix the command
-with `MSYS_NO_PATHCONV=1`. From PowerShell, cmd, macOS or Linux there is nothing to do.
+so `--project /home/me/app` reaches `node` already mangled. From Git Bash, pass a Windows-style
+path (`--project D:/code/app`) or prefix the command with `MSYS_NO_PATHCONV=1`. From
+PowerShell, cmd, macOS or Linux there is nothing to do.
