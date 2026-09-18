@@ -1,7 +1,7 @@
 {
   "name": "dispatch-skills",
-  "version": "0.1.0",
-  "description": "Dispatch a batch of related work across many Claude Code agents, with evidence instead of opinions",
+  "version": "0.2.0",
+  "description": "Spec, tickets and parallel test-first implementation for Claude Code, with the issue tracker kept current as agents work",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -31,9 +31,9 @@
   "keywords": [
     "claude-code",
     "skills",
-    "dispatch",
+    "tdd",
     "agents",
-    "tdd"
+    "workflow"
   ],
   "private": false
 }

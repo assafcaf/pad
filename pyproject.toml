@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dispatch-skills"
-version = "0.1.0"
-description = "Dispatch a batch of related work across many Claude Code agents, with evidence instead of opinions"
+version = "0.2.0"
+description = "Spec, tickets and parallel test-first implementation for Claude Code, with the issue tracker kept current as agents work"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
