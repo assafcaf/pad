@@ -118,7 +118,16 @@ requeues the same way.
    Comment on failed and blocked tasks too, saying what happened and what is needed.
 3. Append to the run log: `<KEY>: done (red <sha7>, merge <sha7>)`, or `failed` / `blocked`
    with the reason, plus each report's `INTERFACES` line.
-4. Remove each task's worktrees (`git worktree remove`) and branches (`git branch -d`).
+4. Refresh the progress snapshot, unless the adapter is `local` — there the status line reads
+   the ticket files directly and a snapshot would only go stale. Overwrite
+   `.work/progress.json` in the **main checkout**, not this worktree
+   (`git rev-parse --git-common-dir`, then its parent), with the epic's standing counts on one
+   line: `{"epic":"<epic key>","done":<n>,"total":<n>,"doing":["<task key>"],"updated":"<ISO-8601 UTC>"}`.
+   `total` is the epic's task count, `done` and `doing` the tasks in those configured statuses;
+   the status line prints `epic` and `doing` verbatim, so use the tracker's own keys. A
+   snapshot older than six hours is shown as stale, so never carry an old `updated` forward.
+   Nothing else reads this file — if the write fails, note it and carry on.
+5. Remove each task's worktrees (`git worktree remove`) and branches (`git branch -d`).
 
 ## 4. Finish the epic
 

@@ -56,6 +56,7 @@ So progress is visible without reading the terminal:
 | Working specs | `.work/specs/<yyyy-mm-dd>-<slug>.md` | no |
 | Plans (task bodies + tracker keys) | `.work/plans/<slug>.md` | no |
 | Run logs for `/batch-implement` | `.work/runs/<run-id>/progress.md` | no |
+| Progress snapshot for the status line | `.work/progress.json` | no |
 | Development record | `docs/decisions/NNNN-<slug>.md` | yes |
 | Promoted specs | `docs/specs/<slug>.md` | yes, only when the operator says so |
 
