@@ -152,7 +152,7 @@ section for your `CLAUDE.md`.
 .claude/workflow/trackers/{jira,github,local}.md
 .claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths}.sh
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
-.claude/statusline.py                   model, branch, context, cost, live run progress
+.claude/statusline.py                   model, branch, context, cost, run and epic progress
 .claude/settings.json                   ← yours: worktree.baseRef + permissions (never overwritten)
 docs/decisions/README.md                ← yours: the committed development record
 CONTEXT.md                              ← yours: the glossary, if the layer is on
