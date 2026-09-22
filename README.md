@@ -67,8 +67,25 @@ tools, so every skill and every other agent goes through it and the ledger has a
 It refuses to create a duplicate epic or task, which is what lets a half-finished run be
 re-run rather than unpicked.
 
-**3. Tickets → tested, merged code.** `/batch-implement <epic key>` orchestrates four agents
-and writes no product code itself:
+**3. Tickets → tested, merged code.** `/batch-implement <epic key>` creates the epic branch and
+works the waves. `task-planner` goes first, and its gaps can send you back to `/tickets`. Then
+you confirm once — the waves, the epic branch, and that it will push that branch and move
+tickets as tasks land — and after that it does not pause between tasks or waves. It stops only
+for an irreversible or security-sensitive action, a change to shared state outside the epic
+branch, a baseline that is already red, every remaining task being blocked, or the ledger
+failing. Anything the tickets left unsettled it decides and logs as
+`Ruling: <decision> — <why> — <cost if wrong>`. The agents it runs and the gates every task
+must pass are [below](#how-a-run-works).
+
+**4. What you get back.** The epic branch pushed, and a draft PR whose body carries the task
+table, every ruling, anything failed or blocked, and what was not verified. The ledger updated
+task by task as the run went, with the PR URL commented on the epic. An Outcome section
+appended to the epic's `docs/decisions/` entry: what was built, where it departed from the
+spec, and why.
+
+## How a run works
+
+`/batch-implement` orchestrates four agents and writes no product code itself:
 
 | Agent | Tools | Does |
 |---|---|---|
@@ -76,13 +93,6 @@ and writes no product code itself:
 | `task-planner` | read-only | Before wave 1: waves, file conflicts, interface mismatches, gaps |
 | `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red |
 | `code-writer` | its own worktree | Cherry-picks that red commit, makes the tests pass, cannot change them |
-
-`task-planner` goes first, and its gaps can send you back to `/tickets`. Then you confirm once
-— the waves, the epic branch, that it will push that branch and move tickets as tasks land —
-and after that it does not pause between tasks or waves. It stops only for an irreversible or
-security-sensitive action, a change to shared state outside the epic branch, a baseline that is
-already red, every remaining task being blocked, or the ledger failing. Anything the tickets
-left unsettled it decides and logs as `Ruling: <decision> — <why> — <cost if wrong>`.
 
 Each wave of unblocked tasks runs in parallel. A task merges into the epic branch only when:
 
@@ -96,12 +106,6 @@ There is no per-task code review. The tests are the contract, which is why they 
 a different agent from the one satisfying them, and proven to fail before any code exists.
 Outcomes that need a shared resource (a GPU machine, a device) run one task at a time, after
 merge.
-
-**4. What you get back.** The epic branch pushed, and a draft PR whose body carries the task
-table, every ruling, anything failed or blocked, and what was not verified. The ledger updated
-task by task as the run went, with the PR URL commented on the epic. An Outcome section
-appended to the epic's `docs/decisions/` entry: what was built, where it departed from the
-spec, and why.
 
 ## Install
 
@@ -218,14 +222,6 @@ approval.
 - The GitHub and local adapters.
 - `/knowledge-layer` end to end on a real repo. Its gate script is exercised against
   passing, missing-path, over-ceiling and mode-off cases; the scan-and-grill flow is not.
-
-## Upgrading from 0.1
-
-0.1 shipped `/dispatch`, `/evidence-dispatch` and four of Matt Pocock's skills, configured
-through `docs/agents/*.md`. 0.2 replaces them. The installer does not remove the old files:
-delete `.claude/skills/{dispatch,evidence-dispatch,implement,tdd,review-standards-spec,resolving-merge-conflicts}/`,
-`scripts/checks/` and `docs/agents/` if nothing else uses them. 0.1 is still installable from
-its last commit: `npx github:assafcaf/dispatch-skills#ccdd421`.
 
 ## Licence
 
