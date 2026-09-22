@@ -18,6 +18,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from itertools import islice
 from pathlib import Path
@@ -26,6 +27,9 @@ BAR = "▁▂▃▄▅▆▇█"
 
 # How old a progress snapshot may be before the status line stops presenting it as live.
 SNAPSHOT_STALE_HOURS = 6
+
+# How much of a session transcript to read when looking for the worktrees it has been in.
+TAIL_BYTES = 262144
 
 
 def get(d: object, *path: str, default: object = None) -> object:
@@ -114,61 +118,134 @@ def ticket_status(ticket: Path) -> str:
     return ""
 
 
+def worktree_name(path: str) -> str:
+    """The `<name>` in `.../.claude/worktrees/<name>/...`, or "" for a path elsewhere.
+
+    Separators are normalised through chr(92) rather than a regex class, which is where the
+    Windows-path bugs live; doubled separators from JSON-escaped paths drop out as empty parts.
+    """
+    parts = [part for part in path.replace(chr(92), "/").split("/") if part]
+    for index in range(len(parts) - 1, 1, -1):
+        if parts[index - 1] == "worktrees" and parts[index - 2] == ".claude":
+            return parts[index]
+    return ""
+
+
 def owns(key: str, names: list[str]) -> bool:
     """True when one of the session's names is this epic key, or `<key>-<slug>`."""
     return any(name == key or name.startswith(key + "-") for name in names)
 
 
-def session_names(payload: dict, cwd: Path, head: str) -> list[str]:
-    """What epic this session could be on: its worktree, its branch, its place in the tree.
+def add_name(names: list[str], candidate: object) -> None:
+    """Append a candidate epic name, without `epic/` and without duplicates."""
+    text = str(candidate or "")
+    if text.startswith("epic/"):
+        text = text[len("epic/"):]
+    if text and text not in names:
+        names.append(text)
 
-    Every session in a repo reads the same ledger, so an unscoped segment reports the same epic
-    in every pane and says nothing about the pane. A session that is not on an epic has no names
-    here, and then the segment is silent and reads no files at all.
+
+def session_names(payload: dict, cwd: Path, head: str) -> list[str]:
+    """What epic this session could be on, from what it costs nothing to know.
+
+    Its place in the tree and its branch. Both are immediate when the session moves, and both
+    are momentary: an orchestrator hops between the epic worktree, the repo root and its agents'
+    worktrees, which is what the pin and the transcript below are for.
     """
-    names = []
-    for candidate in (
-        get(payload, "worktree", "name"),
-        get(payload, "workspace", "git_worktree"),
-        head,
-    ):
-        text = str(candidate or "")
-        if text:
-            names.append(text[len("epic/"):] if text.startswith("epic/") else text)
-    parts = cwd.parts
-    for index in range(len(parts) - 2):
-        if parts[index] == ".claude" and parts[index + 1] == "worktrees":
-            names.append(parts[index + 2])
+    names: list[str] = []
+    add_name(names, worktree_name(str(cwd)))
+    add_name(names, head)
+    add_name(names, get(payload, "worktree", "name"))
+    add_name(names, get(payload, "workspace", "git_worktree"))
     return names
 
 
-def from_tickets(tickets: Path, names: list[str]) -> str:
-    """`E2 5/7 ▶T6` counted straight from this session's epic, under the `local` adapter.
+def transcript_names(transcript: str) -> list[str]:
+    """Worktrees this session's own cwd has been in, most recent first.
 
-    A finished epic still counts here: in its own worktree `E2 7/7` is the news, not noise.
+    Only the harness-written `"cwd"` fields count. Matching free text instead would claim any
+    worktree the session merely mentioned — a session that talked about `worktrees/E2` is not a
+    session working on E2.
+    """
+    try:
+        with open(transcript, "rb") as handle:
+            handle.seek(0, 2)
+            start = max(0, handle.tell() - TAIL_BYTES)
+            handle.seek(start)
+            tail = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return []
+    names: list[str] = []
+    for match in re.finditer(r'"cwd":"([^"]*)"', tail):
+        add_name(names, worktree_name(match.group(1)))
+    names.reverse()
+    return names
+
+
+def pin_path(payload: dict) -> Path | None:
+    """Where this session's last answer is remembered. Under TEMP, never in the repo."""
+    session = str(get(payload, "session_id", default="") or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", session):
+        return None
+    return Path(tempfile.gettempdir()) / "claude-statusline-epic" / session
+
+
+def from_tickets(tickets: Path, names: list[str]) -> tuple[str, str] | None:
+    """`(E2, "E2 5/7 ▶T6")` counted straight from this session's epic, `local` adapter.
+
+    A finished epic still counts: in its own worktree `E2 7/7` is the news, not noise.
     """
     try:
         entries = sorted(tickets.iterdir())
     except OSError:
-        return ""
-    for epic in entries:
-        if not owns(epic.name, names) or not epic.is_dir():
-            continue
-        done, total, doing = 0, 0, []
-        for task in sorted(epic.glob(epic.name + "-T*.md")):
-            status = ticket_status(task)
-            if not status:
+        return None
+    for name in names:
+        for epic in entries:
+            if not owns(epic.name, [name]) or not epic.is_dir():
                 continue
-            total += 1
-            if status == "done":
-                done += 1
-            elif status == "doing":
-                doing.append(task.stem.rsplit("-", 1)[-1])
-        if not total:
-            continue
-        label = f"{epic.name} {done}/{total}"
-        return f"{label} ▶{','.join(doing)}" if doing else label
-    return ""
+            done, total, doing = 0, 0, []
+            for task in sorted(epic.glob(epic.name + "-T*.md")):
+                status = ticket_status(task)
+                if not status:
+                    continue
+                total += 1
+                if status == "done":
+                    done += 1
+                elif status == "doing":
+                    doing.append(task.stem.rsplit("-", 1)[-1])
+            if not total:
+                continue
+            label = f"{epic.name} {done}/{total}"
+            return epic.name, (f"{label} ▶{','.join(doing)}" if doing else label)
+    return None
+
+
+def from_snapshot(path: Path, names: list[str]) -> tuple[str, str] | None:
+    """`(PROJ-7, "PROJ-7 4/7 ▶PROJ-12")` from the snapshot `/batch-implement` leaves behind.
+
+    A status line renders on every event, so it may never call a tracker API; the snapshot is
+    the only thing it is allowed to read. One older than SNAPSHOT_STALE_HOURS, or carrying no
+    timestamp, says so and drops the in-flight task, which by then is not news.
+    """
+    try:
+        snapshot = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(snapshot, dict):
+        return None
+    epic = str(snapshot.get("epic") or "")
+    try:
+        done = int(snapshot.get("done", 0))
+        total = int(snapshot.get("total", 0))
+    except (TypeError, ValueError):
+        return None
+    if not epic or not total or not owns(epic, names):
+        return None
+    label = f"{epic} {done}/{total}"
+    if stale(snapshot.get("updated")):
+        return epic, f"{label} (stale)"
+    doing = [str(key) for key in (snapshot.get("doing") or []) if key]
+    return epic, (f"{label} ▶{','.join(doing)}" if doing else label)
 
 
 def stale(updated: object) -> bool:
@@ -182,49 +259,54 @@ def stale(updated: object) -> bool:
     return datetime.now(timezone.utc) - when > timedelta(hours=SNAPSHOT_STALE_HOURS)
 
 
-def from_snapshot(path: Path, names: list[str]) -> str:
-    """`PROJ-7 4/7 ▶PROJ-12` from the snapshot `/batch-implement` leaves for a remote tracker.
-
-    A status line renders on every event, so it may never call a tracker API; the snapshot is
-    the only thing it is allowed to read. One older than SNAPSHOT_STALE_HOURS, or carrying no
-    timestamp, says so and drops the in-flight task, which by then is not news.
-    """
-    try:
-        snapshot = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-    except (OSError, ValueError):
-        return ""
-    if not isinstance(snapshot, dict):
-        return ""
-    epic = str(snapshot.get("epic") or "")
-    try:
-        done = int(snapshot.get("done", 0))
-        total = int(snapshot.get("total", 0))
-    except (TypeError, ValueError):
-        return ""
-    if not epic or not total or not owns(epic, names):
-        return ""
-    label = f"{epic} {done}/{total}"
-    if stale(snapshot.get("updated")):
-        return f"{label} (stale)"
-    doing = [str(key) for key in (snapshot.get("doing") or []) if key]
-    return f"{label} ▶{','.join(doing)}" if doing else label
-
-
-def epic_progress(project_dir: Path, names: list[str]) -> str:
-    """This session's epic, from the ledger, when no run log is speaking.
-
-    The run log only exists while a run is in flight, and only in that epic's worktree. The
-    ledger is the standing record: tickets on disk under the `local` adapter, and the snapshot
-    under a remote one.
-    """
+def resolve_epic(work: Path, names: list[str]) -> tuple[str, str] | None:
+    """The first of `names` that an epic in the ledger answers to, counted."""
     if not names:
-        return ""
-    work = work_dir(project_dir, "tickets", "progress.json")
-    if work is None:
-        return ""
+        return None
     if (work / "tickets").is_dir():
         return from_tickets(work / "tickets", names)
     return from_snapshot(work / "progress.json", names)
+
+
+def epic_progress(payload: dict, project_dir: Path, cwd: Path, head: str) -> str:
+    """This session's epic, from the ledger, when no run log is speaking.
+
+    Three signals in falling priority: the session's path and branch; the pin, holding what this
+    session resolved to last time (empty content means "no epic", so the answer is remembered
+    either way); and, only when there is no pin yet, this session's transcript — which is what
+    recovers a session that has already left the epic worktree. The transcript is therefore read
+    at most once per session, not once per render.
+    """
+    work = work_dir(project_dir, "tickets", "progress.json")
+    if work is None:
+        return ""
+
+    names = session_names(payload, cwd, head)
+    pin = pin_path(payload)
+    pinned = None
+    if pin is not None:
+        try:
+            pinned = pin.read_text(encoding="utf-8").strip()
+        except OSError:
+            pinned = None
+        add_name(names, pinned)
+
+    found = resolve_epic(work, names)
+    if found is None and pinned is None:
+        transcript = str(get(payload, "transcript_path", default="") or "")
+        if transcript:
+            for name in transcript_names(transcript):
+                add_name(names, name)
+            found = resolve_epic(work, names)
+
+    answer = found[0] if found else ""
+    if pin is not None and answer != pinned:
+        try:
+            pin.parent.mkdir(parents=True, exist_ok=True)
+            pin.write_text(answer, encoding="utf-8")
+        except OSError:
+            pass
+    return found[1] if found else ""
 
 
 def main() -> None:
@@ -265,9 +347,7 @@ def main() -> None:
     if not get(payload, "prompt_cache", "warm", default=True):
         parts.append("cache cold")
 
-    progress = run_progress(project_dir) or epic_progress(
-        project_dir, session_names(payload, cwd, head)
-    )
+    progress = run_progress(project_dir) or epic_progress(payload, project_dir, cwd, head)
     if progress:
         parts.append(progress)
 
