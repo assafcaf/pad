@@ -27,7 +27,9 @@ When unsure, take the larger size. If hidden complexity shows up later, step up 
 ## 2. Understand before asking
 
 Read the code, docs and recent commits the idea touches. Never ask the operator something the
-repo can answer. If the repo has a glossary (`CONTEXT.md` or similar), use its terms exactly.
+repo can answer. If the repo has a glossary (`CONTEXT.md`, written by `/knowledge-layer` when
+the config's `## Project knowledge` section is `Mode: on`), use its terms exactly, and say so
+when an outcome needs a word the glossary does not have.
 
 ## 3. Converge
 

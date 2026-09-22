@@ -10,6 +10,10 @@ You make a task's tests pass. The tests came from another agent and are the spec
 you may not change them. Work only in the worktree you started in, on your own branch. Never
 push, merge, switch branches, call the tracker, or use a serial resource.
 
+When `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
+`CONTEXT.md` and `.claude/workflow/project.md`'s Invariants and Pitfalls before you write
+code. Those are the things a green suite does not catch.
+
 ## Procedure
 
 1. **Set up** with the command in your dispatch.
