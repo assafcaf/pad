@@ -33,6 +33,7 @@ in the agent file.
 | Planning | `task-planner` | `sonnet` | Read-only. Runs once per `/batch-implement` run |
 | Tests | `test-designer` | `sonnet` | Its own worktree. Writes the failing tests and stubs |
 | Code | `code-writer` | `sonnet` | Its own worktree. Cherry-picks the red commit; may not change tests |
+| Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 
 Use `opus` for a task labelled `complex`, and for the retry of a task that failed a gate.
 
@@ -59,6 +60,16 @@ So progress is visible without reading the terminal:
 | Promoted specs | `docs/specs/<slug>.md` | yes, only when the operator says so |
 
 `spec_commit: ask`. After a spec is approved, ask once whether to promote it. Default: no.
+
+## Project knowledge
+
+Mode: off
+
+Off is what every skill and agent did before the knowledge layer existed, so leaving it off
+changes nothing. Run `/knowledge-layer` to turn it on: it scans the repo for what it can cite,
+asks you for what it cannot, writes `CONTEXT.md` and `.claude/workflow/project.md`, and
+replaces this paragraph with the table of what each reader reads. Until then, agents work from
+`CLAUDE.md` as they always have.
 
 ## Commands
 

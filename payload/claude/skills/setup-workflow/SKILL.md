@@ -139,13 +139,33 @@ Check, fix what you safely can, and report the rest:
   `push origin`, and `gh pr create`; with pushes to the default branch denied. Report anything
   missing rather than adding it — widening permissions is the operator's to approve.
 
-## 6. CLAUDE.md
+## 6. Project knowledge
+
+Ask once:
+
+> Knowledge-layer mode? (recommended: **on**)
+
+Recommended on because every skill and agent here already works from `CLAUDE.md` alone, and
+`CLAUDE.md` is loaded into every session whether a run needs it or not. The knowledge layer
+gives a run two files scoped to what it actually reads: a glossary, and the notes an agent
+cannot infer from the code.
+
+| Answer | Do |
+|---|---|
+| **on** | Call the Skill tool with "knowledge-layer" and let it finish, then come back here. It writes `CONTEXT.md`, `.claude/workflow/project.md`, and the `Mode: on` table in the config |
+| **off** | Leave the config's `## Project knowledge` section as it is. Nothing changes: off is the behavior everything had before the layer existed |
+
+Off is not a worse answer for a repo whose `CLAUDE.md` is already good. It stays available:
+`/knowledge-layer` can be run at any point later, and asks nothing of `/setup-workflow`.
+
+## 7. CLAUDE.md
 
 Offer the sections in `.claude/workflow/claude-md-snippet.md` — how work flows here, and the
 writing rules — for the repo's `CLAUDE.md`. Show them, add only what the operator accepts, and
 keep each addition short: every line of `CLAUDE.md` loads into every session.
 
-## 7. Report
+## 8. Report
 
 One checklist. For anything unresolved, name the command the operator should run. Finish with
-the flow they can now use: `/spec` → `/tickets` → `/batch-implement`.
+the flow they can now use: `/spec` → `/tickets` → `/batch-implement`. Where the knowledge
+layer is on, say that `/knowledge-layer refresh` re-scans it when the repo moves.
