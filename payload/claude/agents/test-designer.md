@@ -23,9 +23,9 @@ use a serial resource.
 3. **Add only the stubs the tests need to run**: a module, a signature, a function raising
    `NotImplementedError`. Use the exact names from the ticket's Interfaces; where the ticket
    is silent, choose names that match the surrounding code and report them.
-4. **Run the new tests.** They must fail on an assertion (exit code 1). A collection or import
-   error is not red: add the missing stub and run again. A test that passes now is testing
-   something that already exists — replace it.
+4. **Run the new tests.** They must fail on an assertion — the configured red exit code
+   (`config.md`). A collection or import error is not red: add the missing stub and run again.
+   A test that passes now is testing something that already exists — replace it.
 5. **Run the full suite.** Your stubs must not break an existing test. If one breaks, your
    stub is wrong, or the ticket conflicts with existing behavior: report `BLOCKED`.
 6. **Commit once:** `test(<KEY>): <outcome ids> [red]`. Tests and stubs only, nothing else.

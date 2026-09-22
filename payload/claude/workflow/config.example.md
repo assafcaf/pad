@@ -63,7 +63,9 @@ So progress is visible without reading the terminal:
 ## Commands
 
 Replace these with the commands that work in this repo; `/setup-workflow` runs each one and
-reports what fails. The defaults assume Python with pytest.
+reports what fails. The defaults below are pytest's, because they're the easiest stack to show
+the contract on — not because the workflow assumes Python. `/setup-workflow`'s stack step
+detects the real runner and fills this table in.
 
 | Gate | Command |
 |---|---|
@@ -74,6 +76,17 @@ reports what fails. The defaults assume Python with pytest.
 | Red means | exit code `1`: tests collected, ran, and failed. Collection errors (exit `2`) do not count |
 | Test paths | `tests/` |
 | Weakened tests | `bash .claude/workflow/bin/weakened-tests.sh <base> <head>` (pytest patterns by default; set `WEAK_ADDED` and `TEST_DEF` for another stack — see the script's header) |
+
+**The exit-code contract.** "Red means" exists to tell "the test ran and failed" apart from
+"the test never ran" (`definition-of-done.md`, item 2) — without that split, a task whose test
+file fails to import certifies as red with no assertion ever executed. pytest gives this for
+free: exit `1` is a failed assertion, exit `2` is a collection error, so its row above is just
+those two numbers. Most other runners don't: vitest, jest, `go test` and `cargo test` all exit
+`1` for both a failing assertion and a file that fails to load. On those, wrap the runner and
+remap its output onto pytest's split before filling in this table — `bin/vitest-gate.sh` is a
+worked example (0 passed, 1 real failure, 2 nothing ran); adapt its output-matching to the
+runner you actually have rather than reusing vitest's wording. `/setup-workflow`'s stack step
+checks which case you're in.
 
 ## Serial resources
 
