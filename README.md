@@ -7,6 +7,7 @@ is updated as agents work, so progress is visible there.
 
 ```
 /setup-workflow          →  config + tracker agent     once per machine: connection, metadata, status line
+/knowledge-layer         →  CONTEXT.md + project.md    optional: a glossary, and what an agent cannot infer
 /spec [grill] <idea>     →  .work/specs/…md            outcomes: Given/When/Then, each testable
 /tickets <spec>          →  epic + tasks in tracker    outcome-sliced, blocking edges, waves
 /batch-implement <epic>  →  epic branch + draft PR     tests designed, then code, in parallel
@@ -73,24 +74,26 @@ skipped, and files that are yours once written are never overwritten.
 
 Then restart Claude Code and run **`/setup-workflow`**. It checks the tracker connection,
 discovers what the installer can't (statuses, transition ids, how tasks attach to epics), runs
-the config's commands, installs the status line, and offers a short section for your
-`CLAUDE.md`.
+the config's commands, installs the status line, asks whether you want the knowledge layer, and offers a short
+section for your `CLAUDE.md`.
 
 ## What lands where
 
 ```
-.claude/skills/{spec,tickets,batch-implement,setup-workflow}/
-.claude/agents/{tracker,task-planner,test-designer,code-writer}.md
+.claude/skills/{spec,tickets,batch-implement,setup-workflow,knowledge-layer}/
+.claude/agents/{tracker,task-planner,test-designer,code-writer,knowledge-scanner}.md
 .claude/workflow/config.md              ← yours: tracker, commands, paths, models, resources
 .claude/workflow/definition-of-done.md
 .claude/workflow/ticket-template.md
 .claude/workflow/testing.md             how outcome tests are written
 .claude/workflow/trackers/{jira,github,local}.md
-.claude/workflow/bin/{verify-red,weakened-tests,vitest-gate}.sh
+.claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths}.sh
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
 .claude/statusline.py                   model, branch, context, cost, live run progress
 .claude/settings.json                   ← yours: worktree.baseRef + permissions (never overwritten)
 docs/decisions/README.md                ← yours: the committed development record
+CONTEXT.md                              ← yours: the glossary, if the layer is on
+.claude/workflow/project.md             ← yours: the notes agents cannot infer, if it is on
 .gitignore                              + .work/ .claude/worktrees/ CLAUDE.local.md .claude/settings.local.json
 ```
 
@@ -103,6 +106,38 @@ why).
 Working specs, plans and run logs live in gitignored `.work/`. Decisions a future reader would
 otherwise reverse-engineer go in `docs/decisions/`. Facts true of one machine go in a
 gitignored `CLAUDE.local.md`, which `/setup-workflow` writes.
+
+## The knowledge layer
+
+Optional, and off unless you turn it on. `/knowledge-layer` writes two files:
+
+| File | Carries |
+|---|---|
+| `CONTEXT.md` | the glossary: one word per concept, and the synonyms it beats |
+| `.claude/workflow/project.md` | module map, invariants, standing overlaps, pitfalls |
+
+It is built in two halves, because only one half is safe to generate. Read-only
+`knowledge-scanner` agents fan out over the repo and report what carries a path: modules,
+declared commands, term candidates, and the files recent commits keep touching. Everything that
+cannot be cited (what the repo is for, what must stay true, what newcomers get wrong) is asked
+of you and written down in your words.
+
+That split is not caution for its own sake. A repository context file written by a model
+measured **worse than no file at all** ([arXiv 2602.11988][ctx]: -0.5% on SWE-bench Lite, -2%
+on AGENTbench, and over 20% added inference cost per task); one written by the repo's own
+developers measured **+4%**. Agents obey a wrong context file rather than ignoring it.
+
+`bash .claude/workflow/bin/knowledge-paths.sh` fails when a path either file names has gone, or
+when either grows past its ceiling. `/batch-implement` ends an epic by naming what the layer was
+missing, which is the half with evidence behind it: guidance tuned against observed agent
+failures beats one-shot generation ([arXiv 2606.20512][pr]).
+
+Turn it on at any time with `/knowledge-layer`, re-scan with `/knowledge-layer refresh`, and
+turn it off by setting `Mode: off` in the config. With it off every skill and agent behaves
+exactly as it did before the layer existed.
+
+[ctx]: https://arxiv.org/abs/2602.11988
+[pr]: https://arxiv.org/abs/2606.20512
 
 ## Settings it needs
 
@@ -122,6 +157,8 @@ approval.
   accepts `mcp__<server>`; if not, `tracker` reports it and a run stops rather than letting
   the tracker drift from the code).
 - The GitHub and local adapters.
+- `/knowledge-layer` end to end on a real repo. Its gate script is exercised against
+  passing, missing-path, over-ceiling and mode-off cases; the scan-and-grill flow is not.
 
 ## Upgrading from 0.1
 

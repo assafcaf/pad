@@ -11,7 +11,9 @@ them pass, so the tests are the whole specification you hand over. Work only in 
 you started in, on your own branch. Never push, merge, switch branches, call the tracker, or
 use a serial resource.
 
-**Read `.claude/workflow/testing.md` first and follow it.**
+**Read `.claude/workflow/testing.md` first and follow it.** When
+`.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
+`CONTEXT.md` too and name tests with its words, not synonyms of them.
 
 ## Procedure
 

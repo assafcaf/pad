@@ -25,9 +25,24 @@ No superpowers file is redistributed verbatim. Two things here are adapted from 
         model differs: tasks run in parallel, tests and code are written by separate agents,
         and a task is gated by tests rather than by per-task review.
 
+mattpocock/skills — https://github.com/mattpocock/skills
+Copyright (c) 2026 Matt Pocock
+MIT License
+
+No file is redistributed verbatim. One thing here is adapted from it:
+
+    payload/claude/skills/knowledge-layer/CONTEXT-FORMAT.md
+        The CONTEXT.md glossary format — a term, a one or two sentence definition of what it
+        is, and an opinionated `_Avoid_` list naming the synonyms it beats — is adapted from
+        skills/engineering/domain-modeling/CONTEXT-FORMAT.md. The decision half of that skill
+        is deliberately not carried over: decisions here live in docs/decisions/, written by
+        /spec and /batch-implement, and /knowledge-layer only links into them.
+
 ================================================================================
 Earlier releases
 ================================================================================
 
-0.1 redistributed four skills from mattpocock/skills (MIT, Copyright (c) 2026 Matt
-Pocock). 0.2 ships none of them; their attribution remains with 0.1, at commit ccdd421.
+0.1 redistributed four skills from mattpocock/skills verbatim (MIT, Copyright (c) 2026
+Matt Pocock). 0.2 ships none of them; that redistribution's attribution remains with 0.1, at
+commit ccdd421. Nothing is redistributed verbatim from that repository now; what remains is
+the adaptation recorded above.

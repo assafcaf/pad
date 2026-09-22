@@ -12,6 +12,10 @@ You receive the ticket bodies (goal, outcomes, files, interfaces, blocked by, ta
 repo. Check them against the code as it is now, because tickets are written before anyone
 reads the files.
 
+When `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
+`.claude/workflow/project.md`'s Module map and Standing overlaps first: they name the files
+that already force tasks apart, so you are not re-deriving them from scratch.
+
 ## Check, in this order
 
 1. **Blocking edges.** Is the stated order consistent (no cycles), and does it match reality?

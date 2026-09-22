@@ -128,8 +128,14 @@ requeues the same way.
    and why. Commit it.
 3. **Final review.** If config sets a level, run `/code-review <level>`; fix only correctness
    findings, test-first through the same two agents.
-4. **Push and open a draft PR** (`gh pr create --draft`) whose body has the epic link, a table
+4. **Knowledge gaps.** Only when the config's `## Project knowledge` section is `Mode: on`.
+   From this run, name what the layer was missing: a term two or more tasks used that
+   `CONTEXT.md` does not define, a file every task touched that Standing overlaps does not
+   name, a blocker whose answer was already an Invariant. Put the list in the PR body and tell
+   the operator to run `/knowledge-layer refresh`. Do not edit those files yourself: a line the
+   operator did not write is the kind that measures worse than no line at all.
+5. **Push and open a draft PR** (`gh pr create --draft`) whose body has the epic link, a table
    of tasks (key, outcomes, merge sha), the rulings, failed or blocked tasks, and what was not
    verified. Then have `tracker` move the epic to the review status and comment the PR URL.
-5. **Report:** the PR URL, done / failed / blocked counts, and every `Ruling:` line — those are
+6. **Report:** the PR URL, done / failed / blocked counts, and every `Ruling:` line — those are
    the decisions you made on the operator's behalf.
