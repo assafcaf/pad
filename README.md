@@ -20,6 +20,69 @@ Every skill is user-invoked only (`disable-model-invocation`), so nothing starts
 > `/batch-implement`. Try it on a small epic first. What is unverified is listed
 > [below](#not-yet-verified).
 
+## How you use it
+
+Three commands, three approval points, and one long unattended stretch at the end.
+
+| Step | You run | You approve | Then it runs unattended |
+|---|---|---|---|
+| 1 | `/spec [grill] <idea>` | the outcomes, then the spec file | — |
+| 2 | `/tickets <spec>` | the wave table | publishing the epic and its tasks |
+| 3 | `/batch-implement <epic>` | the waves and the epic branch, once | every wave, through to the draft PR |
+
+`/setup-workflow` comes before all of it, once per machine. `/knowledge-layer` is optional and
+can be run at any point; see [below](#the-knowledge-layer).
+
+**1. Idea → outcomes.** `/spec <idea>` brainstorms: purpose and constraints, then two or three
+approaches with trade-offs, then the design in short sections you confirm one at a time.
+`/spec grill <idea>` is the adversarial version. It maps the idea as a tree of decisions and
+walks it depth-first, asking the hardest question each one raises, pushing back on "fast",
+"robust" and "handle errors" until each is a number, a behavior or a non-goal, and probing the
+failure paths — empty input, a dependency down, the run killed halfway. It stops when every
+leaf is decided or explicitly deferred. Grill when you know roughly what you want and need the
+holes found; brainstorm when you don't know yet.
+
+It sizes the work first and tells you which size it picked. A small change skips the spec file
+and goes straight to `/batch-implement` with the agreed outcomes; something spanning several
+independent subsystems is split before anything is specced.
+
+A feature-sized spec lands in `.work/specs/<date>-<slug>.md`: problem, outcomes, non-goals,
+design, decisions, risks. Every outcome reads "Given …, when …, then …" and names its test
+level (`unit`, `integration`, or a serial-resource tag). You review the file, and it is marked
+approved only when you say so. Working specs are not committed, so anything a future reader of
+the code would otherwise reverse-engineer — an interface, a data format, a rejected approach —
+is written to `docs/decisions/NNNN-<slug>.md` and committed instead.
+
+**2. Outcomes → the ledger.** `/tickets <spec path>` slices the spec vertically: each task
+delivers one to three outcomes end to end and is testable on its own, never split by layer. It
+declares the files each task will touch, since two tasks sharing a file cannot run in the same
+wave; it pins exact interface names into both sides of every dependency, because an implementer
+only ever sees its own ticket; and it labels the tasks needing design judgment `complex` so
+they get the stronger model.
+
+You get one wave table, and it stops there. **Nothing is published before you approve it.**
+
+Then it publishes through `tracker`, the ledger keeper: the only agent holding the tracker's
+tools, so every skill and every other agent goes through it and the ledger has a single writer.
+It refuses to create a duplicate epic or task, which is what lets a half-finished run be
+re-run rather than unpicked.
+
+**3. Tickets → tested, merged code.** `/batch-implement <epic key>` creates the epic branch and
+works the waves. `task-planner` goes first, and its gaps can send you back to `/tickets`. Then
+you confirm once — the waves, the epic branch, and that it will push that branch and move
+tickets as tasks land — and after that it does not pause between tasks or waves. It stops only
+for an irreversible or security-sensitive action, a change to shared state outside the epic
+branch, a baseline that is already red, every remaining task being blocked, or the ledger
+failing. Anything the tickets left unsettled it decides and logs as
+`Ruling: <decision> — <why> — <cost if wrong>`. The agents it runs and the gates every task
+must pass are [below](#how-a-run-works).
+
+**4. What you get back.** The epic branch pushed, and a draft PR whose body carries the task
+table, every ruling, anything failed or blocked, and what was not verified. The ledger updated
+task by task as the run went, with the PR URL commented on the epic. An Outcome section
+appended to the epic's `docs/decisions/` entry: what was built, where it departed from the
+spec, and why.
+
 ## How a run works
 
 `/batch-implement` orchestrates four agents and writes no product code itself:
@@ -159,14 +222,6 @@ approval.
 - The GitHub and local adapters.
 - `/knowledge-layer` end to end on a real repo. Its gate script is exercised against
   passing, missing-path, over-ceiling and mode-off cases; the scan-and-grill flow is not.
-
-## Upgrading from 0.1
-
-0.1 shipped `/dispatch`, `/evidence-dispatch` and four of Matt Pocock's skills, configured
-through `docs/agents/*.md`. 0.2 replaces them. The installer does not remove the old files:
-delete `.claude/skills/{dispatch,evidence-dispatch,implement,tdd,review-standards-spec,resolving-merge-conflicts}/`,
-`scripts/checks/` and `docs/agents/` if nothing else uses them. 0.1 is still installable from
-its last commit: `npx github:assafcaf/dispatch-skills#ccdd421`.
 
 ## Licence
 
