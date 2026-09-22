@@ -114,19 +114,45 @@ def ticket_status(ticket: Path) -> str:
     return ""
 
 
-def from_tickets(tickets: Path) -> str:
-    """`E2 5/7 ▶T6` counted straight from the local adapter's ticket files.
+def owns(key: str, names: list[str]) -> bool:
+    """True when one of the session's names is this epic key, or `<key>-<slug>`."""
+    return any(name == key or name.startswith(key + "-") for name in names)
 
-    The active epic is the one with a task in the doing status, else the lowest-numbered epic
-    that is not finished. A finished epic says nothing: its own PR is the news by then.
+
+def session_names(payload: dict, cwd: Path, head: str) -> list[str]:
+    """What epic this session could be on: its worktree, its branch, its place in the tree.
+
+    Every session in a repo reads the same ledger, so an unscoped segment reports the same epic
+    in every pane and says nothing about the pane. A session that is not on an epic has no names
+    here, and then the segment is silent and reads no files at all.
     """
-    epics = []
+    names = []
+    for candidate in (
+        get(payload, "worktree", "name"),
+        get(payload, "workspace", "git_worktree"),
+        head,
+    ):
+        text = str(candidate or "")
+        if text:
+            names.append(text[len("epic/"):] if text.startswith("epic/") else text)
+    parts = cwd.parts
+    for index in range(len(parts) - 2):
+        if parts[index] == ".claude" and parts[index + 1] == "worktrees":
+            names.append(parts[index + 2])
+    return names
+
+
+def from_tickets(tickets: Path, names: list[str]) -> str:
+    """`E2 5/7 ▶T6` counted straight from this session's epic, under the `local` adapter.
+
+    A finished epic still counts here: in its own worktree `E2 7/7` is the news, not noise.
+    """
     try:
         entries = sorted(tickets.iterdir())
     except OSError:
         return ""
     for epic in entries:
-        if not re.fullmatch(r"E\d+", epic.name) or not epic.is_dir():
+        if not owns(epic.name, names) or not epic.is_dir():
             continue
         done, total, doing = 0, 0, []
         for task in sorted(epic.glob(epic.name + "-T*.md")):
@@ -138,18 +164,25 @@ def from_tickets(tickets: Path) -> str:
                 done += 1
             elif status == "doing":
                 doing.append(task.stem.rsplit("-", 1)[-1])
-        if total and done < total:
-            epics.append((int(epic.name[1:]), epic.name, done, total, doing))
-    if not epics:
-        return ""
-    _, key, done, total, doing = next(
-        (epic for epic in sorted(epics) if epic[4]), sorted(epics)[0]
-    )
-    label = f"{key} {done}/{total}"
-    return f"{label} ▶{','.join(doing)}" if doing else label
+        if not total:
+            continue
+        label = f"{epic.name} {done}/{total}"
+        return f"{label} ▶{','.join(doing)}" if doing else label
+    return ""
 
 
-def from_snapshot(path: Path) -> str:
+def stale(updated: object) -> bool:
+    """True when a snapshot carries no usable timestamp, or one past the cutoff."""
+    try:
+        when = datetime.fromisoformat(str(updated).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return True
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - when > timedelta(hours=SNAPSHOT_STALE_HOURS)
+
+
+def from_snapshot(path: Path, names: list[str]) -> str:
     """`PROJ-7 4/7 ▶PROJ-12` from the snapshot `/batch-implement` leaves for a remote tracker.
 
     A status line renders on every event, so it may never call a tracker API; the snapshot is
@@ -168,7 +201,7 @@ def from_snapshot(path: Path) -> str:
         total = int(snapshot.get("total", 0))
     except (TypeError, ValueError):
         return ""
-    if not epic or done >= total:
+    if not epic or not total or not owns(epic, names):
         return ""
     label = f"{epic} {done}/{total}"
     if stale(snapshot.get("updated")):
@@ -177,30 +210,21 @@ def from_snapshot(path: Path) -> str:
     return f"{label} ▶{','.join(doing)}" if doing else label
 
 
-def stale(updated: object) -> bool:
-    """True when a snapshot carries no usable timestamp, or one past the cutoff."""
-    try:
-        when = datetime.fromisoformat(str(updated).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return True
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) - when > timedelta(hours=SNAPSHOT_STALE_HOURS)
-
-
-def epic_progress(project_dir: Path) -> str:
-    """The active epic's task progress from the ledger, when no run log is speaking.
+def epic_progress(project_dir: Path, names: list[str]) -> str:
+    """This session's epic, from the ledger, when no run log is speaking.
 
     The run log only exists while a run is in flight, and only in that epic's worktree. The
     ledger is the standing record: tickets on disk under the `local` adapter, and the snapshot
     under a remote one.
     """
+    if not names:
+        return ""
     work = work_dir(project_dir, "tickets", "progress.json")
     if work is None:
         return ""
     if (work / "tickets").is_dir():
-        return from_tickets(work / "tickets")
-    return from_snapshot(work / "progress.json")
+        return from_tickets(work / "tickets", names)
+    return from_snapshot(work / "progress.json", names)
 
 
 def main() -> None:
@@ -221,7 +245,8 @@ def main() -> None:
     project_dir = Path(str(get(payload, "workspace", "project_dir", default=cwd)))
 
     parts = [str(get(payload, "model", "display_name", default="claude"))]
-    parts.append(branch(cwd, str(get(payload, "workspace", "git_worktree", default=cwd.name))))
+    head = branch(cwd, str(get(payload, "workspace", "git_worktree", default=cwd.name)))
+    parts.append(head)
 
     pct = get(payload, "context_window", "used_percentage", default=0)
     try:
@@ -240,7 +265,9 @@ def main() -> None:
     if not get(payload, "prompt_cache", "warm", default=True):
         parts.append("cache cold")
 
-    progress = run_progress(project_dir) or epic_progress(project_dir)
+    progress = run_progress(project_dir) or epic_progress(
+        project_dir, session_names(payload, cwd, head)
+    )
     if progress:
         parts.append(progress)
 
