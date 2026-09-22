@@ -34,9 +34,10 @@ A test here exists to prove one outcome from the ticket, and to fail when that o
 ## Red, then green
 
 1. Write the tests for the task's outcomes, and nothing else.
-2. Run them. They must **fail on an assertion** (pytest exit code 1). A collection or import
-   error is not red: add the minimal stub (a module, a function raising
-   `NotImplementedError`) so the test runs and fails for the right reason.
+2. Run them. They must **fail on an assertion**, the configured red exit code
+   (`config.md`'s Commands section — pytest's is `1`). A collection or import error is not red:
+   add the minimal stub (a module, a function raising `NotImplementedError`) so the test runs
+   and fails for the right reason.
 3. Commit the tests alone: `test(<KEY>): <outcomes> [red]`.
 4. Write the least code that makes them pass. Run them, then the full suite.
 5. Refactor with the tests green, then commit: `feat(<KEY>): <goal>`.

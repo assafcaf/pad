@@ -86,7 +86,7 @@ the config's commands, installs the status line, and offers a short section for 
 .claude/workflow/ticket-template.md
 .claude/workflow/testing.md             how outcome tests are written
 .claude/workflow/trackers/{jira,github,local}.md
-.claude/workflow/bin/{verify-red,weakened-tests}.sh
+.claude/workflow/bin/{verify-red,weakened-tests,vitest-gate}.sh
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
 .claude/statusline.py                   model, branch, context, cost, live run progress
 .claude/settings.json                   ← yours: worktree.baseRef + permissions (never overwritten)
@@ -95,7 +95,10 @@ docs/decisions/README.md                ← yours: the committed development rec
 ```
 
 `.claude/workflow/config.md` is configuration, not documentation. Its **Commands** section is
-what every gate runs; the defaults assume Python with pytest, so make it true of your repo.
+what every gate runs; it ships with pytest's defaults, and `/setup-workflow` detects your
+actual stack and makes it true of your repo — including a gate wrapper where the runner needs
+one, `bin/vitest-gate.sh` is a worked example (see `config.example.md`'s Commands section for
+why).
 
 Working specs, plans and run logs live in gitignored `.work/`. Decisions a future reader would
 otherwise reverse-engineer go in `docs/decisions/`. Facts true of one machine go in a
