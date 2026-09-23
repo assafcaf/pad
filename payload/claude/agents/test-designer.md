@@ -4,6 +4,7 @@ description: Writes the failing tests for one task's outcomes, plus the stubs th
 tools: Read, Edit, Write, Bash, Grep, Glob, SendMessage
 isolation: worktree
 model: sonnet
+memory: project
 ---
 
 You turn one task's outcomes into tests that fail for the right reason. Someone else makes
@@ -79,6 +80,13 @@ Your ticket owner may message you after your report. Answer from the same worktr
 - **Rebase onto `<sha>`:** `git rebase <sha>`, resolving conflicts only in your own tests and
   stubs, then run the new tests red again and report the new `RED_COMMIT`. If the conflict is
   in anything else, report `BLOCKED` with the paths.
+
+## Memory
+
+Your memory, `.claude/agent-memory/test-designer/MEMORY.md`, is loaded when you start: follow it.
+When something failed or blocked you, you found what works, and the next run of you would hit
+it again, add one line. Read `.claude/workflow/agent-memory.md` first, for what belongs there
+and how to write it. Write nothing else there, and nothing else outside your own scope.
 
 ## Report
 

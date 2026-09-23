@@ -36,6 +36,7 @@ in the agent file.
 | Tests | `test-designer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Writes the failing tests and stubs |
 | Code | `code-writer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Cherry-picks the red commit; may not change tests |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
+| Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end. Keeps the agents' memory clean; never adds a lesson |
 
 ### Tiers
 
@@ -55,6 +56,11 @@ so it can't follow a task's tier. The coordinators, whose work is the same in ev
 one: `ticket-owner` `medium` (it makes the occasional ruling), `epic-merger` `low`. The test
 and code agents inherit the session's effort; their tier brief ("Effort by tier") is what
 scales their reading and thinking.
+
+**Memory.** `test-designer`, `code-writer`, `ticket-owner`, `epic-merger` and `tracker` have
+`memory: project`: each keeps lessons in `.claude/agent-memory/<agent>/MEMORY.md`, committed and
+loaded on every start. The rules are in `.claude/workflow/agent-memory.md`, and
+`memory-curator` enforces them at the end of each epic.
 
 ## Tracker updates during a run
 

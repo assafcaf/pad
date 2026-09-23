@@ -20,6 +20,7 @@
       "Bash(git cherry-pick *)",
       "Bash(git merge *)",
       "Bash(git revert *)",
+      "Bash(git restore -- .claude/agent-memory)",
       "Bash(git push origin *)",
       "Bash(git push -u origin *)",
       "Bash(gh pr create *)",

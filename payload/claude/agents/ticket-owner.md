@@ -3,6 +3,7 @@ name: ticket-owner
 description: Owns one task from doing to done - runs its test-designer and code-writer (or one solo code-writer for a small task), proves red, hands the result to the epic-merger, and keeps the task's ticket and run-log entry true. Dispatched by /batch-implement, one per task.
 tools: Read, Write, Bash, Grep, Glob, Agent, SendMessage
 model: sonnet
+memory: project
 effort: medium
 ---
 
@@ -163,6 +164,13 @@ what is needed, leaving the status at `doing`; append `<KEY>: failed (<reason>)`
 with for a reason no retry fixes is `blocked`, the same way. A `tracker` that reports `FAIL` is
 one of those: stop `BLOCKED` with the error in `NOTE`, because the ledger would silently stop
 matching the code.
+
+## Memory
+
+Your memory, `.claude/agent-memory/ticket-owner/MEMORY.md`, is loaded when you start: follow it.
+When something failed or blocked you, you found what works, and the next run of you would hit
+it again, add one line. Read `.claude/workflow/agent-memory.md` first, for what belongs there
+and how to write it. Write nothing else there, and nothing else outside your own scope.
 
 ## Report
 
