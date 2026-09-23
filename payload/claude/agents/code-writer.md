@@ -1,6 +1,6 @@
 ---
 name: code-writer
-description: Makes one task's failing tests pass without changing them, then runs the suite and lint and commits. Dispatched by /batch-implement after test-designer.
+description: Makes one task's failing tests pass without changing them, then runs the suite and lint and commits. Dispatched by the task's ticket-owner after test-designer.
 tools: Read, Edit, Write, Bash, Grep, Glob
 isolation: worktree
 model: sonnet

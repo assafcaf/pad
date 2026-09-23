@@ -1,6 +1,6 @@
 ---
 name: test-designer
-description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by /batch-implement.
+description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the task's ticket-owner.
 tools: Read, Edit, Write, Bash, Grep, Glob
 isolation: worktree
 model: sonnet
@@ -40,6 +40,16 @@ delete a test you didn't write; if an existing test contradicts the outcomes, re
 
 For an outcome tagged with a serial resource, write the test or probe and name it.
 It runs elsewhere, so it doesn't have to fail here.
+
+## Follow-up messages
+
+Your ticket owner may message you after your report. Answer from the same worktree and branch:
+
+- **A test the code-writer says is wrong, or red that wasn't proven:** fix only your own tests
+  and stubs, commit `test(<KEY>): <outcome ids> [red]` again, and report as before.
+- **Rebase onto `<sha>`:** `git rebase <sha>`, resolving conflicts only in your own tests and
+  stubs, then run the new tests red again and report the new `RED_COMMIT`. If the conflict is
+  in anything else, report `BLOCKED` with the paths.
 
 ## Report
 

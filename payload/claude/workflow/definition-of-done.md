@@ -1,7 +1,7 @@
 # Definition of done
 
 Done is a list of outcomes met, each shown by a test. Nobody's opinion of the code enters into
-it. Every item below is checked mechanically by `/batch-implement`; commands come from `config.md`.
+it. Every item below is checked mechanically by `/batch-implement` and its agents; commands come from `config.md`.
 
 ## An outcome
 
@@ -34,8 +34,8 @@ belong inside a task whose outcome needs them.
 6. **The tracker says so.** Status moves to done, with a comment naming the merge commit
    (pushed), the red commit, the commands run and their results.
 
-A task that touched files outside its declared list is still done if 1–6 hold. The
-orchestrator records the extra files in the run log and the tracker comment, so the PR reader
+A task that touched files outside its declared list is still done if 1–6 hold. Its ticket
+owner records the extra files in the run log and the tracker comment, so the PR reader
 sees them.
 
 ## An epic is done when

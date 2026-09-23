@@ -31,8 +31,10 @@ in the agent file.
 |---|---|---|---|
 | Tracker | `tracker` | `haiku` | The only agent with tracker tools. Every ticket read and write goes through it |
 | Planning | `task-planner` | `sonnet` | Read-only. Runs once per `/batch-implement` run |
-| Tests | `test-designer` | `sonnet` | Its own worktree. Writes the failing tests and stubs |
-| Code | `code-writer` | `sonnet` | Its own worktree. Cherry-picks the red commit; may not change tests |
+| Task ownership | `ticket-owner` | `sonnet` | One per task. Runs the task's test-designer and code-writer, proves red, gates the branch, moves the ticket |
+| Merging | `epic-merger` | `sonnet` | One per run. The epic branch's only writer: re-checks, merges one task at a time, gates, pushes |
+| Tests | `test-designer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Writes the failing tests and stubs |
+| Code | `code-writer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Cherry-picks the red commit; may not change tests |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 
 Use `opus` for a task labelled `complex`, and for the retry of a task that failed a gate.
@@ -115,8 +117,8 @@ database. None are configured.
 - **Branches:** epic branch `epic/<KEY>-<slug>`, in worktree `.claude/worktrees/<KEY>`.
   `.claude/settings.json` must set `worktree.baseRef: head`, so implementer worktrees branch
   from the epic branch.
-- **Parallelism:** at most `3` implementers at once.
+- **Parallelism:** at most `3` tasks (ticket owners) at once.
 - **Final review:** `off`. Set to a `/code-review` level (`low`, `medium`, …) to run one
   review over the finished epic branch before the PR.
-- **Publishing:** push the epic branch to `origin` after each wave, so tracker comments cite
+- **Publishing:** the merger pushes the epic branch to `origin` after each merge, so tracker comments cite
   fetchable commits. Open the epic PR as a draft. Never merge it.

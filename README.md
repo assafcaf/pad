@@ -85,14 +85,33 @@ spec, and why.
 
 ## How a run works
 
-`/batch-implement` orchestrates four agents and writes no product code itself:
+`/batch-implement` orchestrates three layers of agents and writes no product code itself:
+
+```
+orchestrator (/batch-implement)
+├── task-planner                 once, before wave 1
+├── E3-merger     (epic-merger)  once per run: the epic branch's only writer
+├── E3-T4-owner   (ticket-owner) one per task
+│   ├── E3-T4-tests  (test-designer)
+│   ├── E3-T4-code   (code-writer)
+│   └── E3-T4-tracker (tracker)
+└── E3-T7-owner   …
+```
 
 | Agent | Tools | Does |
 |---|---|---|
-| `tracker` | the tracker's only | Every ticket read and write. Moves tasks To Do → In Progress → Done, with an evidence comment at each step |
 | `task-planner` | read-only | Before wave 1: waves, file conflicts, interface mismatches, gaps |
+| `ticket-owner` | dispatches, gates, run log | One task from In Progress to Done: runs its test-designer and code-writer, proves red, gates the branch, retries once, hands it to the merger, moves its ticket |
 | `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red |
 | `code-writer` | its own worktree | Cherry-picks that red commit, makes the tests pass, cannot change them |
+| `epic-merger` | the epic worktree | Takes ready tasks one at a time: re-checks the tests, merges, runs the suite and lint, pushes, reverts a merge that turns the branch red |
+| `tracker` | the tracker's only | Every ticket read and write, for whoever needs one, with an evidence comment at each step |
+
+The orchestrator acts on one report per task, when it is finished or needs a ruling. The
+detail of a task — forty-odd git, gate and ledger steps — happens in its owner's short
+context instead of the orchestrator's long one, which every orchestrator turn re-reads. Agents
+are named after what they work on (`E3-T4-owner`), so the logs read as a tree; messages route
+by the agent id each dispatch returns.
 
 Each wave of unblocked tasks runs in parallel. A task merges into the epic branch only when:
 
@@ -100,7 +119,8 @@ Each wave of unblocked tasks runs in parallel. A task merges into the epic branc
   an import error;
 - the code-writer's commits changed no test file, and `weakened-tests.sh` finds no added skip,
   xfail or TODO and no deleted test;
-- the full suite and lint pass on the epic branch after the merge.
+- the full suite and lint pass on the epic branch after the merge, which the merger checks after
+  every single merge, so a red is always one task's.
 
 There is no per-task code review. The tests are the contract, which is why they are written by
 a different agent from the one satisfying them, and proven to fail before any code exists.
@@ -144,7 +164,7 @@ section for your `CLAUDE.md`.
 
 ```
 .claude/skills/{spec,tickets,batch-implement,setup-workflow,knowledge-layer}/
-.claude/agents/{tracker,task-planner,test-designer,code-writer,knowledge-scanner}.md
+.claude/agents/{tracker,task-planner,ticket-owner,test-designer,code-writer,epic-merger,knowledge-scanner}.md
 .claude/workflow/config.md              ← yours: tracker, commands, paths, models, resources
 .claude/workflow/definition-of-done.md
 .claude/workflow/ticket-template.md
