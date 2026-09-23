@@ -57,7 +57,7 @@ So progress is visible without reading the terminal:
 | When | Task | Comment |
 |---|---|---|
 | Wave starts | → doing | run id and epic branch |
-| Red proven | — | red sha, outcome → test mapping |
+| Red proven (standard, complex) | — | red sha, outcome → test mapping. A small task puts it in the done comment |
 | Merged and gates green | → done | merge and red shas, commands and results, files outside the ticket's list |
 | Gate failed or blocked | stays doing | what failed, and what is needed |
 | Epic finished | epic → review | PR URL |
