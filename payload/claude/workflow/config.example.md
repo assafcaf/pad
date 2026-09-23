@@ -45,7 +45,7 @@ picks the flow and the models; the Tests and Code rows above are the `standard` 
 | Tier | Flow | Test-designer | Code-writer | Retry |
 |---|---|---|---|---|
 | `small` | one `code-writer` in solo mode: red commit, then green | — | `sonnet` | `opus`, standard flow |
-| `standard` | `test-designer`, then `code-writer` | `sonnet` | `sonnet` | `opus` code-writer |
+| `standard` | `test-designer`, with a `code-writer` started alongside that implements once red is proven | `sonnet` | `sonnet` | `opus` code-writer |
 | `complex` | as standard, wider reading brief | `opus` | `opus` | `opus` code-writer |
 
 A ticket with no `## Tier` section is `standard`; one labelled `complex` is `complex`.

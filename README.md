@@ -60,7 +60,11 @@ another builds, never merely because two share a file, so tasks run in parallel.
 interface names into both sides of every dependency, because an implementer only ever sees its
 own ticket. And it gives every task a tier — `small`, `standard` or `complex` — that sets how
 much process the task gets. A small one is a single agent writing a red commit then a green
-one. A complex one gets separate test and code authors on the stronger model.
+one. A complex one gets separate test and code authors on the stronger model. For standard and
+complex tasks the code-writer starts alongside the test-designer and reads the code while the
+tests are written. It implements only once red is proven, and may ask the test-designer what a
+test means, or object that one contradicts the ticket. The ticket settles any dispute, never
+how hard a test is to pass.
 
 You get one wave table, and it stops there. **Nothing is published before you approve it.**
 
@@ -103,9 +107,9 @@ orchestrator (/batch-implement)
 | Agent | Tools | Does |
 |---|---|---|
 | `task-planner` | read-only | Before wave 1: waves, file conflicts, interface mismatches, gaps |
-| `ticket-owner` | dispatches, gates, run log | One task from In Progress to Done: runs its test-designer and code-writer, proves red, gates the branch, retries once, hands it to the merger, moves its ticket |
-| `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red |
-| `code-writer` | its own worktree | Cherry-picks that red commit, makes the tests pass, cannot change them |
+| `ticket-owner` | dispatches, red proof, run log | One task from In Progress to Done: runs its test-designer and code-writer (or one solo code-writer for a small task), proves red, retries once, hands it to the merger, moves its ticket |
+| `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red. Answers the code-writer's questions, and fixes a test only if it contradicts the ticket |
+| `code-writer` | its own worktree | Starts alongside the test-designer and reads the code, then cherry-picks the red commit once it is proven and makes the tests pass. Cannot change the tests, but may ask about them or object against the ticket |
 | `epic-merger` | the epic worktree | Takes ready tasks one at a time: re-checks the tests, merges, runs the suite and lint, pushes, reverts a merge that turns the branch red |
 | `tracker` | the tracker's only | Every ticket read and write, for whoever needs one, with an evidence comment at each step |
 
