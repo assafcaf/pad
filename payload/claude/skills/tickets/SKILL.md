@@ -57,6 +57,9 @@ that the spec didn't state.
 After approval, write `.work/plans/<slug>.md`: the table, then every task's full body in the
 ticket template. The plan file is how a re-run avoids duplicating tickets.
 
+Write it with `Write`, not a heredoc — this is the longest prose file any skill here produces
+and the one `.claude/workflow/writing-files.md` was written about.
+
 ## 4. Publish through the adapter
 
 Send `tracker` one request per step, and record every key it returns in the plan file before

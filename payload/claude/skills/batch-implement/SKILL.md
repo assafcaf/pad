@@ -134,7 +134,8 @@ requeues the same way.
 1. **Full gates** at the epic head.
 2. **Development record.** Append an Outcome section to the epic's `docs/decisions/` entry, or
    create one per `docs/decisions/README.md`: what was built, where it departed from the spec,
-   and why. Commit it.
+   and why. Use `Edit` to append and `Write` to create, not a heredoc
+   (`.claude/workflow/writing-files.md`). Commit it.
 3. **Final review.** If config sets a level, run `/code-review <level>`; fix only correctness
    findings, test-first through the same two agents.
 4. **Knowledge gaps.** Only when the config's `## Project knowledge` section is `Mode: on`.
