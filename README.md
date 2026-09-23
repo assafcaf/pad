@@ -60,7 +60,11 @@ another builds, never merely because two share a file, so tasks run in parallel.
 interface names into both sides of every dependency, because an implementer only ever sees its
 own ticket. And it gives every task a tier — `small`, `standard` or `complex` — that sets how
 much process the task gets. A small one is a single agent writing a red commit then a green
-one. A complex one gets separate test and code authors on the stronger model.
+one. A complex one gets separate test and code authors on the stronger model. For standard and
+complex tasks the code-writer starts alongside the test-designer and reads the code while the
+tests are written. It implements only once red is proven, and may ask the test-designer what a
+test means, or object that one contradicts the ticket. The ticket settles any dispute, never
+how hard a test is to pass.
 
 You get one wave table, and it stops there. **Nothing is published before you approve it.**
 
@@ -103,11 +107,12 @@ orchestrator (/batch-implement)
 | Agent | Tools | Does |
 |---|---|---|
 | `task-planner` | read-only | Before wave 1: waves, file conflicts, interface mismatches, gaps |
-| `ticket-owner` | dispatches, gates, run log | One task from In Progress to Done: runs its test-designer and code-writer, proves red, gates the branch, retries once, hands it to the merger, moves its ticket |
-| `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red |
-| `code-writer` | its own worktree | Cherry-picks that red commit, makes the tests pass, cannot change them |
+| `ticket-owner` | dispatches, red proof, run log | One task from In Progress to Done: runs its test-designer and code-writer (or one solo code-writer for a small task), proves red, retries once, hands it to the merger, moves its ticket |
+| `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red. Answers the code-writer's questions, and fixes a test only if it contradicts the ticket |
+| `code-writer` | its own worktree | Starts alongside the test-designer and reads the code, then cherry-picks the red commit once it is proven and makes the tests pass. Cannot change the tests, but may ask about them or object against the ticket |
 | `epic-merger` | the epic worktree | Takes ready tasks one at a time: re-checks the tests, merges, runs the suite and lint, pushes, reverts a merge that turns the branch red |
 | `tracker` | the tracker's only | Every ticket read and write, for whoever needs one, with an evidence comment at each step |
+| `memory-curator` | the agents' memory | Once, at the end of the epic: keeps the agents' lessons accurate and short, never adds one |
 
 The orchestrator acts on one report per task, when it is finished or needs a ruling. The
 detail of a task — forty-odd git, gate and ledger steps — happens in its owner's short
@@ -166,12 +171,14 @@ section for your `CLAUDE.md`.
 
 ```
 .claude/skills/{spec,tickets,batch-implement,setup-workflow,knowledge-layer}/
-.claude/agents/{tracker,task-planner,ticket-owner,test-designer,code-writer,epic-merger,knowledge-scanner}.md
+.claude/agents/{tracker,task-planner,ticket-owner,test-designer,code-writer,epic-merger,memory-curator,knowledge-scanner}.md
+.claude/agent-memory/<agent>/MEMORY.md  each agent's lessons, committed; created as agents learn
 .claude/workflow/config.md              ← yours: tracker, commands, paths, models, resources
 .claude/workflow/definition-of-done.md
 .claude/workflow/ticket-template.md
 .claude/workflow/testing.md             how outcome tests are written
 .claude/workflow/writing-files.md       which tool writes a prose file, and why not a heredoc
+.claude/workflow/agent-memory.md        what an agent may write to its memory, and how
 .claude/workflow/trackers/{jira,github,local}.md
 .claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths}.sh
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
@@ -192,6 +199,25 @@ why).
 Working specs, plans and run logs live in gitignored `.work/`. Decisions a future reader would
 otherwise reverse-engineer go in `docs/decisions/`. Facts true of one machine go in a
 gitignored `CLAUDE.local.md`, which `/setup-workflow` writes.
+
+## Agent memory
+
+The agents a run uses — `test-designer`, `code-writer`, `ticket-owner`, `epic-merger` and
+`tracker` — each keep a memory (`memory: project`), which Claude Code loads every time the agent
+starts. An agent writes a line only after something failed or blocked it, it found what works,
+and its next run would hit the same wall: one line, with the task key and date
+(`.claude/workflow/agent-memory.md`). A denied command, a tool limit, a gate that fails for a
+non-obvious reason — each is learned once.
+
+A memory written by the model it guides can drift into noise, and agents follow bad guidance
+rather than ignoring it. So at the end of each epic, `memory-curator` checks every line: still
+true, not a one-task fact, not said elsewhere, short. It deletes, tightens, merges or moves
+lines, never adds any, and commits the result on the epic branch. Its changes are listed in the
+PR, along with anything it found that belongs in `project.md` (the operator's to write) or that
+is really a harness bug to fix upstream.
+
+This is separate from the knowledge layer below. Memory is what an agent learned about doing
+its job here; `project.md` is what the operator knows about the product.
 
 ## The knowledge layer
 
@@ -243,6 +269,8 @@ approval.
   accepts `mcp__<server>`; if not, `tracker` reports it and a run stops rather than letting
   the tracker drift from the code).
 - The GitHub and local adapters.
+- Agent memory in a real run: that memory stays in the main checkout for worktree-isolated
+  agents (the docs say so), and that `memory-curator` keeps it useful.
 - `/knowledge-layer` end to end on a real repo. Its gate script is exercised against
   passing, missing-path, over-ceiling and mode-off cases; the scan-and-grill flow is not.
 
