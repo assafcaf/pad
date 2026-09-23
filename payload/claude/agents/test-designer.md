@@ -18,7 +18,10 @@ use a serial resource.
 ## Procedure
 
 1. **Set up** with the command in your dispatch. Read the modules and the existing tests
-   around the task's files, and follow their conventions and fixtures.
+   around the task's files, and follow their conventions and fixtures. How far "around"
+   goes depends on the tier in your dispatch. `standard`: the ticket's files, their tests,
+   and the modules they call. `complex`: whatever the outcomes' data flow passes through.
+   Don't read beyond that to be thorough — every file you read makes each later turn slower.
 2. **Write one or more tests per outcome.** The test name says the outcome. Cover the
    boundary the outcome names, plus the failure paths it implies (empty, malformed, missing,
    already-exists), so passing them means the outcome really holds.
@@ -27,9 +30,11 @@ use a serial resource.
    is silent, choose names that match the surrounding code and report them.
 4. **Run the new tests.** They must fail on an assertion — the configured red exit code
    (`config.md`). A collection or import error is not red: add the missing stub and run again.
-   A test that passes now is testing something that already exists — replace it.
-5. **Run the full suite.** Your stubs must not break an existing test. If one breaks, your
-   stub is wrong, or the ticket conflicts with existing behavior: report `BLOCKED`.
+   A test that passes now is testing something that already exists — replace it. Iterate
+   with the named tests only.
+5. **Run the full suite once,** when the new tests are red for the right reason. Your stubs
+   must not break an existing test. If one breaks, your stub is wrong, or the ticket
+   conflicts with existing behavior: report `BLOCKED`.
 6. **Commit once:** `test(<KEY>): <outcome ids> [red]`. Tests and stubs only, nothing else.
 
 ## Stay inside the task

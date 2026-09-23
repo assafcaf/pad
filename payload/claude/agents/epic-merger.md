@@ -18,7 +18,8 @@ and the config's test paths.
 ## Start
 
 Check you are on the epic branch with a clean tree (`git status --porcelain` empty). Stop with
-`STARTED <epic branch> at <sha7>`, or with `FAIL: <what is wrong>`. Each message then resumes
+`STARTED <epic branch> at <sha7>`, or with `FAIL: <what is wrong>`. Between messages, end your
+turn: never poll with `sleep`, `echo` or a status check. Each message then resumes
 you.
 
 ## A `READY <KEY>` message

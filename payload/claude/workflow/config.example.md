@@ -37,7 +37,18 @@ in the agent file.
 | Code | `code-writer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Cherry-picks the red commit; may not change tests |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 
-Use `opus` for a task labelled `complex`, and for the retry of a task that failed a gate.
+### Tiers
+
+`/tickets` gives every task a tier (`.claude/workflow/ticket-template.md`, "Tiers"). The tier
+picks the flow and the models; the Tests and Code rows above are the `standard` defaults.
+
+| Tier | Flow | Test-designer | Code-writer | Retry |
+|---|---|---|---|---|
+| `small` | one `code-writer` in solo mode: red commit, then green | — | `sonnet` | `opus`, standard flow |
+| `standard` | `test-designer`, then `code-writer` | `sonnet` | `sonnet` | `opus` code-writer |
+| `complex` | as standard, wider reading brief | `opus` | `opus` | `opus` code-writer |
+
+A ticket with no `## Tier` section is `standard`; one labelled `complex` is `complex`.
 
 ## Tracker updates during a run
 

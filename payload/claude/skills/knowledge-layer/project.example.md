@@ -43,8 +43,8 @@ Gates are in `config.md`'s Commands table. Only what that table cannot express:
 
 ## Standing overlaps
 
-Files most tasks touch. `/tickets` and `task-planner` keep two tasks that both touch one out
-of the same wave.
+Files most tasks touch. `/tickets` and `task-planner` check two tasks that both touch one for
+a real conflict (both rewriting the same code); separate additions merge on their own.
 
 | Path | Recent commits touching it |
 |---|---|

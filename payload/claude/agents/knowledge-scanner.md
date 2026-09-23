@@ -35,7 +35,8 @@ rest.
    that is the most valuable thing you can find, because the operator has to settle it.
 4. **Standing overlaps.** Files touched by an unusual share of recent commits
    (`git log --name-only --pretty=format: -n 200 -- <area> | sort | uniq -c | sort -rn`).
-   These are what force two tasks into different waves, so the count matters.
+   These are where two parallel tasks are most likely to conflict at merge, so the count
+   matters.
 
 ## The inference test
 
