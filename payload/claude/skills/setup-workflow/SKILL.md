@@ -116,8 +116,8 @@ rather than overwriting it:
 - Write the checkout's **absolute path with forward slashes**, even on Windows: Git Bash eats
   backslashes in this field and the status line then fails silently.
 - If the operator already has a `statusLine` in their user settings, say what this one adds
-  (progress through the active epic: live from the run log during `/batch-implement`, and from
-  the ledger between runs) and ask before shadowing it for this project. Porting the segment
+  (progress through the epic this session is on: live from the run log during
+  `/batch-implement`, and from the ledger between runs) and ask before shadowing it for this project. Porting the segment
   into their own status line is often the better trade — it reads two files and calls no API.
 - Test it before reporting success:
   `echo '{"model":{"display_name":"test"}}' | python3 .claude/statusline.py`
