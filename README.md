@@ -55,10 +55,12 @@ is written to `docs/decisions/NNNN-<slug>.md` and committed instead.
 
 **2. Outcomes → the ledger.** `/tickets <spec path>` slices the spec vertically: each task
 delivers one to three outcomes end to end and is testable on its own, never split by layer. It
-declares the files each task will touch, since two tasks sharing a file cannot run in the same
-wave; it pins exact interface names into both sides of every dependency, because an implementer
-only ever sees its own ticket; and it labels the tasks needing design judgment `complex` so
-they get the stronger model.
+declares the files each task will touch, but adds a blocking edge only where one task uses what
+another builds, never merely because two share a file, so tasks run in parallel. It pins exact
+interface names into both sides of every dependency, because an implementer only ever sees its
+own ticket. And it gives every task a tier — `small`, `standard` or `complex` — that sets how
+much process the task gets. A small one is a single agent writing a red commit then a green
+one. A complex one gets separate test and code authors on the stronger model.
 
 You get one wave table, and it stops there. **Nothing is published before you approve it.**
 

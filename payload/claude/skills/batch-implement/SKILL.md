@@ -61,6 +61,11 @@ waves. When the tickets don't settle something, decide it and log
 | Plan path | The plan file's tasks and their recorded keys |
 | Outcomes in quotes | One task, no tracker. Run it inline (3d) on the current branch, after asking: current branch, or a worktree? |
 
+**Write each ticket body once,** to `.work/runs/<run id>/tickets/<KEY>.md` in the epic
+worktree, with `Write`, as `tracker` returned it. From here every agent gets the file's
+absolute path and reads it, rather than being handed the body as text. Each copy retyped into
+a prompt is output that someone waits for, three times per task.
+
 The run id is the epic key or a slug; the run log is `.work/runs/<run id>/progress.md` in the
 epic worktree. Owners append their own lines to it, so you only ever append too, one line at a
 time with `printf '%s
@@ -79,10 +84,13 @@ run log's `agents:` lines give you back the merger's id and each owner's; trust 
 ## 2. Start
 
 1. **Plan.** Dispatch `task-planner` with the ticket bodies. Reconcile its waves with the
-   tickets' own edges; log a ruling for each disagreement you settle. Its `GAPS` and `RISKS`
-   may change the models you choose or send you back to `/tickets`.
-2. **Confirm once.** Show the waves, the epic branch name, the planner's conflicts and gaps,
-   and that you will push that branch and update the tracker as tasks land. Wait for yes.
+   tickets' own edges; log a ruling for each disagreement you settle. Drop the edges it lists
+   under `EDGES TO DROP` unless you can name a use it missed, and take its `TIERS`
+   suggestions unless the ticket says why not; log both as rulings. Its `CONTRADICTIONS`,
+   `GAPS` and `RISKS` may change the models you choose or send you back to `/tickets`.
+2. **Confirm once.** Show the waves with each task's tier, the critical path, the epic branch
+   name, the planner's conflicts, contradictions and gaps, and that you will push that branch
+   and update the tracker as tasks land. Wait for yes.
 3. **Enter the epic worktree.** Create it if missing (`git fetch origin`, then
    `git worktree add .claude/worktrees/<KEY> -b <epic branch> origin/HEAD`), then
    `EnterWorktree` into it.
@@ -98,16 +106,20 @@ run log's `agents:` lines give you back the merger's id and each owner's; trust 
 
 ## 3. Run waves until no task is left
 
-**a. Pick the wave.** Ready tasks are those not done whose blockers are all done. Add them in
-key order, skipping any whose files overlap a task already in the wave, up to the parallelism
-limit.
+**a. Fill the free slots.** Ready tasks are those not done whose blockers are all done. Start
+them in key order up to the parallelism limit, skipping only a task the planner listed under
+`CONFLICTS` with one already running. Sharing a file is not a conflict: the merger merges
+additions to one file, and a real conflict comes back as `CONFLICT` and is rebased. Don't wait
+for a whole wave to close. Whenever an owner reports `DONE`, `FAILED` or `BLOCKED`, start
+whatever is ready now. The waves are the plan's order, not a barrier.
 
 **b. Dispatch one `ticket-owner` per task, in one message,** so they run in parallel. Name each
-`<task key>-owner`, and append `agents: <task key>-owner <id>` to the run log. Each prompt carries: the ticket body verbatim, the task key,
-the run id and epic branch, the setup, named-tests, full-suite and lint commands, the config's
-test paths, the model for the task and the stronger model for a retry (per the config's
-Agents section), any interface correction from an earlier owner's `INTERFACES`, and the
-merger's id.
+`<task key>-owner`, and append `agents: <task key>-owner <id>` to the run log. Each prompt carries: the ticket file's absolute path (not its text), the task key,
+the task's tier (`small` | `standard` | `complex` from its `## Tier` section; a ticket with
+none is `standard`, and one labelled `complex` is `complex`), the run id and epic branch, the
+setup, named-tests, full-suite and lint commands, the config's test paths, that tier's models
+and the retry model (per the config's Tiers table), any interface correction from an earlier
+owner's `INTERFACES`, and the merger's id.
 
 From here each owner moves its ticket, proves red, gates its branch and hands it to the
 merger; the merger merges one task at a time and gates the epic head after each merge. You
@@ -119,7 +131,7 @@ don't repeat their checks.
 |---|---|
 | Owner `NEEDS_RULING` | Decide it, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` the answer to the owner. If it needs the operator, it's one of the stop-and-ask cases above |
 | Owner `MERGED_PENDING_RESOURCE` | Run its `RESOURCE_PROBES`, one at a time across the whole run, with the configured runner, at the merge sha — from a throwaway `git worktree add --detach`, because the merger keeps merging in the epic worktree meanwhile. Keep the output in the run log. Pass: message the owner `RESOURCE PASSED` with the output tail. Fail: message the merger `REVERT <key> <merge sha>`, wait for its `REVERTED` line, then message the owner `RESOURCE FAILED` with the output |
-| Owner `DONE`, `FAILED`, `BLOCKED` | Record it. A failed or blocked task's dependents wait; everything else continues. A `BLOCKED` whose note is a `tracker` failure is a stop-and-ask case |
+| Owner `DONE`, `FAILED`, `BLOCKED` | Record it, then fill the free slot (a). A failed or blocked task's dependents wait; everything else continues. A `BLOCKED` whose note is a `tracker` failure is a stop-and-ask case |
 | Merger `FAIL: …; holding …` | Stop and ask. Once the operator has fixed it, message the merger `CONTINUE`; the held owners are still waiting and need nothing from you |
 
 Everything else — an owner's `SUBMITTED`, the merger's `MERGED` / `REJECTED` / `CONFLICT` /
@@ -130,10 +142,10 @@ every role yourself, in order, in the epic worktree (or the current branch for q
 outcomes). Same gates, same run-log line, and the same tracker comments when there is a
 tracker.
 
-**e. Close the wave** when every owner in it has reported `DONE`, `FAILED` or `BLOCKED`.
-1. Append a wave line to the run log: the keys, your rulings, and each owner's `INTERFACES`
-   and `FILES_OUTSIDE`. The owners have already appended their `<KEY>: done|failed|blocked`
-   lines; don't repeat them.
+**e. Record each finished task** when its owner reports `DONE`, `FAILED` or `BLOCKED`.
+1. Append one line to the run log: the key, your rulings for it, and the owner's `INTERFACES`
+   and `FILES_OUTSIDE`. The owner has already appended its `<KEY>: done|failed|blocked`
+   line; don't repeat it.
 2. Refresh the progress snapshot, unless the adapter is `local` — there the status line reads
    the ticket files directly and a snapshot would only go stale. Overwrite
    `.work/progress.json` in the **main checkout**, not this worktree

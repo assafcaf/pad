@@ -30,7 +30,8 @@ The gates live in `config.md`'s Commands table. Only what that table cannot say 
 - Every write to the ledger goes through `append()`. Direct writes bypass the checksum.
 
 ## Standing overlaps
-Files that most tasks touch, so `/tickets` and `task-planner` keep them out of one wave.
+Files that most tasks touch, so `/tickets` and `task-planner` watch them for real conflicts and
+put shared wiring in them into one task. Touching one is not by itself a blocking edge.
 | Path | Recent commits touching it |
 |---|---|
 | `db/schema.sql` | 19 of the last 40 |

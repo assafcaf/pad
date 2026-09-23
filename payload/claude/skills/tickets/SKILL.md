@@ -31,14 +31,29 @@ Nothing is published before the operator approves the plan.
   is testable on its own. Never split by layer ("models", then "API", then "tests").
 - **Cover every outcome.** Each spec outcome lands in exactly one task. Setup, config and
   docs work goes inside the task whose outcome needs it.
-- **Declare files.** List the files each task will likely touch. Two tasks that share a file
-  cannot run in the same wave, so either give one a `Blocked by` edge or move the shared
-  change into an earlier task.
+- **Declare files.** List the files each task will likely touch, and mark an edit that
+  rewrites existing code rather than adding to it. Sharing a file is **not** a blocking edge:
+  git merges separate additions to one file (a route, a prop, an import) on its own, and a
+  real conflict is caught at merge and rebased. An edge for a shared file serialises the
+  epic — a hub file like an app root or router is in almost every task, so every task ends
+  up in its own wave.
+- **Block only on use.** `Blocked by` means this task uses a name, a behaviour or data that
+  the other one builds. If two tasks would rewrite the same code, give that code to one
+  task and let the other consume it. If every task wires into one hub file, put the wiring
+  in a final task.
 - **Pin interfaces.** When a later task uses what an earlier one builds, write the exact
-  names and signatures into both tasks' `Interfaces`. Implementers see only their own ticket.
+  names and signatures into both tasks' `Interfaces`, and the edge. Implementers see only
+  their own ticket. A task that passes new props or arguments to something another task is
+  changing is using it, even when the ticket only says "wire".
+- **Keep outcomes consistent.** Two tasks must not assert different behaviour for the same
+  screen, function or record. Where they meet, one owns the behaviour and the other's outcome
+  names it.
 - **Tag resources.** Mark outcomes that need a serial resource from the config, by its tag.
-- **Label hard tasks.** Label a task `complex` when it needs design judgment across modules,
-  so `/batch-implement` gives it the stronger model.
+- **Assign a tier.** Every task gets `small`, `standard` or `complex`, with one line saying
+  why (`ticket-template.md`, "Tiers"). The tier decides how many agents run the task and on
+  which model, so be honest in both directions. A one-field change marked `standard` pays
+  for two agents and a hand-off it didn't need. A cross-module change marked `small` loses
+  the independent test author.
 - **Size to one session:** as a rule of thumb, at most 3 outcomes and about 5 files.
 
 ## 2. Compute waves and show the plan
@@ -46,11 +61,13 @@ Nothing is published before the operator approves the plan.
 A task is in wave *n* when all its blockers are in earlier waves. Present one table and stop
 for approval:
 
-| Wave | Task | Outcomes | Blocked by | Files | Tags |
-|---|---|---|---|---|---|
+| Wave | Task | Tier | Outcomes | Blocked by | Files | Tags |
+|---|---|---|---|---|---|---|
 
-Below it, list any spec outcome with no task (there should be none) and any decision you made
-that the spec didn't state.
+Below it, list any spec outcome with no task (there should be none), any decision you made
+that the spec didn't state, and the longest chain of blocking edges. If that chain holds more
+than about half the tasks, look again at each edge on it: an edge that exists only because
+two tasks share a file is not a real one.
 
 ## 3. Write the plan file
 

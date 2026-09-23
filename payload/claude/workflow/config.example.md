@@ -37,7 +37,24 @@ in the agent file.
 | Code | `code-writer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Cherry-picks the red commit; may not change tests |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 
-Use `opus` for a task labelled `complex`, and for the retry of a task that failed a gate.
+### Tiers
+
+`/tickets` gives every task a tier (`.claude/workflow/ticket-template.md`, "Tiers"). The tier
+picks the flow and the models; the Tests and Code rows above are the `standard` defaults.
+
+| Tier | Flow | Test-designer | Code-writer | Retry |
+|---|---|---|---|---|
+| `small` | one `code-writer` in solo mode: red commit, then green | — | `sonnet` | `opus`, standard flow |
+| `standard` | `test-designer`, then `code-writer` | `sonnet` | `sonnet` | `opus` code-writer |
+| `complex` | as standard, wider reading brief | `opus` | `opus` | `opus` code-writer |
+
+A ticket with no `## Tier` section is `standard`; one labelled `complex` is `complex`.
+
+**Thinking effort** is set in an agent file's `effort:` field, and a dispatch can't override it,
+so it can't follow a task's tier. The coordinators, whose work is the same in every task, have
+one: `ticket-owner` `medium` (it makes the occasional ruling), `epic-merger` `low`. The test
+and code agents inherit the session's effort; their tier brief ("Effort by tier") is what
+scales their reading and thinking.
 
 ## Tracker updates during a run
 
@@ -46,8 +63,8 @@ So progress is visible without reading the terminal:
 | When | Task | Comment |
 |---|---|---|
 | Wave starts | → doing | run id and epic branch |
-| Red proven | — | red sha, outcome → test mapping |
-| Merged and gates green | → done | merge and red shas, commands and results, files outside the ticket's list |
+| Red proven (standard, complex) | — | red sha, test count and files. A small task puts it in the done comment |
+| Merged and gates green | → done | at most five lines: merge and red shas, red and green commands with results, files outside the ticket's list. The full evidence is in `.work/runs/<run id>/<KEY>.md` |
 | Gate failed or blocked | stays doing | what failed, and what is needed |
 | Epic finished | epic → review | PR URL |
 
