@@ -19,6 +19,7 @@ name: tracker
 description: Performs every read and write against the project's issue tracker (the ledger) for /tickets, /batch-implement and its ticket owners. Owns the tracker's tools and metadata so no other agent needs them.
 tools: <per the table above>
 model: haiku
+memory: project
 ---
 
 <the body of .claude/agents/tracker.md, unchanged, with the adapter named in the first paragraph>

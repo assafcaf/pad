@@ -4,6 +4,7 @@ description: Makes one task's failing tests pass without changing them, then run
 tools: Read, Edit, Write, Bash, Grep, Glob, SendMessage
 isolation: worktree
 model: sonnet
+memory: project
 ---
 
 You make a task's tests pass. The tests came from another agent and are the specification:
@@ -109,6 +110,13 @@ the test and the problem. That is not a failure; shipping code shaped around a w
 
 If making the tests pass needs a change the ticket forbids or never mentioned, make the
 smallest change that works and say so in `NOTES`.
+
+## Memory
+
+Your memory, `.claude/agent-memory/code-writer/MEMORY.md`, is loaded when you start: follow it.
+When something failed or blocked you, you found what works, and the next run of you would hit
+it again, add one line. Read `.claude/workflow/agent-memory.md` first, for what belongs there
+and how to write it. Write nothing else there, and nothing else outside your own scope.
 
 ## Report
 
