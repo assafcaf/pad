@@ -27,17 +27,24 @@ code=$?
 printf '%s\n' "$out"
 echo "---"
 
-if printf '%s' "$out" | grep -qE 'No test files found'; then
+# vitest colours its summary even when its output is a pipe (on Windows tinyrainbow forces
+# colour unless NO_COLOR is set), and the escape codes land between the anchors the patterns
+# below match -- "\e[2m      Tests \e[22m \e[1m\e[31m17 failed". Match on a stripped copy so
+# the verdict is the same everywhere; the caller still sees the original, colours and all.
+esc=$(printf '\033')
+plain="$(printf '%s' "$out" | sed -E "s/${esc}\[[0-9;?]*[a-zA-Z]//g")"
+
+if printf '%s' "$plain" | grep -qE 'No test files found'; then
   echo "vitest-gate: no test files matched (exit 2)"
   exit 2
 fi
 
-if printf '%s' "$out" | grep -qE 'Failed to load|Unhandled Error|Cannot find module|Tests[[:space:]]+no tests'; then
+if printf '%s' "$plain" | grep -qE 'Failed to load|Unhandled Error|Cannot find module|Tests[[:space:]]+no tests'; then
   echo "vitest-gate: a suite failed to load, so no assertion ran (exit 2)"
   exit 2
 fi
 
-if printf '%s' "$out" | grep -qE '^[[:space:]]*Tests[[:space:]]+.*[0-9]+ failed'; then
+if printf '%s' "$plain" | grep -qE '^[[:space:]]*Tests[[:space:]]+.*[0-9]+ failed'; then
   echo "vitest-gate: tests ran and failed (exit 1)"
   exit 1
 fi
