@@ -61,6 +61,11 @@ waves. When the tickets don't settle something, decide it and log
 | Plan path | The plan file's tasks and their recorded keys |
 | Outcomes in quotes | One task, no tracker. Run it inline (3d) on the current branch, after asking: current branch, or a worktree? |
 
+**Write each ticket body once,** to `.work/runs/<run id>/tickets/<KEY>.md` in the epic
+worktree, with `Write`, as `tracker` returned it. From here every agent gets the file's
+absolute path and reads it, rather than being handed the body as text. Each copy retyped into
+a prompt is output that someone waits for, three times per task.
+
 The run id is the epic key or a slug; the run log is `.work/runs/<run id>/progress.md` in the
 epic worktree. Owners append their own lines to it, so you only ever append too, one line at a
 time with `printf '%s
@@ -109,7 +114,7 @@ for a whole wave to close. Whenever an owner reports `DONE`, `FAILED` or `BLOCKE
 whatever is ready now. The waves are the plan's order, not a barrier.
 
 **b. Dispatch one `ticket-owner` per task, in one message,** so they run in parallel. Name each
-`<task key>-owner`, and append `agents: <task key>-owner <id>` to the run log. Each prompt carries: the ticket body verbatim, the task key,
+`<task key>-owner`, and append `agents: <task key>-owner <id>` to the run log. Each prompt carries: the ticket file's absolute path (not its text), the task key,
 the task's tier (`small` | `standard` | `complex` from its `## Tier` section; a ticket with
 none is `standard`, and one labelled `complex` is `complex`), the run id and epic branch, the
 setup, named-tests, full-suite and lint commands, the config's test paths, that tier's models

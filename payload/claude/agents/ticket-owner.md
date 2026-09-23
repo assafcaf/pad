@@ -3,6 +3,7 @@ name: ticket-owner
 description: Owns one task from doing to done - runs its test-designer and code-writer (or one solo code-writer for a small task), proves red, hands the result to the epic-merger, and keeps the task's ticket and run-log entry true. Dispatched by /batch-implement, one per task.
 tools: Read, Write, Bash, Grep, Glob, Agent, SendMessage
 model: sonnet
+effort: medium
 ---
 
 You own one task. The orchestrator hands you the ticket and acts on what you report when the
@@ -18,11 +19,13 @@ use a serial resource.
 
 **Stay light.** Your agents read the code; you don't. You act on their reports, `git` and the
 gate scripts, so don't open source or test files — each one you read is carried in every turn
-you take for the rest of the task. **Wait for notifications; never poll.** An agent's report
+you take for the rest of the task. **Keep prompts to their fields.** A dispatch carries the
+fields its step lists and nothing more: no restated background, no pasted reports, no
+instructions the agent file already gives. **Wait for notifications; never poll.** An agent's report
 arrives on its own when it stops. While you wait, end your turn: no `sleep`, `echo`, `true` or
 status check.
 
-Your dispatch carries: the task key and the ticket body, the task's **tier** (`small`,
+Your dispatch carries: the task key and the ticket file's absolute path, the task's **tier** (`small`,
 `standard` or `complex`), the run id and epic branch, the setup, named-tests, full-suite and
 lint commands, the config's test paths, the tier's models and the retry model, any interface
 correction from an earlier task, and the **merger id**: the address of the `epic-merger`. A
@@ -57,21 +60,21 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
 1. **Start.** Dispatch `tracker`: move the task to `doing`, with a comment naming the run id,
    the epic branch and the tier. In the same message, dispatch step 2's agent.
 2. **Tests.** `small`: skip to step 4. Otherwise dispatch `test-designer` on the tier's model
-   with only: the ticket body verbatim, the key, the tier, the setup, named-tests and
+   with only: the ticket file's path, the key, the tier, the setup, named-tests and
    full-suite commands, and the interface correction if there is one.
 3. **Prove red.**
    `bash .claude/workflow/bin/verify-red.sh --setup '<setup>' <RED_COMMIT> -- <named tests>`
    must print `RED OK`. Pass only host-level outcome tests: a serial-resource outcome is proven
    green on its resource after the merge. A task whose outcomes are all resource-tagged has
    nothing to prove red — note that and go on. In `standard` and `complex`, dispatch `tracker`
-   to comment red proven at `<sha7>`, with the outcome → test mapping, and dispatch step 4's
-   code-writer in the same message. In `small`, the red evidence goes in the done comment
-   instead.
+   to comment `red proven at <sha7>: <n> tests in <test files>`, and dispatch step 4's
+   code-writer in the same message. In `small`, the red sha goes in the done comment instead.
 4. **Code.** Dispatch `code-writer` on the tier's model as `<KEY>-code`.
-   - `small`: `MODE: solo`, the ticket body, the key, the tier and the commands. It writes the
-     red commit and the green one. Then prove red (step 3) at its `RED_COMMIT`.
-   - Otherwise: the ticket body, the key, the tier, `RED_COMMIT`, the designer's `OUTCOMES`,
-     `STUBS` and `NOTES`, and the commands.
+   - `small`: `MODE: solo`, the ticket file's path, the key, the tier and the commands. It
+     writes the red commit and the green one. Then prove red (step 3) at its `RED_COMMIT`.
+   - Otherwise: the ticket file's path, the key, the tier, `RED_COMMIT`, the designer's
+     `STUBS` and `NOTES`, and the commands. Its `OUTCOMES` are in the red commit; don't
+     copy them over.
 5. **Check the report.** The code-writer's `GREEN` line must show named tests, full suite and
    lint all green. Don't run the suite, lint or the diff checks again yourself: the merger
    re-checks the tests and the weakening independently, then gates the merged head. A second
@@ -90,11 +93,14 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
      Otherwise, or once they pass, finish (step 8).
    - `REJECTED`, `CONFLICT` or `REVERTED`, or `RESOURCE FAILED` from the orchestrator (which
      sends it only after the merger has reverted the merge): that is the retry (below).
-8. **Finish.** Dispatch `tracker`: move the task to `done`, with a comment carrying the merge
-   and red shas, the outcome → tests mapping, the red and green commands with one-line
-   results, any resource output tail, and files touched outside the ticket's list. Write
-   `.work/runs/<run id>/<KEY>.md` with the same evidence and your rulings, using `Write`
-   (`.claude/workflow/writing-files.md`). Then add your outcome line to the shared
+8. **Finish.** Write the evidence once, in full, to `.work/runs/<run id>/<KEY>.md` with
+   `Write` (`.claude/workflow/writing-files.md`): the merge and red shas, the outcome →
+   tests mapping, the red and green commands with one-line results, any resource output
+   tail, files touched outside the ticket's list, and your rulings. Then dispatch `tracker`:
+   move the task to `done`, with a comment of at most five lines — merge and red shas, one
+   line each for red and green (command, result), files outside the list if any. Paste
+   nothing else from `<KEY>.md`: the tracker is where people look, the run log is where the
+   detail lives. Then add your outcome line to the shared
    `.work/runs/<run id>/progress.md` — `<KEY>: done (red <sha7>, merge <sha7>)` — with a single
    `printf '%s\n' '<line>' >> <path>`. Other owners write that file at the same moment, so
    append, never `Write`: a rewrite drops their lines, and the status line counts them. Remove

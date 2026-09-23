@@ -50,6 +50,12 @@ picks the flow and the models; the Tests and Code rows above are the `standard` 
 
 A ticket with no `## Tier` section is `standard`; one labelled `complex` is `complex`.
 
+**Thinking effort** is set in an agent file's `effort:` field, and a dispatch can't override it,
+so it can't follow a task's tier. The coordinators, whose work is the same in every task, have
+one: `ticket-owner` `medium` (it makes the occasional ruling), `epic-merger` `low`. The test
+and code agents inherit the session's effort; their tier brief ("Effort by tier") is what
+scales their reading and thinking.
+
 ## Tracker updates during a run
 
 So progress is visible without reading the terminal:
@@ -57,8 +63,8 @@ So progress is visible without reading the terminal:
 | When | Task | Comment |
 |---|---|---|
 | Wave starts | → doing | run id and epic branch |
-| Red proven (standard, complex) | — | red sha, outcome → test mapping. A small task puts it in the done comment |
-| Merged and gates green | → done | merge and red shas, commands and results, files outside the ticket's list |
+| Red proven (standard, complex) | — | red sha, test count and files. A small task puts it in the done comment |
+| Merged and gates green | → done | at most five lines: merge and red shas, red and green commands with results, files outside the ticket's list. The full evidence is in `.work/runs/<run id>/<KEY>.md` |
 | Gate failed or blocked | stays doing | what failed, and what is needed |
 | Epic finished | epic → review | PR URL |
 

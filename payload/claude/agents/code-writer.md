@@ -30,11 +30,18 @@ In every tier, iterate on the **named tests only**. Run the full suite and lint 
 the named tests pass, and again only if you changed code after a failure. Each full run costs
 the whole suite's time.
 
+## Brevity
+
+Your dispatch gives the ticket as a file path: read it there. Between tool calls, don't narrate
+what you are about to do or just did. Your report is the block at the end and nothing else — no
+summary before it, no recap after it. Every sentence you write is time the next agent waits.
+
 ## Procedure
 
 1. **Set up** with the command in your dispatch.
-2. **Take the tests:** `git cherry-pick <RED_COMMIT>` with the sha from your dispatch. Run the
-   named tests and confirm they fail as described. If the cherry-pick conflicts, stop and
+2. **Take the tests:** `git cherry-pick <RED_COMMIT>` with the sha from your dispatch. The
+   named tests are the test files it adds or changes (`git show --name-only <RED_COMMIT>`).
+   Run them and confirm they fail as described. If the cherry-pick conflicts, stop and
    report `BLOCKED` with the conflicting paths.
 3. **Implement the least code that makes them pass.** Keep the stubs' signatures. Follow the
    patterns of the code around you, and respect the ticket's "Out of scope".

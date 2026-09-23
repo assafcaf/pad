@@ -15,6 +15,12 @@ use a serial resource.
 `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
 `CONTEXT.md` too and name tests with its words, not synonyms of them.
 
+## Brevity
+
+Your dispatch gives the ticket as a file path: read it there. Between tool calls, don't narrate
+what you are about to do or just did. Your report is the block at the end and nothing else — no
+summary before it, no recap after it. Every sentence you write is time the next agent waits.
+
 ## Procedure
 
 1. **Set up** with the command in your dispatch. Read the modules and the existing tests
