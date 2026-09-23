@@ -55,7 +55,8 @@ recommended option.
 
 ## 4. Write the spec (Feature size)
 
-Save to `.work/specs/<yyyy-mm-dd>-<slug>.md`:
+Save to `.work/specs/<yyyy-mm-dd>-<slug>.md` with `Write`, not a heredoc
+(`.claude/workflow/writing-files.md`):
 
 ```markdown
 # <Title>

@@ -24,6 +24,16 @@ in this checkout — never commit it).
 | Suite | the configured setup and full-suite commands: record the pass/skip counts and the runtime here |
 | Serial resources | for each one in the config, does its runner reach it from here? |
 | Tracker CLI | `gh auth status` when the adapter is `github` |
+| Text-file writes | the escape hatch in `.claude/workflow/writing-files.md` — see below |
+
+**The text-file escape hatch.** That doc sends an agent to an interpreter heredoc when only
+the shell will do, and names `CLAUDE.local.md` as where the working invocation is recorded.
+Settle it here rather than leaving every run to find out. Which of `python3`, `python` or
+`py -3` actually runs — a stub that exits "Permission denied" counts as not running — and does
+non-ASCII survive a round trip: write a file containing `→`, then read it back, in two
+separate commands. Where the write succeeds but echoing it back raises `UnicodeEncodeError`,
+record that: the exit code is `1` for a write that worked, and an agent that doesn't know it
+undoes a correct edit.
 
 Write only facts that differ between machines, in this shape:
 
@@ -35,6 +45,8 @@ Observed <yyyy-mm-dd> by /setup-workflow.
 - OS / shell: <…>
 - Suite here: `<command>` → <n> passed, <m> skipped, ~<t>s
 - <platform quirks that cost someone an hour here, e.g. path or shell differences>
+- Text-file escape hatch: `<python3 | python | py -3>`; stdout <does | does not> need
+  `sys.stdout.reconfigure(encoding='utf-8')` before printing non-ASCII
 - Serial resources: <tag: reachable / unreachable>
 ```
 

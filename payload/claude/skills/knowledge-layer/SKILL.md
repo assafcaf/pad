@@ -98,7 +98,9 @@ from a scanner and which are theirs.
 
 ### 5. Write
 
-1. `CONTEXT.md` and `.claude/workflow/project.md`, in their formats.
+1. `CONTEXT.md` and `.claude/workflow/project.md`, in their formats. Both with `Write`, and
+   any later correction with `Edit` — never a heredoc or `sed`
+   (`.claude/workflow/writing-files.md`).
 2. The `## Project knowledge` section in `.claude/workflow/config.md`: set `Mode: on`, drop
    the off paragraph, and write this table under it. Add the whole section if the file
    predates this skill.

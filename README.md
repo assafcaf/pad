@@ -149,6 +149,7 @@ section for your `CLAUDE.md`.
 .claude/workflow/definition-of-done.md
 .claude/workflow/ticket-template.md
 .claude/workflow/testing.md             how outcome tests are written
+.claude/workflow/writing-files.md       which tool writes a prose file, and why not a heredoc
 .claude/workflow/trackers/{jira,github,local}.md
 .claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths}.sh
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
