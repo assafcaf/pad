@@ -29,6 +29,13 @@ you.
 Handle one message at a time, in the order they arrive. Reply to its `from` address; that is
 the task's owner, and it waits for your reply however long it takes.
 
+0. **Check where you are, then the message.** First, `git rev-parse --abbrev-ref HEAD` must
+   name the epic branch and `git status --porcelain` must be empty. If git refuses to run in
+   the epic worktree, or either check fails, that is your environment: see Holding. Then the
+   message itself: it names a `KEY`, and `git cat-file -e <sha>^{commit}` succeeds for both
+   `RED` and `TASK_HEAD` (run `git fetch origin` once first if one is missing). If not,
+   reply `RESEND <KEY>: <what is missing or wrong>` and go to the next message. Nothing was
+   merged, and a bad message from one owner never holds anyone else's.
 1. **Re-check, independently of the owner.** With `BASE = git merge-base <TASK_HEAD> HEAD` — the
    point the task's branch left the epic, whatever has merged or reverted since — both must
    hold:
@@ -46,8 +53,9 @@ the task's owner, and it waits for your reply however long it takes.
    Holding) — an owner told `MERGED` would mark its ticket done on a merge nobody else can see.
 5. **Reply** `MERGED <merge sha>` with the suite and lint one-line results.
 
-Then stop with one line: `MERGED <KEY> <sha7>`, `REJECTED <KEY>`, `CONFLICT <KEY>` or
-`REVERTED <KEY>`. The orchestrator gets that line as a notification and acts on none of them.
+Then stop with one line: `MERGED <KEY> <sha7>`, `REJECTED <KEY>`, `CONFLICT <KEY>`,
+`REVERTED <KEY>` or `RESEND <KEY>`. The orchestrator gets that line as a notification and acts
+on none of them.
 
 ## A `REVERT <KEY> <merge sha>` message
 
@@ -56,12 +64,19 @@ as in step 3, push, reply `REVERTED <KEY> at <new head sha7>`, and stop with the
 
 ## Holding
 
-Anything outside these steps — a dirty tree, a detached head, a message you can't parse, a
-revert that won't go green, a push that won't go through — means stop with
-`FAIL: <what you saw>; holding <KEY>, <KEY>` naming every task whose `READY` you have not yet
-answered. Don't repair it, and don't answer those owners: they wait. The orchestrator gets the
-operator to fix it and then messages you `CONTINUE`; pick up where you stopped (for a push,
-push again), and answer the held messages in order.
+Hold only for what would make every merge unsafe, not for one task's problem: that one gets
+its own reply (`RESEND`, `REJECTED`, `CONFLICT`, `REVERTED`) and you move on. What holds
+everything is the epic worktree or branch itself — git refuses to run there, a dirty tree, a
+detached head, a revert that won't go green, a push that won't go through. Then stop with
+`FAIL: <kind>: <what you saw>; holding <KEY>, <KEY>` naming every task whose `READY` you have
+not yet answered. The kind is `environment` when git won't run in the epic worktree or your
+working directory is no longer it, and `branch` for anything wrong with the branch, the tree
+or the push. Don't repair it, and don't answer those owners: they wait.
+
+The orchestrator then messages you `CONTINUE` once it is fixed — pick up where you stopped
+(for a push, push again), and answer the held messages in order — or `STAND DOWN` because it
+is replacing you. On `STAND DOWN`, reply to no owner, merge nothing, and stop with
+`STOOD DOWN`.
 
 ## Memory
 

@@ -105,6 +105,13 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
      Otherwise, or once they pass, finish (step 8).
    - `REJECTED`, `CONFLICT` or `REVERTED`, or `RESOURCE FAILED` from the orchestrator (which
      sends it only after the merger has reverted the merge): that is the retry (below).
+   - `RESEND <KEY>: <why>`: your `READY` block was wrong — a missing field, or a sha the epic
+     worktree can't see. Fix the block from `git` (a code-writer's branch that is gone,
+     re-read from its report) and send it again. This is not the retry; a second `RESEND`
+     for the same reason is `BLOCKED`.
+   - `MERGER <id>` from the orchestrator: the merger was replaced and never answered you.
+     That id is your merger from now on; send it the same `READY` block and stop with
+     `SUBMITTED`.
 8. **Finish.** Write the evidence once, in full, to `.work/runs/<run id>/<KEY>.md` with
    `Write` (`.claude/workflow/writing-files.md`): the merge and red shas, the outcome →
    tests mapping, the red and green commands with one-line results, any resource output

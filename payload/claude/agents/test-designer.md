@@ -29,7 +29,13 @@ summary before it, no recap after it. Every sentence you write is time the next 
    goes depends on the tier in your dispatch. `standard`: the ticket's files, their tests,
    and the modules they call. `complex`: whatever the outcomes' data flow passes through.
    Don't read beyond that to be thorough — every file you read makes each later turn slower.
-2. **Write one or more tests per outcome.** The test name says the outcome. Cover the
+2. **Write one or more tests per outcome, in a new test file** named for the task's subject,
+   next to the code it tests, following the suite's naming (`<Module>.<subject>.test.tsx`,
+   `test_<module>_<subject>.py`). Don't append to an existing test file: other tasks in the
+   epic are adding to the same shared files — the app-level test above all — at the same
+   spot, and git conflicts on every pair of them. Each of those is a rebase round at merge.
+   Import the fixtures you need; one that is private to another file, copy the few lines you
+   need rather than exporting it. The test name says the outcome. Cover the
    boundary the outcome names, plus the failure paths it implies (empty, malformed, missing,
    already-exists), so passing them means the outcome really holds.
 3. **Add only the stubs the tests need to run**: a module, a signature, a function raising

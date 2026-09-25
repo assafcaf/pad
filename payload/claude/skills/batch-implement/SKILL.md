@@ -50,8 +50,8 @@ waves. When the tickets don't settle something, decide it and log
 - every remaining task being blocked or failed
 - `tracker` reporting `FAIL`, or its tools being unavailable: the run's record would silently
   stop matching the code
-- the merger stopping with `FAIL`: it holds every task it hasn't answered until you send it
-  `CONTINUE`
+- the merger stopping with `FAIL: branch`: it holds every task it hasn't answered until you
+  send it `CONTINUE`. A `FAIL: environment` is not asked about: replace the merger (3c)
 
 ## 1. Load the work
 
@@ -103,7 +103,7 @@ run log's `agents:` lines give you back the merger's id and each owner's; trust 
    the run id, the setup, full-suite and lint commands, and the test paths. Append
    `agents: <epic key>-merger <id>` to the run log. It stops with `STARTED`; a `FAIL` means stop
    and ask. There is one merger per session: the epic branch's `git log` is its whole state, so
-   a new session starts a fresh one, and nothing else does.
+   a new session starts a fresh one, and otherwise only a `FAIL: environment` does (3c).
 
 ## 3. Run waves until no task is left
 
@@ -133,10 +133,21 @@ don't repeat their checks.
 | Owner `NEEDS_RULING` | Decide it, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` the answer to the owner. If it needs the operator, it's one of the stop-and-ask cases above |
 | Owner `MERGED_PENDING_RESOURCE` | Run its `RESOURCE_PROBES`, one at a time across the whole run, with the configured runner, at the merge sha — from a throwaway `git worktree add --detach`, because the merger keeps merging in the epic worktree meanwhile. Keep the output in the run log. Pass: message the owner `RESOURCE PASSED` with the output tail. Fail: message the merger `REVERT <key> <merge sha>`, wait for its `REVERTED` line, then message the owner `RESOURCE FAILED` with the output |
 | Owner `DONE`, `FAILED`, `BLOCKED` | Record it, then fill the free slot (a). A failed or blocked task's dependents wait; everything else continues. A `BLOCKED` whose note is a `tracker` failure is a stop-and-ask case |
-| Merger `FAIL: …; holding …` | Stop and ask. Once the operator has fixed it, message the merger `CONTINUE`; the held owners are still waiting and need nothing from you |
+| Merger `FAIL: branch: …; holding …` | Stop and ask. Once the operator has fixed it, message the merger `CONTINUE`; the held owners are still waiting and need nothing from you |
+| Merger `FAIL: environment: …; holding …` | Replace it, without asking — below |
+
+**Replacing the merger.** The merger's only state is the epic branch's `git log`, so a fresh
+one loses nothing, and every minute spent asking is a minute every held task waits. Message
+the old merger `STAND DOWN` and wait for `STOOD DOWN` (or its stop). In the epic worktree,
+check that the tree is clean and on the epic branch; if not, that is a `branch` problem —
+stop and ask. Otherwise dispatch a new `epic-merger` as in 2.6, and append
+`agents: <epic key>-merger <new id> (replaces <old id>: <its FAIL line>)` to the run log.
+Then message each held owner `MERGER <new id>`; each resends its `READY` there. Tell the
+operator what happened, but don't wait for an answer. Replace it once per run: a second
+`FAIL: environment` is a stop-and-ask.
 
 Everything else — an owner's `SUBMITTED`, the merger's `MERGED` / `REJECTED` / `CONFLICT` /
-`REVERTED` lines — is for the log; the owner already has it and handles its own retry.
+`REVERTED` / `RESEND` lines — is for the log; the owner already has it and handles its own retry.
 
 **d. Inline instead** when the whole run is one task: skip the owner and the merger, and do
 every role yourself, in order, in the epic worktree (or the current branch for quoted

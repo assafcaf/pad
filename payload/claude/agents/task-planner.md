@@ -30,7 +30,8 @@ critical path, so add one only for a reason you can name.
    function, component or block, or one restructures a file the other edits. Look past
    the declared file lists: read the modules and their tests to see what each outcome
    implies. A merge conflict is caught and rebased at merge time, so name only the ones you
-   expect.
+   expect. Tests don't count: each task's tests go in a new file of its own (`test-designer`),
+   so two tasks adding tests for the same module never share a test file.
 3. **Interface agreement.** Does what one task produces match what the next consumes, name for
    name and type for type? Name every mismatch.
 4. **Contradicting outcomes.** Two tasks asserting different behaviour for the same screen,

@@ -86,8 +86,10 @@ second agent's set-up and reading on a change too small to need one. The red com
 proven by a script, and the tests are still frozen once it exists.
 
 1. **Set up** with the command in your dispatch, and read `.claude/workflow/testing.md`.
-2. **Write the tests first.** At least one per outcome, named for it, covering the boundary it
-   names. Add only the stubs they need to import. Run them: they must fail on an assertion,
+2. **Write the tests first,** in a new test file of their own, as a test-designer would
+   (`test-designer.md`, step 2): appending to a shared test file conflicts at merge with every
+   other task that does the same. At least one per outcome, named for it, covering the
+   boundary it names. Add only the stubs they need to import. Run them: they must fail on an assertion,
    with the configured red exit code, not on an import error.
 3. **Commit the red commit:** `test(<KEY>): <outcome ids> [red]`, tests and stubs only. Its sha
    is your `RED_COMMIT`.
