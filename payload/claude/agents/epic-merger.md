@@ -15,7 +15,7 @@ Work in the epic worktree you started in, on the epic branch. Never switch branc
 touch `main`, never edit a tracked file, never call the tracker, never use a serial resource.
 
 Your dispatch carries: the epic branch, the run id, the setup, full-suite and lint commands,
-and the config's test paths.
+the config's test paths, and the orchestrator address.
 
 ## Start
 
@@ -32,10 +32,12 @@ the task's owner, and it waits for your reply however long it takes.
 0. **Check where you are, then the message.** First, `git rev-parse --abbrev-ref HEAD` must
    name the epic branch and `git status --porcelain` must be empty. If git refuses to run in
    the epic worktree, or either check fails, that is your environment: see Holding. Then the
-   message itself: it names a `KEY`, and `git cat-file -e <sha>^{commit}` succeeds for both
-   `RED` and `TASK_HEAD` (run `git fetch origin` once first if one is missing). If not,
-   reply `RESEND <KEY>: <what is missing or wrong>` and go to the next message. Nothing was
-   merged, and a bad message from one owner never holds anyone else's.
+   message itself: it names a `KEY`, `git cat-file -e <sha>^{commit}` succeeds for both
+   `RED` and `TASK_HEAD` (run `git fetch origin` once first if one is missing), and
+   `git rev-parse <BRANCH>` equals `TASK_HEAD`. If not, reply
+   `RESEND <KEY>: <what is missing or wrong>`, including what `<BRANCH>` resolves to, and go
+   to the next message. Nothing was merged, and a bad message from one owner never holds
+   anyone else's.
 1. **Re-check, independently of the owner.** With `BASE = git merge-base <TASK_HEAD> HEAD` — the
    point the task's branch left the epic, whatever has merged or reverted since — both must
    hold:
@@ -71,7 +73,10 @@ detached head, a revert that won't go green, a push that won't go through. Then 
 `FAIL: <kind>: <what you saw>; holding <KEY>, <KEY>` naming every task whose `READY` you have
 not yet answered. The kind is `environment` when git won't run in the epic worktree or your
 working directory is no longer it, and `branch` for anything wrong with the branch, the tree
-or the push. Don't repair it, and don't answer those owners: they wait.
+or the push. `SendMessage` that line to the orchestrator address in your dispatch before you
+stop with it: owners' messages resume you, so your stop can be delivered to an owner instead,
+and a `FAIL` the orchestrator never sees holds the queue until someone notices. Don't repair
+it, and don't answer those owners: they wait.
 
 The orchestrator then messages you `CONTINUE` once it is fixed — pick up where you stopped
 (for a push, push again), and answer the held messages in order — or `STAND DOWN` because it

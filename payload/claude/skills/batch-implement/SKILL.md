@@ -36,6 +36,13 @@ code review: a task is done when the definition of done holds.
 dispatch returns, so keep the merger's id and every owner's id, and reply to a message at its
 `from` address.
 
+**Reports come by message.** An agent's stop can be delivered to the agent whose message resumed
+it, which for an owner or the merger is often the other one, not you. So every dispatch of the merger and of
+an owner carries your own address — `main`, the address `SendMessage` gives the main
+conversation — and they send you each report that needs you before stopping with it. The same
+report can then reach you twice, as the message and as the stop: act on the first, per task
+and status, and ignore the repeat.
+
 **Wait for notifications; never poll.** An agent's report arrives on its own when it stops.
 A `sleep`, an `echo`, or a status check while you wait re-reads your whole context for nothing.
 
@@ -100,7 +107,7 @@ run log's `agents:` lines give you back the merger's id and each owner's; trust 
 5. **Baseline.** Run setup, the full suite and lint. Log the results with the head sha. Red
    means stop: later failures can't be attributed.
 6. **Start the merger.** Dispatch `epic-merger` as `<epic key>-merger` with the epic branch,
-   the run id, the setup, full-suite and lint commands, and the test paths. Append
+   the run id, the setup, full-suite and lint commands, the test paths, and your address. Append
    `agents: <epic key>-merger <id>` to the run log. It stops with `STARTED`; a `FAIL` means stop
    and ask. There is one merger per session: the epic branch's `git log` is its whole state, so
    a new session starts a fresh one, and otherwise only a `FAIL: environment` does (3c).
@@ -120,7 +127,7 @@ the task's tier (`small` | `standard` | `complex` from its `## Tier` section; a 
 none is `standard`, and one labelled `complex` is `complex`), the run id and epic branch, the
 setup, named-tests, full-suite and lint commands, the config's test paths, that tier's models
 and the retry model (per the config's Tiers table), any interface correction from an earlier
-owner's `INTERFACES`, and the merger's id.
+owner's `INTERFACES`, the merger's id, and your address.
 
 From here each owner moves its ticket, proves red, gates its branch and hands it to the
 merger; the merger merges one task at a time and gates the epic head after each merge. You

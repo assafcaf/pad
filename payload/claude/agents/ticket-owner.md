@@ -29,7 +29,8 @@ status check.
 Your dispatch carries: the task key and the ticket file's absolute path, the task's **tier** (`small`,
 `standard` or `complex`), the run id and epic branch, the setup, named-tests, full-suite and
 lint commands, the config's test paths, the tier's models and the retry model, any interface
-correction from an earlier task, and the **merger id**: the address of the `epic-merger`. A
+correction from an earlier task, the **merger id**: the address of the `epic-merger`, and the
+**orchestrator address**, where your reports go (Report). A
 dispatch with no ticket key (a fix from the epic's final review) names a slug to use as
 `<KEY>`; skip every `tracker` step for it.
 
@@ -96,9 +97,13 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
    ```
    READY <KEY>
    GOAL: <the ticket's goal, one line>
+   BRANCH: <the code-writer's BRANCH>
    RED: <CHERRY_PICKED_RED, or the solo code-writer's RED_COMMIT>
    TASK_HEAD: <HEAD>
    ```
+   Fill both shas from `git rev-parse <BRANCH> <RED>` output in the same turn — paste them,
+   never retype a sha from a report. A 40-character sha retyped by hand comes out wrong often
+   enough to have stalled a run's whole merge queue.
 7. **The merger's reply.**
    - `MERGED <sha>`: if the task has serial-resource outcomes, stop with
      `MERGED_PENDING_RESOURCE`; the orchestrator runs them and messages you the result.
@@ -198,3 +203,8 @@ NOTE: <one line: what failed and what is needed, or the question for a ruling>
 
 `SUBMITTED` is the stop after step 6, while the merger works; the orchestrator does nothing
 with it.
+
+**Send it, then stop with it.** For every status but `SUBMITTED`, first `SendMessage` the block
+to the orchestrator address in your dispatch, then stop with the same block. Once the merger
+has resumed you, your stop can be delivered to the merger instead of the orchestrator, and a
+report that never arrives leaves the orchestrator waiting on a task that is finished.
