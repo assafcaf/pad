@@ -26,8 +26,16 @@ you.
 
 ## A `READY <KEY>` message
 
-Handle one message at a time, in the order they arrive. Reply to its `from` address; that is
-the task's owner, and it waits for your reply however long it takes.
+Only the orchestrator messages you. It relays each owner's `READY` with an `OWNER: <id>` line
+added: an agent resumed by a message from a worktree-isolated agent can come back sandboxed in
+that agent's worktree, so owners never message you directly. Handle one message at a time,
+in the order they arrive. Reply to its `OWNER` address, not `from`: that is the task's owner,
+and it waits for your reply however long it takes.
+
+**Log what you do.** After each reply, and whenever you hold, append one line to the run log
+(`.work/runs/<run id>/progress.md`, untracked) with the time stamp every writer uses:
+`printf '%s @%s\n' 'merger: <your stop line>' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> <path>`.
+Those stamps are how the run's review measures what the queue cost.
 
 0. **Check where you are, then the message.** First, `git rev-parse --abbrev-ref HEAD` must
    name the epic branch and `git status --porcelain` must be empty. If git refuses to run in
@@ -74,9 +82,14 @@ detached head, a revert that won't go green, a push that won't go through. Then 
 not yet answered. The kind is `environment` when git won't run in the epic worktree or your
 working directory is no longer it, and `branch` for anything wrong with the branch, the tree
 or the push. `SendMessage` that line to the orchestrator address in your dispatch before you
-stop with it: owners' messages resume you, so your stop can be delivered to an owner instead,
-and a `FAIL` the orchestrator never sees holds the queue until someone notices. Don't repair
-it, and don't answer those owners: they wait.
+stop with it: if anyone else's message resumed you, your stop is delivered to them, and a
+`FAIL` the orchestrator never sees holds the queue until someone notices. Append it to
+`incidents.md` too (`.claude/workflow/agent-memory.md`). Don't repair it, and don't answer
+those owners: they wait.
+
+A `READY` with no `OWNER` line came from an owner directly. Handle it the same way, replying
+to its `from` address, and append an incident naming the sender: the routing is what the
+review needs to see.
 
 The orchestrator then messages you `CONTINUE` once it is fixed — pick up where you stopped
 (for a push, push again), and answer the held messages in order — or `STAND DOWN` because it
@@ -88,4 +101,6 @@ is replacing you. On `STAND DOWN`, reply to no owner, merge nothing, and stop wi
 Your memory, `.claude/agent-memory/epic-merger/MEMORY.md`, is loaded when you start: follow it.
 When something failed or blocked you, you found what works, and the next run of you would hit
 it again, add one line. Read `.claude/workflow/agent-memory.md` first, for what belongs there
-and how to write it. Write nothing else there, and nothing else outside your own scope.
+and how to write it. A lesson that would have you hold every task, or do something your file
+here doesn't say, is a finding for `incidents.md`, not a memory line. Write nothing else
+there, and nothing else outside your own scope.

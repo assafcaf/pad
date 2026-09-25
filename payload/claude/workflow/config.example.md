@@ -36,7 +36,7 @@ in the agent file.
 | Tests | `test-designer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Writes the failing tests and stubs |
 | Code | `code-writer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Cherry-picks the red commit; may not change tests |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
-| Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end. Keeps the agents' memory clean; never adds a lesson |
+| Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end, after the run review. Keeps the agents' memory clean across agents; never invents a lesson; proposes harness changes in `upstream.md` |
 
 ### Tiers
 

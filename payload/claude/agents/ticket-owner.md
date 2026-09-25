@@ -29,8 +29,8 @@ status check.
 Your dispatch carries: the task key and the ticket file's absolute path, the task's **tier** (`small`,
 `standard` or `complex`), the run id and epic branch, the setup, named-tests, full-suite and
 lint commands, the config's test paths, the tier's models and the retry model, any interface
-correction from an earlier task, the **merger id**: the address of the `epic-merger`, and the
-**orchestrator address**, where your reports go (Report). A
+correction from an earlier task, and the **orchestrator address**, where your hand-over and
+reports go. A
 dispatch with no ticket key (a fix from the epic's final review) names a slug to use as
 `<KEY>`; skip every `tracker` step for it.
 
@@ -92,8 +92,11 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
    lint all green. Don't run the suite, lint or the diff checks again yourself: the merger
    re-checks the tests and the weakening independently, then gates the merged head. A second
    run on the same code finds nothing new.
-6. **Hand over.** `SendMessage` to the merger id with exactly this block, then stop with
-   `SUBMITTED`. The merger's reply resumes you, however long it takes.
+6. **Hand over.** `SendMessage` exactly this block to the orchestrator address, which relays
+   it to the merger, then stop with `SUBMITTED`. The merger's reply resumes you, however long
+   it takes. Never message the merger yourself: an agent resumed by your message can come
+   back sandboxed in your worktree's isolation, and a merger that can't run git in the epic
+   worktree holds every task.
    ```
    READY <KEY>
    GOAL: <the ticket's goal, one line>
@@ -103,7 +106,9 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
    ```
    Fill both shas from `git rev-parse <BRANCH> <RED>` output in the same turn — paste them,
    never retype a sha from a report. A 40-character sha retyped by hand comes out wrong often
-   enough to have stalled a run's whole merge queue.
+   enough to have stalled a run's whole merge queue. Append `<KEY>: submitted <TASK_HEAD sha7>`
+   to `progress.md` as in step 8, each time you hand over: it is how the run's review
+   measures how long a task waited to merge.
 7. **The merger's reply.**
    - `MERGED <sha>`: if the task has serial-resource outcomes, stop with
      `MERGED_PENDING_RESOURCE`; the orchestrator runs them and messages you the result.
@@ -112,11 +117,8 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
      sends it only after the merger has reverted the merge): that is the retry (below).
    - `RESEND <KEY>: <why>`: your `READY` block was wrong — a missing field, or a sha the epic
      worktree can't see. Fix the block from `git` (a code-writer's branch that is gone,
-     re-read from its report) and send it again. This is not the retry; a second `RESEND`
-     for the same reason is `BLOCKED`.
-   - `MERGER <id>` from the orchestrator: the merger was replaced and never answered you.
-     That id is your merger from now on; send it the same `READY` block and stop with
-     `SUBMITTED`.
+     re-read from its report) and hand it over again (step 6). This is not the retry; a
+     second `RESEND` for the same reason is `BLOCKED`.
 8. **Finish.** Write the evidence once, in full, to `.work/runs/<run id>/<KEY>.md` with
    `Write` (`.claude/workflow/writing-files.md`): the merge and red shas, the outcome →
    tests mapping, the red and green commands with one-line results, any resource output
@@ -126,7 +128,8 @@ made must have answered: a `FAIL` among them makes the task `BLOCKED` (see One r
    nothing else from `<KEY>.md`: the tracker is where people look, the run log is where the
    detail lives. Then add your outcome line to the shared
    `.work/runs/<run id>/progress.md` — `<KEY>: done (red <sha7>, merge <sha7>)` — with a single
-   `printf '%s\n' '<line>' >> <path>`. Other owners write that file at the same moment, so
+   `printf '%s @%s\n' '<line>' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> <path>`: the time goes at
+   the end of every line you write there. Other owners write that file at the same moment, so
    append, never `Write`: a rewrite drops their lines, and the status line counts them. Remove
    your agents' worktrees (`git worktree remove`) and delete their merged branches
    (`git branch -d`); one that refuses — the test-designer's, whose red commit was
@@ -183,6 +186,10 @@ Your memory, `.claude/agent-memory/ticket-owner/MEMORY.md`, is loaded when you s
 When something failed or blocked you, you found what works, and the next run of you would hit
 it again, add one line. Read `.claude/workflow/agent-memory.md` first, for what belongs there
 and how to write it. Write nothing else there, and nothing else outside your own scope.
+Anything that held you or your agents up from outside the task — a wait on the merger or the
+orchestrator, a report that went astray, a worktree or tool that misbehaved, a hold-up in an
+agent's `NOTES` — goes to `.work/runs/<run id>/incidents.md`, one line each, even when you got
+past it ("A memory line or a finding" in that file).
 
 ## Report
 
@@ -202,7 +209,7 @@ NOTE: <one line: what failed and what is needed, or the question for a ruling>
 ```
 
 `SUBMITTED` is the stop after step 6, while the merger works; the orchestrator does nothing
-with it.
+with it (it acts on the `READY` message you sent it, not on this stop).
 
 **Send it, then stop with it.** For every status but `SUBMITTED`, first `SendMessage` the block
 to the orchestrator address in your dispatch, then stop with the same block. Once the merger

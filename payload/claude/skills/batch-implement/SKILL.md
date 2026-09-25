@@ -20,12 +20,13 @@ You orchestrate and never write product code yourself. You run three layers of a
 | `test-designer` | The task's failing tests + stubs, committed red | Its ticket owner |
 | `code-writer` | Makes those tests pass, suite and lint green | Its ticket owner |
 | `tracker` | Every tracker read and write | Anyone who needs one. You make no tracker calls directly |
-| `memory-curator` | Keeps the agents' persistent memory clean: keeps, tightens, merges or deletes lessons, never adds them | You, once, at the end of the epic |
+| `memory-curator` | Keeps the agents' persistent memory clean across agents: keeps, tightens, merges, copies or deletes lessons, never invents them; proposes harness changes | You, once, at the end of the epic, after the run review |
 
 You pick the waves, answer what the owners can't settle, run the serial resources, and finish
 the epic. A task's detail stays with its owner: you act on one report per task, not every step
 of it. Owners and the merger also stop in between — `SUBMITTED`, the merger's per-merge line —
-and each stop reaches you as a notification; end that turn without a tool call. That is the
+and each stop reaches you as a notification; end that turn without a tool call. The one
+in-between message you do act on is an owner's `READY`: you relay it to the merger (3c). That is the
 point of the layer — every turn you take re-reads your whole context, so a
 task's forty small steps cost far less in an owner's short context than in yours. There is no
 code review: a task is done when the definition of done holds.
@@ -36,12 +37,18 @@ code review: a task is done when the definition of done holds.
 dispatch returns, so keep the merger's id and every owner's id, and reply to a message at its
 `from` address.
 
-**Reports come by message.** An agent's stop can be delivered to the agent whose message resumed
-it, which for an owner or the merger is often the other one, not you. So every dispatch of the merger and of
-an owner carries your own address — `main`, the address `SendMessage` gives the main
-conversation — and they send you each report that needs you before stopping with it. The same
-report can then reach you twice, as the message and as the stop: act on the first, per task
-and status, and ignore the repeat.
+**Only you message the merger.** An agent resumed by a message comes back carrying the
+sender's context: its stop is delivered to the sender, and a sender running in an isolated
+worktree can leave it sandboxed there. A merger resumed by a worktree-isolated owner lost git
+in the epic worktree twice in one run, the replacement included. So owners hand their `READY`
+to you and you relay it; the merger replies to owners, never the other way round.
+
+**Reports come by message.** An owner is resumed by the merger and by its own agents, so its
+stop can reach one of them instead of you. Every dispatch of the merger and of an owner
+carries your own address — `main`, the address `SendMessage` gives the main conversation — and
+they send you each report that needs you before stopping with it. The same report can then
+reach you twice, as the message and as the stop: act on the first, per task and status, and
+ignore the repeat.
 
 **Wait for notifications; never poll.** An agent's report arrives on its own when it stops.
 A `sleep`, an `echo`, or a status check while you wait re-reads your whole context for nothing.
@@ -75,10 +82,14 @@ absolute path and reads it, rather than being handed the body as text. Each copy
 a prompt is output that someone waits for, three times per task.
 
 The run id is the epic key or a slug; the run log is `.work/runs/<run id>/progress.md` in the
-epic worktree. Owners append their own lines to it, so you only ever append too, one line at a
-time with `printf '%s
-' '<line>' >> <path>`; longer notes go in
-`.work/runs/<run id>/orchestrator.md`.
+epic worktree. Owners and the merger append their own lines to it, so you only ever append too,
+one line at a time, **stamped with the time at the end**:
+`printf '%s @%s\n' '<line>' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> <path>`. Every writer stamps
+its lines this way; the stamp goes last because the status line matches each line's start.
+Longer notes go in `.work/runs/<run id>/orchestrator.md`. Agents record what held them up
+outside their own work in `.work/runs/<run id>/incidents.md`
+(`.claude/workflow/agent-memory.md`, "A memory line or a finding"); so do you, for a report
+that never reached you or a wait on the operator.
 
 **Resuming in a new session.** If the run log exists, the earlier run's agents are gone. A task
 with a `done`, `failed` or `blocked` line keeps it. A task in the doing status with none of
@@ -127,16 +138,17 @@ the task's tier (`small` | `standard` | `complex` from its `## Tier` section; a 
 none is `standard`, and one labelled `complex` is `complex`), the run id and epic branch, the
 setup, named-tests, full-suite and lint commands, the config's test paths, that tier's models
 and the retry model (per the config's Tiers table), any interface correction from an earlier
-owner's `INTERFACES`, the merger's id, and your address.
+owner's `INTERFACES`, and your address.
 
 From here each owner moves its ticket, proves red, gates its branch and hands it to the
-merger; the merger merges one task at a time and gates the epic head after each merge. You
-don't repeat their checks.
+merger through you; the merger merges one task at a time and gates the epic head after each
+merge. You don't repeat their checks.
 
 **c. Act on the reports.** Owners and the merger each stop with a short block. Act only on:
 
 | Report | You |
 |---|---|
+| Owner `READY <KEY>` block | Relay it to the merger unchanged, with one line added: `OWNER: <the message's from address>`. Nothing else: the merger checks it and replies to the owner |
 | Owner `NEEDS_RULING` | Decide it, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` the answer to the owner. If it needs the operator, it's one of the stop-and-ask cases above |
 | Owner `MERGED_PENDING_RESOURCE` | Run its `RESOURCE_PROBES`, one at a time across the whole run, with the configured runner, at the merge sha — from a throwaway `git worktree add --detach`, because the merger keeps merging in the epic worktree meanwhile. Keep the output in the run log. Pass: message the owner `RESOURCE PASSED` with the output tail. Fail: message the merger `REVERT <key> <merge sha>`, wait for its `REVERTED` line, then message the owner `RESOURCE FAILED` with the output |
 | Owner `DONE`, `FAILED`, `BLOCKED` | Record it, then fill the free slot (a). A failed or blocked task's dependents wait; everything else continues. A `BLOCKED` whose note is a `tracker` failure is a stop-and-ask case |
@@ -149,9 +161,11 @@ the old merger `STAND DOWN` and wait for `STOOD DOWN` (or its stop). In the epic
 check that the tree is clean and on the epic branch; if not, that is a `branch` problem —
 stop and ask. Otherwise dispatch a new `epic-merger` as in 2.6, and append
 `agents: <epic key>-merger <new id> (replaces <old id>: <its FAIL line>)` to the run log.
-Then message each held owner `MERGER <new id>`; each resends its `READY` there. Tell the
-operator what happened, but don't wait for an answer. Replace it once per run: a second
-`FAIL: environment` is a stop-and-ask.
+Then relay the held `READY` blocks to it again, in their original order; the owners are
+still waiting and need nothing from you. Append an incident
+(`.claude/workflow/agent-memory.md`) and tell the operator what happened, but don't wait for
+an answer. Replace it once per run: a second `FAIL: environment` means something besides the
+routing is wrong, and is a stop-and-ask.
 
 Everything else — an owner's `SUBMITTED`, the merger's `MERGED` / `REJECTED` / `CONFLICT` /
 `REVERTED` / `RESEND` lines — is for the log; the owner already has it and handles its own retry.
@@ -195,16 +209,31 @@ it, so write the development record after they land.
    name, a blocker whose answer was already an Invariant. Put the list in the PR body and tell
    the operator to run `/knowledge-layer refresh`. Do not edit those files yourself: a line the
    operator did not write is the kind that measures worse than no line at all.
-5. **Curate the agents' memory.** Dispatch `memory-curator` as `<epic key>-memory` with the
-   epic worktree's path, the epic branch and the run log's path, and wait for its report.
-   Agents added lessons to their memory during the run (`.claude/workflow/agent-memory.md`).
-   The curator keeps, tightens, merges or deletes them, and commits the result on the epic
-   branch. A `BLOCKED` doesn't stop the epic: note it for the PR body.
-6. **Push and open a draft PR** (`gh pr create --draft`) whose body has the epic link, a table
+5. **Review the run.** No agent sees what a run cost as a whole: a task that waited an hour
+   failed nobody. Before curation, read `progress.md` and `incidents.md` and write
+   `.work/runs/<run id>/findings.md` with `Write`:
+   - per task, from the stamps: dispatched → submitted → merged, and the minutes between;
+     conflicts, rejections, resends and retries;
+   - the merger's holds: when, why, which tasks, for how long;
+   - reports that reached you late, twice, or not at all;
+   - each `Ruling:` whose "cost if wrong" came true, with what it actually cost.
+   Then list, under `## Findings`, each of these that happened: any merger `FAIL`, any task
+   that waited more than 10 minutes on something other than its own work, the same file
+   conflicting twice, a lost report, a ruling that came out wrong. Numbers from the stamps,
+   not impressions. A run with none says `## Findings` / `none`.
+6. **Curate the agents' memory.** Dispatch `memory-curator` as `<epic key>-memory` with the
+   epic worktree's path, the epic branch, the run log's path and the paths of `findings.md`
+   and `incidents.md`, and wait for its report. Agents added lessons to their memory during
+   the run (`.claude/workflow/agent-memory.md`). The curator checks them across agents
+   against the findings, commits the result on the epic branch, and writes what memory can't
+   fix to `upstream.md`. A `BLOCKED` doesn't stop the epic: note it for the PR body.
+7. **Push and open a draft PR** (`gh pr create --draft`) whose body has the epic link, a table
    of tasks (key, outcomes, merge sha), the rulings, failed or blocked tasks, what was not
-   verified, and an **Agent memory** section: the curator's `CHANGED` lines, its
-   `PROJECT_MD_CANDIDATES` (for the operator to add to `project.md` or drop), and its
-   `UPSTREAM_FIXES`. Then have `tracker` move the epic to the review status and comment the PR
-   URL.
-7. **Report:** the PR URL, done / failed / blocked counts, and every `Ruling:` line — those are
-   the decisions you made on the operator's behalf.
+   verified, the `## Findings` list from `findings.md`, and an **Agent memory** section: the
+   curator's `CHANGED` lines, its `PROJECT_MD_CANDIDATES` (for the operator to add to
+   `project.md` or drop), and its `UPSTREAM_FIXES`. Then have `tracker` move the epic to the
+   review status and comment the PR URL.
+8. **Report:** the PR URL, done / failed / blocked counts, every `Ruling:` line — those are
+   the decisions you made on the operator's behalf — and, when the curator wrote
+   `upstream.md`, its path and one line per section: those are proposed changes to this
+   harness, for the operator to take upstream.

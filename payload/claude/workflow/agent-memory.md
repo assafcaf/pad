@@ -20,7 +20,35 @@ Not:
 - anything your agent file, `config.md`, `CLAUDE.md` or `project.md` already says;
 - a guess, a preference, or something that went fine;
 - a fact about the product's code (an invariant, a domain rule): that belongs in
-  `project.md`, which the operator writes. Put it in your report's `NOTES` instead.
+  `project.md`, which the operator writes. Put it in your report's `NOTES` instead;
+- a finding (below).
+
+## A memory line or a finding
+
+Memory is for recipes: how you get past a wall on your own. Some walls aren't yours to get
+past, and a line that works around them hides them. It's a **finding**, not a memory line,
+when:
+- the fix would make you act against your agent file: the file is what's wrong;
+- it cost another agent, not you — someone waited on you, or your report went astray;
+- it's the harness, a tool or another agent misbehaving, not something you did.
+
+One agent sees one wall. The same defect reached several agents in one run (a worktree moved
+out from under a code-writer, a tracker, an owner and the merger), and each wrote its own
+workaround. None of them connected it. A merger's line — *hold everything on a bad sha* —
+followed its agent file and stalled every other task for an hour.
+
+Write a finding as one line appended to `.work/runs/<run id>/incidents.md`, with
+`printf '%s\n' '<line>' >> <path>` (the run log's folder, so other agents can append at the
+same time):
+
+```
+<UTC time> <your agent> <KEY> — <what happened> — <what it cost: minutes, a retry, a lost report> — <what unblocked it>
+```
+
+Write one whenever you waited on, or were blocked by, something outside your own work, even
+when you found your way past it. It takes no judgement: the run's review
+(`/batch-implement`, "Review the run") and the curator decide what it means. You may still add
+a memory line for your part of the workaround, if the rules above allow it.
 
 ## How to write it
 
@@ -45,7 +73,10 @@ For example:
 
 ## Who keeps it clean
 
-Each agent owns its own memory. At the end of every epic, `/batch-implement` runs the
-`memory-curator`, which keeps, tightens, merges or deletes lines against the rules above, and
-never adds new ones. It commits the result on the epic branch, so its changes show in the epic's
-PR.
+Each agent owns its own memory. At the end of every epic, `/batch-implement` reviews the run and
+then runs the `memory-curator`. The curator keeps, tightens, merges or deletes lines against the
+rules above, and never invents a lesson. It works across agents: it groups lines and incidents
+with one cause, copies a lesson to every agent that hits the same wall, and removes a line
+whose cost falls on others. What memory can't fix — the agent files, the harness — it writes up
+as a proposed change. It commits the result on the epic branch, so its changes show in the
+epic's PR.

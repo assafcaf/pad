@@ -110,9 +110,9 @@ orchestrator (/batch-implement)
 | `ticket-owner` | dispatches, red proof, run log | One task from In Progress to Done: runs its test-designer and code-writer (or one solo code-writer for a small task), proves red, retries once, hands it to the merger, moves its ticket |
 | `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red. Answers the code-writer's questions, and fixes a test only if it contradicts the ticket |
 | `code-writer` | its own worktree | Starts alongside the test-designer and reads the code, then cherry-picks the red commit once it is proven and makes the tests pass. Cannot change the tests, but may ask about them or object against the ticket |
-| `epic-merger` | the epic worktree | Takes ready tasks one at a time: re-checks the tests, merges, runs the suite and lint, pushes, reverts a merge that turns the branch red |
+| `epic-merger` | the epic worktree | Takes ready tasks one at a time, relayed by the orchestrator: re-checks the tests, merges, runs the suite and lint, pushes, reverts a merge that turns the branch red |
 | `tracker` | the tracker's only | Every ticket read and write, for whoever needs one, with an evidence comment at each step |
-| `memory-curator` | the agents' memory | Once, at the end of the epic: keeps the agents' lessons accurate and short, never adds one |
+| `memory-curator` | the agents' memory | Once, at the end of the epic: keeps the agents' lessons accurate and short across agents, never invents one, and writes up what memory can't fix as a proposed harness change |
 
 The orchestrator acts on one report per task, when it is finished or needs a ruling. The
 detail of a task — forty-odd git, gate and ledger steps — happens in its owner's short
@@ -211,10 +211,19 @@ non-obvious reason — each is learned once.
 
 A memory written by the model it guides can drift into noise, and agents follow bad guidance
 rather than ignoring it. So at the end of each epic, `memory-curator` checks every line: still
-true, not a one-task fact, not said elsewhere, short. It deletes, tightens, merges or moves
-lines, never adds any, and commits the result on the epic branch. Its changes are listed in the
-PR, along with anything it found that belongs in `project.md` (the operator's to write) or that
-is really a harness bug to fix upstream.
+true, not a one-task fact, not said elsewhere, short, and not costing other agents. It deletes,
+tightens, merges, moves or copies lines, never invents one, and commits the result on the epic
+branch.
+
+Memory alone can't see a problem that sits between agents: a task that waited an hour failed
+nobody, and a defect four agents hit shows up as four unrelated workarounds. So agents also
+log what held them up from outside their own work to the run's `incidents.md`, every run-log
+line carries a time stamp, and before curation the orchestrator reviews the run — waits,
+holds, conflicts, lost reports, rulings whose "cost if wrong" came true — into `findings.md`.
+The curator reads both, groups lines and incidents by cause across agents, and writes what
+memory can't fix to `upstream.md` as proposed changes to the agent files. The PR lists its
+changes, the findings, anything that belongs in `project.md` (the operator's to write), and
+those proposals.
 
 This is separate from the knowledge layer below. Memory is what an agent learned about doing
 its job here; `project.md` is what the operator knows about the product.

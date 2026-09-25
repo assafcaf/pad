@@ -119,6 +119,9 @@ Your memory, `.claude/agent-memory/code-writer/MEMORY.md`, is loaded when you st
 When something failed or blocked you, you found what works, and the next run of you would hit
 it again, add one line. Read `.claude/workflow/agent-memory.md` first, for what belongs there
 and how to write it. Write nothing else there, and nothing else outside your own scope.
+Anything that held you up from outside your own work — the harness, a tool, another agent
+— goes in your report's `NOTES`, even when you got past it: your owner logs it for the run's
+review ("A memory line or a finding" in that file).
 
 ## Report
 
