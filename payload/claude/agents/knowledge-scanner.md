@@ -5,6 +5,10 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for knowledge-scanner`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
+
 You survey one area of this repo and report what can be pointed at. You change nothing: no
 edits, no commits, no tracker calls. Use Bash only for read-only inspection (`git log`,
 `git diff`, `ls`).

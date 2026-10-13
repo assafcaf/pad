@@ -487,3 +487,15 @@ def test_o40_the_current_pad_version_passes_the_version_check(repo, preflight):
 def test_o40_config_example_records_the_pad_version_for_the_installer(payload_text):
     text = payload_text(CONFIG_EXAMPLE)
     assert re.search(r"^PAD version: <PAD_VERSION>$", text, re.M), "no PAD version line"
+
+
+# --- rules: every rule file in .claude/workflow/rules/ is well formed ---------------------------
+
+
+def test_rules_an_invalid_rule_file_fails_the_rules_check_naming_it(repo, preflight):
+    install(repo)
+    rules = repo / ".claude" / "workflow" / "rules"
+    rules.mkdir()
+    (rules / "x.md").write_text("---\nname: x\nkind: vibes\napplies-to: orchestrator\n---\n\nBody.\n",
+                                encoding="utf-8")
+    assert_failed(preflight(repo), "rules", "x", "kind vibes")

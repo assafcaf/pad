@@ -2,8 +2,9 @@
 //
 // Called by /batch-implement in workflow mode, once per ready task:
 //   Workflow({name: 'pad-task', args: {key, ticket, run, epicBranch, epicWorktree, epicHead,
-//     tier, commands: {setup, named, full, lint, typecheck, deps?, lockfile?}, testPaths,
-//     models: {tier, retry}, goal?, ruling?}})
+//     tier, commands: {setup, named, full, lint, typecheck, deps?, lockfile?, derived?},
+//     testPaths,
+//     models: {tier, retry}, gate?, workers?, goal?, ruling?}})
 //
 // Stages: test-designer -> red proof -> code-writer -> submission check -> merge -> ledger, run
 // log and evidence. Every script runs through the `gate-runner` agent, one `RUN: ` line each, so
@@ -110,11 +111,21 @@ export default async function padTask({ args, agent }) {
       `bash ${bin}/task-submit.sh ${epicHead} ${red} ${head} --test-paths ${q(testPaths)}`);
   }
 
+  // Removal review: exit 3 when the branch deletes tests a rule explains but nobody has
+  // claimed. The orchestrator reviews them against the rules before the merge.
+  async function removals(head) {
+    return script(`bash ${bin}/weakened-tests.sh --claims /dev/null ${epicHead} ${head}`);
+  }
+
   // The merge: gated on the merged tree, one merge at a time.
   async function merge(red, head) {
     return script(`bash ${bin}/merge-task.sh --worktree ${q(epicWorktree)} ` +
       `--branch ${q(epicBranch)} --setup ${q(setup)} --gate ${q(full)} --lint ${q(lint)} ` +
-      `--test-paths ${q(testPaths)} ${key} ${red} ${head} ${q(goal)}`);
+      `--test-paths ${q(testPaths)} ` +
+      (commands.derived || []).map((d) => `--derived ${q(d)} `).join('') +
+      (args.gate === 'affected' ? `--affected ${q(named)} ` : '') +
+      (args.workers ? `--workers ${q(args.workers)} ` : '') +
+      `${key} ${red} ${head} ${q(goal)}`);
   }
 
   // Evidence: <KEY>.md, the run-log done line and the PR row.
@@ -185,6 +196,13 @@ export default async function padTask({ args, agent }) {
       }
       const head = wrote.HEAD;
       const check = await submit(red, head);
+      if (check.exit === 0 && !/REMOVALS reviewed:/.test(ruling || '')) {
+        const review = await removals(head);
+        if (review.exit === 3) {
+          throw new Stop(`NEEDS_RULING ${key} removes tests: review them with ` +
+            `weakened-tests.sh --claims <file> ${epicHead} ${head} (${review.last})`);
+        }
+      }
       let result = check.exit === 0 ? await merge(red, head) : { last: check.last, exit: 1 };
       if (/^ERROR /.test(result.last)) result = await merge(red, head);
       if (/^ERROR /.test(result.last)) {

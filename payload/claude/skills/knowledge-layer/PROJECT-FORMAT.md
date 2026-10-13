@@ -40,6 +40,26 @@ put shared wiring in them into one task. Touching one is not by itself a blockin
 - The dev server caches the schema at boot. A migration needs a restart, not a reload.
 ```
 
+## Packages
+
+A multi-package repo keeps one level per package (SKILL.md, "A multi-package repo"). The repo's
+`project.md` then has a Packages table in place of most of its Module map, and keeps the rows
+outside every package:
+
+```markdown
+## Packages
+| Package | Owns | Files |
+|---|---|---|
+| `service/` | Control API, run lifecycle | `service/PROJECT.md`, `service/CONTEXT.md` |
+| `lab/` | Shared experiment blocks | `lab/PROJECT.md` |
+```
+
+Each package's `<package>/PROJECT.md` has this file's shape, scoped to the package: a line on
+what the package is (operator), its Module map, its Commands, its Invariants and Pitfalls
+(operator), and its Standing overlaps. Paths stay repo-relative, so the gate resolves them the
+same way. A section with nothing package-specific is left out; what holds across packages stays
+at the repo level, once. The ceiling applies per file.
+
 ## Sections, and who writes each
 
 | Section | Written by | Carries |

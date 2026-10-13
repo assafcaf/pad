@@ -7,6 +7,10 @@ memory: project
 effort: medium
 ---
 
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for ticket-owner`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
+
 You own one task. The orchestrator hands you the ticket and acts on what you report when the
 task is finished, or when you need a ruling only it can make; everything in between is yours.
 You write no tests and no product code: a `test-designer` writes the tests, a `code-writer`
@@ -66,11 +70,13 @@ Git moves: a move named "the `<capability>` move" is the command `config.md`'s G
 lists for that capability, the form the settings allow; tell your agents the capability, never
 a raw command.
 
-**Never override the weakened-tests gate.** When the ticket calls for a change that would
-rename or delete a test title, have the test-designer keep the old title and give it a body
-that asserts the new truth, so `weakened-tests.sh` passes as it is. Don't ask for an exception:
-none is granted, and a run that argues past a test-safety gate gets its later steps denied as
-a CI bypass. Never edit your own permission settings to get past a denial.
+**Test removals go through the rules.** `weakened-tests.sh` passes a removed test only when a
+test-removal rule explains it (`rules.sh for ticket-owner` prints them): the code it tested is
+deleted in the same diff, a new test carries `# ported-from: <file>::<test>`, or the same
+name is added again. Any other change that would rename or delete a test title keeps the old
+title, with a body that asserts the new truth. Never switch the check off or ask for it to be
+switched off, and never edit your own permission settings to get past a denial: a removal no
+rule explains is a `NEEDS_RULING`.
 
 1. **Start.** Dispatch step 2's agents.
 2. **Tests.** `small`: skip to step 4. Otherwise dispatch the `test-designer` as `<KEY>-tests`
@@ -96,13 +102,19 @@ a CI bypass. Never edit your own permission settings to get past a denial.
    (`<KEY>-tests`) with the test and the ticket line; it commits a fix on top, you prove red
    at it (step 3), then message the code-writer `RED <sha>`. If the test stands, tell the
    code-writer the ticket line that makes it right.
-5. **Check the report.** The code-writer's `GREEN` line must show named tests, full suite and
-   lint all green. Don't run the suite or lint again yourself: `merge-task.sh` gates the
-   merged tree. Then, before you submit, run
+5. **Check the report.** The code-writer's `GREEN` line must show named tests, typecheck and
+   lint all green. Nobody in the task runs the full suite: `merge-task.sh` gates the merged
+   tree. Then, before you submit, run
    `task-submit.sh <epic head> <RED> <TASK_HEAD> --test-paths "<config test paths>"` from the
-   task's worktree. It checks the shas and that the tests weren't weakened. On `SUBMIT FAIL`,
-   fix it inside the task (send it back to the code-writer or the test-designer) and run it
-   again; submit only once it passes.
+   task's worktree. It checks the shas, the test-authoring rules, and that the tests weren't
+   weakened; its output lists each removed test and the rule that explains it. On
+   `SUBMIT FAIL`, fix it inside the task (send it back to the code-writer or the test-designer)
+   and run it again; submit only once it passes.
+   **Triage the dev tests.** For each line of the code-writer's `DEV_TESTS`, decide from
+   the ticket: **promote** it when it checks behaviour a caller relies on (message
+   `<KEY>-tests` to write it as an outcome test in a follow-up red commit; prove red at it and
+   send the code-writer `RED <sha>`, as for a fixed test), or **discard** it. A dev test is never
+   committed; `task-submit.sh` rejects one that is.
 6. **Hand over.** Stop with `SUBMITTED`, and put exactly this block under your report; the
    orchestrator runs `merge-task.sh` with it and messages you its last line, which resumes you,
    however long it takes.
@@ -111,7 +123,17 @@ a CI bypass. Never edit your own permission settings to get past a denial.
    GOAL: <the ticket's goal, one line>
    RED: <the code-writer's RED, or the solo code-writer's RED_COMMIT>
    TASK_HEAD: <HEAD>
+   REMOVALS:
+   <file>::<test> | <rule> | <reason>
+   DEV_TESTS:
+   <test> | promote | <outcome test it became>
+   <test> | discard | <why>
    ```
+   `DEV_TESTS` lists every dev test the code-writer reported and your decision, or `none`.
+   `REMOVALS` lists every test the branch deletes, one per line: the rule `task-submit.sh`
+   named for it and why, in one line. Write `REMOVALS: none` when it deletes none. A test
+   explained only by `same-name-readded` was moved, not deleted: leave it out. The
+   orchestrator checks each line against the rules before it merges.
 7. **The merge result.**
    - `MERGED <sha>`: if the task has serial-resource outcomes, stop with
      `MERGED_PENDING_RESOURCE`; the orchestrator runs them and messages you the result.
@@ -123,7 +145,7 @@ a CI bypass. Never edit your own permission settings to get past a denial.
      a serial-resource outcome failed on its resource: that is the retry (below).
 8. **Finish.** Write the evidence once, in full, to `.work/runs/<run id>/<KEY>.md` with
    `Write` (`.claude/workflow/writing-files.md`): the merge and red shas, the outcome →
-   tests mapping, the red and green commands with one-line results, any resource output
+   tests mapping, every dev test and whether it was promoted or discarded, the red and green commands with one-line results, any resource output
    tail, files touched outside the ticket's list, and your rulings. Then put the
    ledger comment in the report's `LEDGER_COMMENT` line: one line with the merge and red shas
    and the red and green results. Nothing else from `<KEY>.md`: the tracker is where people

@@ -1,7 +1,7 @@
 ---
 name: batch-implement
 description: Implement a batch of planned tasks test-first. Unblocked tasks run in parallel in isolated worktrees - tests designed first, then code written against them - and each merges only when the definition of done holds. Tracker status moves as it goes. Run as /batch-implement <epic key | task keys | plan path | outcomes>.
-argument-hint: "<epic key | task keys… | plan path | outcomes in quotes> [--mode owner|workflow|spine]"
+argument-hint: "<epic key | task keys… | plan path | outcomes in quotes> [--mode owner|workflow|spine] [--gate full|affected]"
 disable-model-invocation: true
 ---
 
@@ -9,9 +9,16 @@ disable-model-invocation: true
 
 Input: `$ARGUMENTS`. Read `.claude/workflow/config.md` and
 `.claude/workflow/definition-of-done.md`.
+Run `bash .claude/workflow/bin/rules.sh for orchestrator` and follow every rule it prints
+(`.claude/workflow/rules/`).
 
 `--mode owner|workflow|spine` picks how tasks run. Without it, the mode defaults to
 `.claude/workflow/config.md`'s Execution → Mode.
+
+`--gate full|affected` picks what each merge's gate runs; without it, the config's Execution →
+Gate. With `affected`, every `merge-task.sh` call adds `--affected "<named tests>"` (the config's
+Run named tests command, `{tests}` left in). With the config's Test workers set, every call adds
+`--workers <n>`.
 
 `spine` is not available yet: report that and stop.
 
@@ -82,12 +89,13 @@ in the main checkout. The class names where the fix belongs: `pad` (this workflo
 `harness` (Claude Code itself). When the halt resolves, log a second line with the same run id,
 key, class and cause, and what unblocked it in place of `pending`.
 
-**Never override the weakened-tests gate.** No ruling lets a merge accept a test that
-`weakened-tests.sh` flags, even when the spec calls for the rename or deletion. The owner keeps
-the old test title with a body that asserts the new truth, and the gate passes as it is. An
-override reads as a CI bypass to a permission classifier, which then denies every later step
-toward that merge. Never edit your own permission settings to get past a denial either: give
-the operator the rule to add.
+**Test removals go through the rules.** `weakened-tests.sh` passes a removed test only when a
+test-removal rule in `.claude/workflow/rules/` explains it (`rules.sh list test-removal`).
+Nothing switches the check off: never set its pattern variables to get a merge through, never
+add a ruling that excuses a removal, and never edit your own permission settings to get past a
+denial; give the operator the rule to add instead. A deletion the operator approves but no
+rule explains needs a rule: the operator adds one (a repo rule in the same folder), and the
+merge then passes as it is.
 
 ## 1. Load the work
 
@@ -123,7 +131,9 @@ run log's `agents:` lines give you back each owner's id; trust the run log and
 ## 2. Start
 
 1. **Plan.** Dispatch `task-planner` with the ticket bodies. Reconcile its waves with the
-   tickets' own edges; log a ruling for each disagreement you settle. Drop the edges it lists
+   tickets' own edges; log a ruling for each disagreement you settle. Take its `HOTSPOTS`: one
+   task per wave edits each hotspot, so move the others to a later wave or add the edge it
+   suggests, and log it as a ruling. Drop the edges it lists
    under `EDGES TO DROP` unless you can name a use it missed, and take its `TIERS`
    suggestions unless the ticket says why not; log both as rulings. Its `CONTRADICTIONS`,
    `GAPS` and `RISKS` may change the models you choose or send you back to `/tickets`.
@@ -155,8 +165,8 @@ run log's `agents:` lines give you back each owner's id; trust the run log and
 ## 3. Run waves until no task is left
 
 **a. Fill the free slots.** Ready tasks are those not done whose blockers are all done. Start
-them in key order up to the parallelism limit, skipping only a task the planner listed under
-`CONFLICTS` with one already running. Sharing a file is not a conflict: `merge-task.sh`
+them all in key order, or up to the config's parallelism cap if it sets one, skipping only
+a task the planner listed under `CONFLICTS` with one already running. Sharing a file is not a conflict: `merge-task.sh`
 merges additions to one file, and a real conflict comes back as `CONFLICT` and is rebased. Don't wait
 for a whole wave to close. Whenever an owner reports `DONE`, `FAILED` or `BLOCKED`, start
 whatever is ready now. The waves are the plan's order, not a barrier.
@@ -178,7 +188,7 @@ with one last line. Act only on:
 
 | Report | You |
 |---|---|
-| Owner `SUBMITTED` | Run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --lint "<lint>" --test-paths "<test paths>" <KEY> <RED> <TASK_HEAD> "<GOAL>"` with the `READY` block's values, in the background (`run_in_background`), and end your turn. When it exits, `SendMessage` the owner its last line unchanged (`MERGED …`, `REJECTED …` or `CONFLICT …`), except in the two cases below |
+| Owner `SUBMITTED` | First review its `REMOVALS`: write the lines to `.work/runs/<run id>/removals/<KEY>.txt` and run `bash .claude/workflow/bin/weakened-tests.sh --claims <that file> <merge-base of the epic head and TASK_HEAD> <TASK_HEAD>` in the epic worktree. Exit 0: every removal is explained by the rule its owner named; log `REMOVALS <KEY>: <lines>` with `run-log.sh` and go on. An unexplained removal or a `MISMATCH` is a question (below) for the operator: park the task, quoting the output. Then run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --lint "<lint>" --test-paths "<test paths>" [--derived "<path>=<cmd>" …] <KEY> <RED> <TASK_HEAD> "<GOAL>"` with the `READY` block's values and one `--derived` per row of the config's Derived files, in the background (`run_in_background`), and end your turn. When it exits, `SendMessage` the owner its last line unchanged (`MERGED …`, `REJECTED …` or `CONFLICT …`), except in the two cases below |
 | `merge-task.sh` `REJECTED` whose failing tests all sit in files the task didn't touch and doesn't import | A false positive: the script already reran them once. Resubmit it once: rerun `merge-task.sh` in the background with the same `RED` and the same `TASK_HEAD`. This doesn't use the task's retry, and the owner hears only the rerun's last line |
 | `merge-task.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the task. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead, and the owner then gets `MERGED <sha>`. A second `ERROR` is a question (above): park that task. It never uses the task's retry |
 | Owner `NEEDS_RULING` | Decide it, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` the answer to the owner. If it needs the operator, it's a question (above): park the task |
@@ -238,7 +248,9 @@ Workflow({name: 'pad-task', args: {key, ticket, run, epicBranch, epicWorktree, e
 `epicBranch` and `epicWorktree` the epic branch and its worktree path, `epicHead`
 `git -C <epic worktree> rev-parse HEAD` now, `tier` from the ticket (3b), `commands` the
 config's setup, named-tests, full-suite, lint and typecheck commands (add `deps` and `lockfile`
-from its Dependency directory and Lockfile rows when set), `testPaths` the config's test paths,
+from its Dependency directory and Lockfile rows when set, and `derived`, a list of
+`<path>=<cmd>` strings, from its Derived files row), and `gate` (`full` or `affected`) and
+`workers` from Execution, `testPaths` the config's test paths,
 `models` the tier's model and the retry model, and an optional `goal`, the ticket's goal line,
 for the merge commit. `ruling` is only for a resumed run (below).
 
@@ -252,6 +264,11 @@ is re-dispatched once and doesn't use the retry), and returns one result line:
 | `DONE <KEY> merge <sha7>` | Nothing to record: ledger, run log and evidence are written. Refresh the progress snapshot (3e.2), then fill the free slot (3a) |
 | `FAILED <KEY> <reason>` | Its dependents wait; everything else continues. Fill the free slot |
 | `NEEDS_RULING <KEY> <question>` | Decide it, or park the task as a question (above) |
+
+A `NEEDS_RULING <KEY> removes tests: …` is the removal review: run the command it names with
+a claims file you write from its output, one `<file>::<test> | <rule> | <reason>` line per
+removal. Exit 0: log `REMOVALS <KEY>: <lines>` and resume with a ruling that starts
+`REMOVALS reviewed:`. An unexplained removal or a `MISMATCH` is a question for the operator.
 
 Answer a `NEEDS_RULING` by resuming that run, not by starting a new one: call `Workflow` again
 with `resumeFromRunId` set to its run id and the same args plus `ruling: "<your ruling>"`, and
@@ -284,7 +301,7 @@ epic (step 4) is unchanged.
 Once every owner has reported and no `merge-task.sh` is running, you may commit and push on the
 epic branch yourself. Final-review fixes (step 2) land through `merge-task.sh` like any task, so refresh the knowledge layer and write the development record after they land.
 
-1. **Full gates** at the epic head, then `bash .claude/workflow/bin/surface-checks.sh`: any
+1. **Full gates** at the epic head, even under `gate=affected`: the full suite and lint, then `bash .claude/workflow/bin/surface-checks.sh`: any
    `SURFACES FAIL <surface>` line fails the gate. Then stop each preview started at the baseline with
    `bash .claude/workflow/bin/preview.sh stop --surface <name> --worktree <epic worktree>`, so it
    holds no file in the worktree.
@@ -309,7 +326,8 @@ epic branch yourself. Final-review fixes (step 2) land through `merge-task.sh` l
    branch. A `BLOCKED` doesn't stop the epic: note it for the PR body.
 6. **Push and open a draft PR** (`gh pr create --draft`) whose body has the epic link, a table
    of tasks (key, outcomes, merge sha), the rulings, failed or blocked tasks, what was not
-   verified, and an **Agent memory** section: the curator's `CHANGED` lines, its
+   verified, a **Test removals** section (every `REMOVALS` line from the run log: the test, the
+   rule that explains it, the owner's reason), and an **Agent memory** section: the curator's `CHANGED` lines, its
    `PROJECT_MD_CANDIDATES` (for the operator to add to `project.md` or drop), its
    `UPSTREAM_FIXES`, its `LOCAL_CANDIDATES` (for `CLAUDE.local.md`) and its
    `REPEATED_RULINGS` (questions for the next `/tickets`), each group listed separately. Then have `tracker` move the epic to the review status and comment the PR

@@ -122,7 +122,8 @@ def test_install_from_a_git_checkout_records_its_commit_in_the_lock(repo, tmp_pa
     assert "source: https://example.invalid/pad" in lock
     assert f"commit: {commit}" in lock
     assert f"version: {version}" in lock
-    assert "migration: 0001" in lock
+    notes = sorted(n.name[:4] for n in (source / "payload" / "migrations").glob("[0-9][0-9][0-9][0-9]-*.md"))
+    assert f"migration: {notes[-1]}" in lock
 
 
 def test_install_from_a_packaged_copy_writes_no_lock_and_drops_a_stale_one(repo, tmp_path):

@@ -29,7 +29,8 @@ When unsure, take the larger size. If hidden complexity shows up later, step up 
 Read the code, docs and recent commits the idea touches. Never ask the operator something the
 repo can answer. If the repo has a glossary (`CONTEXT.md`, written by `/knowledge-layer` when
 the config's `## Project knowledge` section is `Mode: on`), use its terms exactly, and say so
-when an outcome needs a word the glossary does not have.
+when an outcome needs a word the glossary does not have. In a multi-package repo, the
+glossary of a package the idea touches (`<package>/CONTEXT.md`) adds that package's terms.
 
 ## 3. Converge
 

@@ -21,7 +21,7 @@ named here, stop and ask, naming the sub-runs.
 |---|---|
 | `moves` | step 5, only its `check-moves.sh` run: the permission rules the Git moves need |
 | `surfaces` | step 7b: rescan the config's surface rows |
-| `load` | step 7c: calibrate suite slots and parallelism again |
+| `load` | step 7c: calibrate suite slots again |
 | `capabilities` | step 7e: what Claude Code features this machine has |
 | `rehearse` | step 8: the closing dry run of the delivery path |
 | `upgrade` | step 7f: bring the config up to the installed PAD version |
@@ -221,8 +221,9 @@ bash .claude/workflow/bin/load-probe.sh <N> -- <full suite cmd>
 ```
 
 It runs the suite alone, then N copies at once, and lists the tests that failed only under load.
-Its last line, `SUGGEST slots=<n> parallelism=<n>`, is what to propose to the operator for the
-config's suite slots and parallelism. Write them only once the operator accepts.
+Its last line, `SUGGEST slots=<n> parallelism=<n>`, gives the suite slots to propose to the
+operator. Write them only once the operator accepts. Leave parallelism `none` unless the operator
+asks for a cap: the slots already bound how many suites load the host at once.
 
 ## 7d. Line endings
 
@@ -251,9 +252,13 @@ of step 1's template), replacing the lines already there.
 Bring an existing config up to the installed PAD. Run `bash .claude/workflow/bin/preflight.sh`
 and read its `version` failure: it names the sections missing from `config.md`. Add each
 missing section from `.claude/workflow/config.example.md`, keeping every value already in the
-config and leaving its other sections as they are. Then set the config's `PAD version:` line
-to the installed version in `.claude/workflow/VERSION`, and run preflight again: the `version`
-check must pass.
+config and leaving its other sections as they are. Add, the same way, each table row and
+Execution bullet of `config.example.md` that the config lacks (0.3.0 added Commands `Dev tests`
+and `Derived files`, Execution `Gate` and `Test workers`), with the example's default. Then set
+the config's `PAD version:` line to the installed version in `.claude/workflow/VERSION`, and run
+preflight again: the `version` check must pass. Each `commands` failure that names a workflow
+script also names the allow rule it needs: show the operator those lines for
+`.claude/settings.json` and add them once they agree; the settings are theirs.
 
 ## 8. Rehearsal
 

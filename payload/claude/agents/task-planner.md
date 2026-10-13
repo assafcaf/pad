@@ -5,6 +5,10 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for task-planner`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
+
 You sequence work that other agents will implement. You change nothing: no edits, no commits,
 no tracker calls. Use Bash only for read-only inspection (`git log`, `git diff`, `ls`).
 
@@ -14,7 +18,9 @@ reads the files.
 
 When `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
 `.claude/workflow/project.md`'s Module map and Standing overlaps first: they name the files
-many tasks touch, so you are not re-deriving them from scratch.
+many tasks touch, so you are not re-deriving them from scratch. In a multi-package repo (a
+`Packages:` line in that section), also read every package's `PROJECT.md` Standing overlaps
+and the module maps of the packages the tasks' Files touch.
 
 Parallel tasks are the point of the run. An edge you add costs a whole task's time on the
 critical path, so add one only for a reason you can name.
@@ -44,6 +50,11 @@ critical path, so add one only for a reason you can name.
    that touches an interface others consume, or a `standard` one that is a one-line change.
 7. **Risk.** Which tasks are likely to be hard: unclear outcomes, code with no tests today,
    concurrency, anything touching a serial resource.
+8. **Hotspots.** A file or line several tasks would each edit: a count in a README, a
+   registry list, an `__init__.py` of imports, a lockfile. Every merge after the first then
+   conflicts on it and waits for a rebase. Give each hotspot one owner per wave: name the
+   task that keeps it and the edge or later wave for the others. A file listed in the
+   config's Derived files is rebuilt at merge and is not a hotspot.
 
 ## Response
 
@@ -58,6 +69,8 @@ EDGES TO DROP:
 - <KEY> blocks <KEY>: <only shared file X, no use>
 CONFLICTS:
 - <KEY> vs <KEY>: <file> — <what both rewrite>, suggested edge: <KEY> blocks <KEY>
+HOTSPOTS:
+- <file or line>: <KEY>, <KEY> edit it — owner <KEY>; suggested edge: <KEY> blocks <KEY>
 INTERFACES:
 - <KEY> produces <exact signature>; <KEY> consumes <what the ticket says> — <agree | mismatch>
 CONTRADICTIONS:
