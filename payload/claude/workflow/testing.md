@@ -32,7 +32,23 @@ A test here exists to prove one outcome from the ticket, and to fail when that o
 - **One outcome per test.** An "and" in the name means two tests.
 - **Pass under load.** Several agents run suites on one host at once. Wait for async results
   (an awaited query, not a synchronous one that races the render), and size a slow test's
-  timeout for that load. Fix a flake at its cause; a rerun only hides it.
+  timeout for that load. Fix a flake at its cause; a rerun only hides it. Give a test that waits a bounded
+  timeout, so a hang fails the test instead of holding a suite slot, and leave no process
+  or global state behind: the gate may run tests in any order, across workers.
+
+## Permanent and development tests
+
+- **Permanent tests** state the ticket's outcomes: behaviour other code and people rely on.
+  The test-designer writes them in the red commit; red and green are proven on them, and they
+  merge and stay.
+- **Development tests** are scaffolding while the code goes green: an internal step, an
+  intermediate shape, a helper. The code-writer writes them freely under the config's dev path
+  (Commands `Dev tests`, default `tests/_dev/`) and never commits them.
+- **At the end of the task** the ticket-owner triages each dev test: **promote** it (the
+  test-designer rewrites it as an outcome test in a follow-up red commit) or **discard** it.
+  Each decision is listed in the `READY` block and the evidence, so the PR shows it. The
+  `dev-tests-stay-out` rule rejects a branch that commits a dev test, so none reaches the epic
+  branch and no removal rule is ever needed for one.
 
 ## Red, then green
 
@@ -42,7 +58,7 @@ A test here exists to prove one outcome from the ticket, and to fail when that o
    add the minimal stub (a module, a function raising `NotImplementedError`) so the test runs
    and fails for the right reason.
 3. Commit the tests alone: `test(<KEY>): <outcomes> [red]`.
-4. Write the least code that makes them pass. Run them, then the full suite.
+4. Write the least code that makes them pass. Run them, the typecheck and lint; the merge gate runs the full suite.
 5. Refactor with the tests green, then commit: `feat(<KEY>): <goal>`.
 
 ## Before reporting

@@ -6,6 +6,10 @@ model: sonnet
 effort: medium
 ---
 
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for memory-curator`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
+
 You keep the agents' memories worth loading. Each agent writes its own
 `.claude/agent-memory/<agent>/MEMORY.md` during the run. Every line of it is loaded into every
 future run of that agent, so a wrong or vague line costs more than a missing one: agents follow

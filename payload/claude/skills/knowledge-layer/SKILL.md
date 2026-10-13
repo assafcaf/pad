@@ -1,7 +1,7 @@
 ---
 name: knowledge-layer
 description: Build or refresh this repo's knowledge layer - a glossary the whole workflow shares, and the working notes an agent cannot infer from the code. Scans for what can be cited, asks you for what cannot. Run as /knowledge-layer at any point in a project's life.
-argument-hint: "[refresh]"
+argument-hint: "[refresh [<package>]]"
 disable-model-invocation: true
 ---
 
@@ -15,6 +15,20 @@ Two files, and nothing else:
 |---|---|---|
 | `CONTEXT.md` | the glossary, at the repo root | [CONTEXT-FORMAT.md](CONTEXT-FORMAT.md) |
 | `.claude/workflow/project.md` | what an agent cannot infer by reading the repo | [PROJECT-FORMAT.md](PROJECT-FORMAT.md) |
+
+**A multi-package repo** (several packages, each with its own code, tests and words) has the
+same two files at the repo level, holding what is shared: what the repo is, a Packages table
+(one row per package), shared commands, cross-package overlaps, repo-wide terms and pitfalls.
+Each package then has its own level beside its code:
+
+| File | Is |
+|---|---|
+| `<package>/PROJECT.md` | the package's module map, invariants, pitfalls and standing overlaps, in PROJECT-FORMAT's package shape |
+| `<package>/CONTEXT.md` | the package's own terms, only when it has words the repo glossary lacks |
+
+The config's `## Project knowledge` section lists the packages on a `Packages:` line, as
+backtick paths or a glob (`` Packages: `service/`, `lab/` `` or `` Packages: `packages/*/` ``).
+Without that line the repo is one package and everything below works as it always did.
 
 The mode is optional and off by default. With it off, every skill and agent behaves exactly as
 it did before this skill existed. You can turn it on here at any time, and you do not have to
@@ -36,7 +50,8 @@ words, taken down as given. Never write those three yourself, and never smooth t
 
 ## Entry state
 
-Check `config.md` for a `## Project knowledge` section, then check the two files.
+Check `config.md` for a `## Project knowledge` section, then check the two files, and in a
+multi-package repo every package's `PROJECT.md`.
 
 | Section | Files | Run |
 |---|---|---|
@@ -44,7 +59,8 @@ Check `config.md` for a `## Project knowledge` section, then check the two files
 | `Mode: on` | both present | **Refresh** |
 | `Mode: on` | one or both missing | **Repair** |
 
-`refresh` in `$ARGUMENTS` forces Refresh. Say which one you picked before you start.
+`refresh` in `$ARGUMENTS` forces Refresh; `refresh <package>` refreshes that package's files
+alone. Say which one you picked before you start.
 
 ## Enable
 
@@ -68,6 +84,11 @@ the fan-out is that the survey's cost stays in the scanners, and a coordinator t
 source alongside them has paid for the scan twice and still has a full context window of code.
 `/batch-implement` keeps `task-planner` at the same arm's length, for the same reason.
 
+In a multi-package repo, dispatch one `knowledge-scanner` per package, with that package as
+its area, plus one for the paths outside the packages. A package's block becomes its
+`PROJECT.md` (and `CONTEXT.md`, when it found package-only terms); the outside block and the
+overlaps that cross packages go to the repo level.
+
 Merge the blocks: modules in path order, commands deduplicated, overlaps by descending count,
 terms with their `ambiguous` flags kept.
 
@@ -82,6 +103,10 @@ grill mode: push back on a vague answer until it is a behavior, a number or a no
 | Invariants | "What has to stay true that a passing test suite would not catch?" |
 | Pitfalls | "What does a new contributor here always get wrong?" |
 | Ambiguous terms | For each term the scanners flagged: "`<term>` is used for both `<a>` and `<b>`. Which is it, and what do we call the other?" |
+
+The grill runs once per package in a multi-package repo: the repo's questions first (what the
+repo is, the invariants and pitfalls that cross packages), then each package's (its invariants,
+its pitfalls, its ambiguous terms). An answer that holds across packages goes to the repo level.
 
 Take the answer as given. Where an answer contradicts what a scanner found, say so and let the
 operator settle it: `"You said every write goes through append(), but src/ledger/bulk.py:40
@@ -113,9 +138,15 @@ from a scanner and which are theirs.
    | `test-designer` | `CONTEXT.md`, so test names use the project's words |
    | `code-writer` | `CONTEXT.md`, plus `project.md` Invariants and Pitfalls |
 
+   In a multi-package repo, add the `Packages:` line under `Mode: on` and this line under the
+   table: each reader reads the repo-level files
+   plus the package files of every package its task's Files touch; `task-planner` reads every package's `PROJECT.md` Standing overlaps.
+
    Nothing else reads them. A reader not in this table is a reader paying for context it was
    not given a use for.
-3. `bash .claude/workflow/bin/knowledge-paths.sh`. It must pass before you report done.
+3. `bash .claude/workflow/bin/knowledge-paths.sh`. It must pass before you report done. It
+   checks every file of both levels: each exists, each is under its ceiling (120 lines for a
+   `PROJECT.md` or `project.md`, 100 for a `CONTEXT.md`), and every path in it resolves.
 4. Tell the operator that `/spec`, `/tickets`, `/batch-implement` and the implementer agents
    now read these, and that `/knowledge-layer refresh` re-scans.
 
@@ -131,13 +162,22 @@ Re-run Explore and Scan. Then show a diff, and change nothing until the operator
 + overlap db/schema.sql 19 of the last 40 commits
 ```
 
+`/knowledge-layer refresh <package>` re-scans that package alone and diffs its files only.
+
+**Refresh adopts a layout written by hand; it does not replace it.** When `project.md` has a Packages table
+whose packages each have a `PROJECT.md`, but the config has no `Packages:` line, the repo was
+migrated by hand. Propose the `Packages:` line from that table, keep every file name and line
+as it is, and diff the scan against those files like any refresh.
+
 **Never rewrite What this repo is, Invariants or Pitfalls.** Show them unchanged, and ask
 whether they still hold. A refresh that quietly reworded an invariant has replaced the
 operator's knowledge with a model's, which is the failure this whole skill is shaped around.
 
 ## Repair
 
-The switch says `on` and a file is missing. Report which, and offer: restore from the last
+The switch says `on` and a file is missing. Repair works per file: a missing package
+`PROJECT.md` is repaired alone, and the other files are left as they are. Report which, and
+offer: restore from the last
 commit that had it (`git log --oneline -- <path>`), or re-enable from scratch. Do not
 silently regenerate: a file deleted on purpose is a decision.
 

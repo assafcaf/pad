@@ -113,6 +113,9 @@ asks you for what it cannot, writes `CONTEXT.md` and `.claude/workflow/project.m
 replaces this paragraph with the table of what each reader reads. Until then, agents work from
 `CLAUDE.md` as they always have.
 
+A repo of several packages gets a `Packages:` line here (backtick paths, or a glob such as
+`packages/*/`) and one knowledge level per package beside its code; see the skill.
+
 ## Commands
 
 Replace these with the commands that work in this repo; `/setup-workflow` runs each one and
@@ -131,6 +134,8 @@ detects the real runner and fills this table in.
 | Lockfile | none (e.g. `package-lock.json`; setup runs again only when it changes from the base) |
 | Red means | exit code `1`: tests collected, ran, and failed. Collection errors (exit `2`) do not count |
 | Test paths | `tests/` |
+| Dev tests | `tests/_dev/` — where code-writers keep development tests, never committed (`.claude/workflow/testing.md`, "Permanent and development tests") |
+| Derived files | none (e.g. `README.md: python scripts/readme_counts.py`; `uv.lock: uv lock`). One `<path>: <command>` per file every task may change that is rebuilt, not merged: `merge-task.sh --derived` takes the epic's copy on a conflict that touches only these files, runs the command on the merged tree and gates the result. Pair a rebuilt lockfile with a check in Lint (`uv lock --check`, `npm ci --dry-run`) so a stale lock fails the gate |
 | Weakened tests | `bash .claude/workflow/bin/weakened-tests.sh <base> <head>` (pytest patterns by default; set `WEAK_ADDED` and `TEST_DEF` for another stack — see the script's header) |
 
 **The exit-code contract.** "Red means" exists to tell "the test ran and failed" apart from
@@ -206,6 +211,16 @@ The places where the product is seen or used. Optional; none are configured.
   `workflow` (the Workflow tool). `--mode` overrides it for one run.
 - **Parallelism:** `none`: every ready task starts at once. Set a number only to cap ticket
   owners; host load is already bounded by suite slots, below.
+- **Gate:** `full`. What `merge-task.sh` runs per merge: `full` (the full suite) or `affected`
+  (the named-tests command on the tests the change reaches through imports, from
+  `bin/affected-tests.sh`; the full suite still runs when a conftest, manifest, lockfile or
+  test helper changed, and at the end of the epic). `/batch-implement --gate` overrides it.
+- **Test workers:** `none`. A number caps the workers a parallel suite may start on this host
+  (e.g. `-n {workers}` with pytest-xdist): `merge-task.sh --workers` fills `{workers}` in the
+  Full suite and Run named tests commands. Size it so a gate plus the agents' named-test runs
+  fit in RAM: each worker loads the whole import graph. Run `load-probe.sh` with the
+  parallel command three times before adopting it, and give the suite a per-test timeout
+  (pytest-timeout's `--timeout=<s>`) so a hung test fails instead of holding a slot.
 - **Suite slots:** `2` — at most this many full-suite runs at once, through `bin/suite-slot.sh`;
   a waiting merge gate goes first. `PAD_SUITE_SLOTS` overrides it.
 - **Final review:** `off`. Set to a `/code-review` level (`low`, `medium`, …) to run one

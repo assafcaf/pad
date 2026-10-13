@@ -29,8 +29,10 @@ belong inside a task whose outcome needs them.
 4. **Serial-resource outcomes passed** where their resource lives, run by the orchestrator at
    the merged commit, with the output kept in the run log.
 5. **Nothing was weakened.** No commit after the red commit changed a test file, and the
-   task's diff adds no `skip`, `xfail` or disabled test, deletes no existing test, and leaves
-   no `TODO` in code it adds (`.claude/workflow/bin/weakened-tests.sh`).
+   task's diff adds no `skip`, `xfail` or disabled test, deletes no existing test that a
+   test-removal rule doesn't explain (`.claude/workflow/rules/`), and leaves no `TODO` in code
+   it adds (`.claude/workflow/bin/weakened-tests.sh`). The tests it adds keep the
+   test-authoring rules (`task-submit.sh`).
 6. **The tracker says so.** Status moves to done, with a comment naming the merge commit
    (pushed), the red commit, the commands run and their results.
 

@@ -3,7 +3,8 @@
 #
 #   merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup "<cmd>"]
 #                 --gate "<cmd>" --lint "<cmd>" [--test-paths "<pathspecs>"]
-#                 <KEY> <RED> <TASK_HEAD> "<GOAL>"
+#                 [--derived "<path>=<cmd>" ...] [--affected "<cmd with {tests}>"]
+#                 [--workers <n>] <KEY> <RED> <TASK_HEAD> "<GOAL>"
 #
 # Order: merge lock -> task-submit.sh -> git merge --no-ff --no-commit -> setup (only when a
 # dependency manifest or lockfile changed) -> gate -> lint -> commit "Merge <KEY>: <GOAL>" -> push
@@ -17,6 +18,23 @@
 # lines) all sit in test files the task neither changed nor imports is rerun once; a green rerun
 # counts. A failure naming no test file is not rerun.
 #
+# --derived "<path>=<cmd>" (repeatable) names a file every task may change that is rebuilt rather
+# than merged: a count in a README, a lockfile. When the merge conflicts only in derived files,
+# each takes the epic's copy, then, after setup, its command runs in the epic worktree on the
+# merged tree and the result is staged; the gate proves it. A conflict in any other path, or a
+# command that fails, is CONFLICT as before. Every merge turns on `rerere.enabled`, so a
+# resolution an owner records while rebasing is replayed the next time the same conflict comes.
+#
+# --affected "<cmd>" is gate=affected: affected-tests.sh selects the test files the task's change
+# reaches, and the gate runs <cmd> with {tests} replaced by them; when it answers FULL, the full
+# --gate runs instead. Either way one line says which: `gate: affected (<files>)` or
+# `gate: full (<reason>)`. --workers <n> replaces {workers} in --gate and --affected, the host's
+# test-worker budget (e.g. `pytest -n {workers}`).
+#
+# The gate runs as a child whose whole process tree is killed when this script exits early (a
+# signal, a timeout), and a merge left in progress is aborted, so no orphaned workers keep
+# running and the epic worktree is left as it was.
+#
 # Last line: MERGED <sha> | REJECTED <KEY>: <reason> | CONFLICT <KEY>: <paths> | ERROR <KEY>: ...
 # Exit 0 MERGED, 1 REJECTED or CONFLICT, 2 infrastructure failure (push, dirty tree), 64 usage.
 # A failed push keeps the gated merge commit locally: push it again, don't re-merge.
@@ -24,11 +42,14 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup \"<cmd>\"] --gate \"<cmd>\" --lint \"<cmd>\" [--test-paths \"<pathspecs>\"] <KEY> <RED> <TASK_HEAD> \"<GOAL>\"" >&2
+  echo "usage: merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup \"<cmd>\"] --gate \"<cmd>\" --lint \"<cmd>\" [--test-paths \"<pathspecs>\"] [--derived \"<path>=<cmd>\" ...] [--affected \"<cmd>\"] [--workers <n>] <KEY> <RED> <TASK_HEAD> \"<GOAL>\"" >&2
   exit 64
 }
 
 wt=""; branch=""; setup=""; gate=""; lint=""; paths="tests/"
+derived=()
+affected=""
+workers=""
 pos=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -38,12 +59,19 @@ while [ $# -gt 0 ]; do
     --gate) gate="${2:-}"; shift 2 ;;
     --lint) lint="${2:-}"; shift 2 ;;
     --test-paths) paths="${2:-}"; shift 2 ;;
+    --derived) derived+=("${2:-}"); shift 2 ;;
+    --affected) affected="${2:-}"; shift 2 ;;
+    --workers) workers="${2:-}"; shift 2 ;;
     *) pos+=("$1"); shift ;;
   esac
 done
 [ "${#pos[@]}" -eq 4 ] && [ -n "$wt" ] && [ -n "$branch" ] && [ -n "$gate" ] && [ -n "$lint" ] ||
   usage
 key="${pos[0]}"; red="${pos[1]}"; head="${pos[2]}"; goal="${pos[3]}"
+if [ -n "$workers" ]; then
+  gate="${gate//\{workers\}/$workers}"
+  affected="${affected//\{workers\}/$workers}"
+fi
 
 bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 g() { git -C "$wt" "$@"; }
@@ -59,7 +87,38 @@ restart_previews() {
   done
   stopped=()
 }
-trap 'rm -f "$log"; restart_previews; [ -z "$lock" ] || rm -rf "$lock"' EXIT
+gate_pid=""
+merging=""
+# descendants <pid>: every process below <pid>, deepest last.
+descendants() {
+  local c
+  for c in $(ps -ef 2>/dev/null | awk -v p="$1" '$3 == p { print $2 }'); do
+    echo "$c"
+    descendants "$c"
+  done
+}
+# kill_tree <pid>: <pid> and everything below it. On Windows the native processes (python.exe
+# and its workers) are killed through taskkill /T as well.
+kill_tree() {
+  local p="$1" all w
+  [ -n "$p" ] || return 0
+  all="$p $(descendants "$p")"
+  if command -v taskkill >/dev/null 2>&1; then
+    for w in $all; do
+      [ -r "/proc/$w/winpid" ] && taskkill //F //T //PID "$(cat "/proc/$w/winpid")" >/dev/null 2>&1
+    done
+  fi
+  kill -KILL $all 2>/dev/null
+  return 0
+}
+cleanup() {
+  kill_tree "$gate_pid"
+  [ -z "$merging" ] || abort
+  rm -f "$log"
+  restart_previews
+  [ -z "$lock" ] || rm -rf "$lock"
+}
+trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -85,6 +144,16 @@ echo $$ > "$lock/pid"
 g rev-parse -q --verify MERGE_HEAD >/dev/null && infra "a merge is already in progress in $wt"
 [ -z "$(g status --porcelain --untracked-files=no)" ] || infra "epic worktree $wt is dirty"
 before="$(g rev-parse HEAD)"
+g config rerere.enabled true >/dev/null 2>&1 || true
+
+# derived_cmd <path>: the rebuild command --derived names for <path>; false when none does.
+derived_cmd() {
+  local d
+  for d in ${derived[@]+"${derived[@]}"}; do
+    [ "${d%%=*}" = "$1" ] && { printf '%s' "${d#*=}"; return 0; }
+  done
+  return 1
+}
 
 # Submission rules, before the tree is touched. A task cut from an earlier epic head is checked
 # against the head it was cut from; the merge below then finds any conflict.
@@ -96,17 +165,30 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-abort() { g merge --abort >/dev/null 2>&1 || g reset -q --merge >/dev/null 2>&1; }
+abort() { merging=""; g merge --abort >/dev/null 2>&1 || g reset -q --merge >/dev/null 2>&1; }
 
+rebuild=()
+merging=1
 if ! g merge --no-ff --no-commit "$head" >"$log" 2>&1; then
   conflicts="$(g diff --name-only --diff-filter=U | tr '\n' ' ')"
-  abort
-  if [ -n "$conflicts" ]; then
-    echo "CONFLICT $key: ${conflicts% }"
-    exit 1
+  only_derived=1
+  for c in $conflicts; do derived_cmd "$c" >/dev/null || only_derived=0; done
+  if [ -n "$conflicts" ] && [ "$only_derived" -eq 1 ]; then
+    # Take the epic's copy now; its command rebuilds it once setup has run.
+    for c in $conflicts; do
+      { g checkout -q --ours -- "$c" && g add -- "$c"; } || {
+        abort; echo "CONFLICT $key: $c (could not take the epic's copy)"; exit 1; }
+      rebuild+=("$c")
+    done
+  else
+    abort
+    if [ -n "$conflicts" ]; then
+      echo "CONFLICT $key: ${conflicts% }"
+      exit 1
+    fi
+    tail -n 40 "$log"
+    infra "git merge failed without a conflict"
   fi
-  tail -n 40 "$log"
-  infra "git merge failed without a conflict"
 fi
 
 # Print the failed step's tail, abort the merge and reject.
@@ -123,9 +205,15 @@ step() {
   reject_step "$1" "$?"
 }
 
-# The gate, holding a suite slot ahead of task-side runs.
+# The gate, holding a suite slot ahead of task-side runs, as a child whose tree the exit trap
+# can kill.
 run_gate() {
-  (cd "$wt" && bash "$bin/suite-slot.sh" --priority merge -- bash -c "$gate") >"$log" 2>&1
+  local rc
+  (cd "$wt" && bash "$bin/suite-slot.sh" --priority merge -- bash -c "$gate_cmd") >"$log" 2>&1 &
+  gate_pid=$!
+  wait "$gate_pid"; rc=$?
+  gate_pid=""
+  return "$rc"
 }
 
 # True when the gate output names failing test files and every one is outside the task: not
@@ -172,6 +260,27 @@ if [ -n "$setup" ]; then
     step setup "$setup"
   fi
 fi
+for c in ${rebuild[@]+"${rebuild[@]}"}; do
+  (cd "$wt" && bash -c "$(derived_cmd "$c")") >"$log" 2>&1
+  rc=$?
+  if [ "$rc" -ne 0 ] || grep -q '^<<<<<<< ' "$wt/$c" 2>/dev/null; then
+    tail -n 40 "$log"
+    abort
+    echo "CONFLICT $key: $c (rebuild failed: exit $rc)"
+    exit 1
+  fi
+  g add -- "$c"
+done
+
+gate_cmd="$gate"
+if [ -n "$affected" ]; then
+  pick="$(cd "$wt" && bash "$bin/affected-tests.sh" "$base" "$head" --test-paths "$paths" | tail -n 1)"
+  case "$pick" in
+    "TESTS "*) gate_cmd="${affected//\{tests\}/${pick#TESTS }}"
+               echo "gate: affected (${pick#TESTS })" ;;
+    *) echo "gate: full (${pick#FULL })" ;;
+  esac
+fi
 run_gate; code=$?
 if [ "$code" -ne 0 ] && outside_only; then
   echo "gate failed only in test files outside $key; rerunning it once"
@@ -182,6 +291,7 @@ step lint "$lint"
 
 g commit -q --no-edit -m "Merge $key: $goal" >"$log" 2>&1 || {
   tail -n 40 "$log"; abort; infra "git commit failed"; }
+merging=""
 sha="$(g rev-parse HEAD)"
 
 g push -q -u origin "$branch" >"$log" 2>&1 || {

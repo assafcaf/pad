@@ -27,7 +27,9 @@
       "Bash(gh pr view *)",
       "Bash(gh pr checks *)",
       "Bash(bash .claude/workflow/bin/verify-red.sh *)",
-      "Bash(bash .claude/workflow/bin/weakened-tests.sh *)"
+      "Bash(bash .claude/workflow/bin/weakened-tests.sh *)",
+      "Bash(bash .claude/workflow/bin/rules.sh *)",
+      "Bash(bash .claude/workflow/bin/affected-tests.sh *)"
     ],
     "deny": [
       "Bash(git checkout *)",

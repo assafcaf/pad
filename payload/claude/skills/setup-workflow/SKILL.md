@@ -252,9 +252,13 @@ of step 1's template), replacing the lines already there.
 Bring an existing config up to the installed PAD. Run `bash .claude/workflow/bin/preflight.sh`
 and read its `version` failure: it names the sections missing from `config.md`. Add each
 missing section from `.claude/workflow/config.example.md`, keeping every value already in the
-config and leaving its other sections as they are. Then set the config's `PAD version:` line
-to the installed version in `.claude/workflow/VERSION`, and run preflight again: the `version`
-check must pass.
+config and leaving its other sections as they are. Add, the same way, each table row and
+Execution bullet of `config.example.md` that the config lacks (0.3.0 added Commands `Dev tests`
+and `Derived files`, Execution `Gate` and `Test workers`), with the example's default. Then set
+the config's `PAD version:` line to the installed version in `.claude/workflow/VERSION`, and run
+preflight again: the `version` check must pass. Each `commands` failure that names a workflow
+script also names the allow rule it needs: show the operator those lines for
+`.claude/settings.json` and add them once they agree; the settings are theirs.
 
 ## 8. Rehearsal
 

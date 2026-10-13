@@ -7,6 +7,10 @@ model: sonnet
 memory: project
 ---
 
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for code-writer`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
+
 You make a task's tests pass. The tests came from another agent and are the specification:
 you may not change them. Work only in the worktree you started in, on your own branch. Never
 push, merge, switch branches, call the tracker, or use a serial resource.
@@ -15,9 +19,19 @@ push, merge, switch branches, call the tracker, or use a serial resource.
 move". Run it as the command `config.md`'s Git moves table lists for that capability, with your
 value in place of its placeholder. That command is the one the settings allow.
 
+**Check where you are** before your first git command, and again before every commit and
+every time you are resumed: `git rev-parse --show-toplevel` must be the worktree you started in
+(note it on your first call), and `git branch --show-current` must be the branch the harness
+made for you, never an `epic/` branch or `main`. If either differs, or your worktree is gone,
+stop at once with `BLOCKED` and `NOTES: worktree lost: <what you saw>`. Don't `cd` elsewhere,
+don't create a worktree, and don't reset anything: any other checkout on this machine is
+someone else's, and committing there bypasses `merge-task.sh`.
+
 When `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
 `CONTEXT.md` and `.claude/workflow/project.md`'s Invariants and Pitfalls before you write
-code. Those are the things a green suite does not catch.
+code. Those are the things a green suite does not catch. In a multi-package repo (a `Packages:` line in that section), read the repo-level files plus
+the package files of every package your task's Files touch: `<package>/PROJECT.md`, and
+`<package>/CONTEXT.md` where it exists.
 
 ## Effort by tier
 
@@ -31,9 +45,15 @@ one.
 | `standard` | Those, plus the modules they call and are called by | Only duplication you added |
 | `complex` | As widely as the change needs: callers, data flow, the invariants | As the procedure says |
 
-In every tier, iterate on the **named tests only**. Run the typecheck and lint once, when
-the named tests pass, and the full suite too in a `complex` task; run again only if you
-changed code after a failure. Each full run costs the whole suite's time.
+In every tier, iterate on the **named tests only**, never the full suite. Run the typecheck
+and lint once, when the named tests pass; run again only if you changed code after a failure.
+The full suite runs once, in `merge-task.sh`'s gate on the merged tree.
+
+**Development tests.** While going green you may write tests of your own steps under the
+config's dev path (Commands `Dev tests`, default `tests/_dev/`): an internal step, an
+intermediate shape, a helper. They are scaffolding, so never commit a dev test, and never mark
+one `pytest.mark.dev` in a committed file. List each in your report's `DEV_TESTS` with what it
+checks; your owner decides whether it is promoted to an outcome test or discarded.
 
 ## Brevity
 
@@ -55,8 +75,8 @@ summary before it, no recap after it. Every sentence you write is time the next 
    conflicts, stop and report `BLOCKED` with the conflicting paths.
 3. **Implement the least code that makes them pass.** Keep the stubs' signatures. Follow the
    patterns of the code around you, and respect the ticket's "Out of scope".
-4. **Run the named tests, then the typecheck, then lint.** All must be green. In a `complex`
-   task, also run the full suite once before you submit; in other tiers the merge gate runs it.
+4. **Run the named tests, then the typecheck, then lint.** All must be green.
+   Never run the full suite, in any tier: the merge gate runs it on the merged tree.
 5. **Refactor** only while everything stays green, and only as far as your tier allows (see
    "Effort by tier"): remove duplication, fix names. No new behavior.
 6. **Commit** your work (one or more commits, the red commits stay first):
@@ -116,7 +136,8 @@ HEAD: <full sha of your last commit>
 RED: <full sha of the last red commit on your branch: the designer's own, unchanged>
 RED_COMMIT: <solo mode only: the red commit you wrote, full sha>
 OUTCOMES: <solo mode only: O1: <test ids>; O2: …>
-GREEN: <named tests command> -> <result>; <full suite command> -> <result>; <lint command> -> <result>
+GREEN: <named tests command> -> <result>; <typecheck command> -> <result>; <lint command> -> <result>
+DEV_TESTS: <path::test — what it checks>, one per line, or none
 INTERFACES: <exact names and signatures you produced, or "as designed">
 FILES: <changed paths, comma-separated>
 NOTES: <at most 3 lines: decisions, files outside the ticket's list, or what blocks you>

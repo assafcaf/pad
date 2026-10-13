@@ -41,3 +41,4 @@ rewrite history.
 - [0001](0001-lean-agent-harness.md): a lean agent harness, with outcome-tested parallel delivery
 - [0002](0002-pad-run-hardening.md): setup proves the delivery path, and each step of a run is a script
 - [0003](0003-project-plugins.md): a project extends PAD's agents through listed plugin files, never by editing them
+- [0004](0004-rules-replace-never-override.md): test removals and test-writing practice are rules, not a gate nothing may pass

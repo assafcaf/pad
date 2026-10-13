@@ -15,7 +15,9 @@ Input: `$ARGUMENTS`. Read, in order:
 
 When `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
 `.claude/workflow/project.md`'s Module map as well: it is what each task's Files field is
-otherwise guessing at.
+otherwise guessing at. In a multi-package repo (a `Packages:` line in that section), read
+the Packages table there and the `<package>/PROJECT.md` module map of each package the spec
+touches.
 
 Every tracker read and write goes through the `tracker` agent, which owns the tracker's tools
 and its adapter. You never call the tracker directly.

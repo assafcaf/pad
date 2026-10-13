@@ -1,6 +1,6 @@
 {
   "name": "dispatch-skills",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spec, tickets and parallel test-first implementation for Claude Code, with the issue tracker kept current as agents work",
   "license": "MIT",
   "type": "module",

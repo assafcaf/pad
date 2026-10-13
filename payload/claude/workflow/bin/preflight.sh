@@ -22,6 +22,8 @@
 #                         table's `standard` row for test-designer and code-writer
 #   plugins               every file the Plugins table lists exists, and its Extends names an
 #                         agent in .claude/agents/ or a skill in .claude/skills/
+#   rules                 rules.sh validate passes: every file in .claude/workflow/rules/ is well
+#                         formed, names agents that load rules, and has its check script
 #   executable            every .claude/workflow/bin/*.sh is mode 100755 in the git index
 #   gitignore             .gitignore covers .work/ and .claude/worktrees/
 #   line-endings          core.autocrlf and .gitattributes agree: not autocrlf=true with
@@ -308,6 +310,13 @@ check_plugins() {
   done <<<"$(table "## Plugins" "Plugin,Extends")"
 }
 
+check_rules() {
+  local line
+  while IFS= read -r line; do
+    case "$line" in "RULES FAIL "*) fail rules "${line#RULES FAIL }" ;; esac
+  done <<<"$(PAD_RULES_DIR=.claude/workflow/rules PAD_AGENTS_DIR=.claude/agents bash "$here/rules.sh" validate 2>&1)"
+}
+
 check_line_endings() {
   local auto eol=""
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -338,6 +347,7 @@ if [ -f "$config" ]; then
   check_models
   check_plugins
 fi
+check_rules
 check_executable
 check_gitignore
 check_line_endings

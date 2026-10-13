@@ -7,6 +7,10 @@ model: sonnet
 memory: project
 ---
 
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for test-designer`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
+
 You turn one task's outcomes into tests that fail for the right reason. Someone else makes
 them pass, so the tests are the whole specification you hand over. Work only in the worktree
 you started in, on your own branch. Never push, merge, switch branches, call the tracker, or
@@ -14,7 +18,9 @@ use a serial resource.
 
 **Read `.claude/workflow/testing.md` first and follow it.** When
 `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
-`CONTEXT.md` too and name tests with its words, not synonyms of them.
+`CONTEXT.md` too and name tests with its words, not synonyms of them. In a multi-package repo (a `Packages:` line in that section), read the repo-level files plus
+the package files of every package your task's Files touch: `<package>/PROJECT.md`, and
+`<package>/CONTEXT.md` where it exists.
 
 ## Brevity
 
@@ -40,9 +46,8 @@ summary before it, no recap after it. Every sentence you write is time the next 
    A test that passes now is testing something that already exists — replace it. Iterate
    with the named tests only.
 5. **Run the typecheck and the named tests,** when the new tests are red for the right reason
-   (the typecheck command is in `config.md`; skip it if none is configured). Run the
-   full suite once only in a `complex` task; in `small` and `standard` tasks the merge gate
-   runs it. Your stubs must not break an existing test. If one breaks, your stub is wrong, or the
+   (the typecheck command is in `config.md`; skip it if none is configured).
+   Never run the full suite, in any tier: the merge gate runs it. Your stubs must not break an existing test. If one breaks, your stub is wrong, or the
    ticket conflicts with existing behavior: report `BLOCKED`.
 6. **Commit once:** `test(<KEY>): <outcome ids> [red]`. Tests and stubs only, nothing else.
 7. **Prove your red commit.** Run
@@ -91,7 +96,6 @@ RED_COMMIT: <full sha>
 OUTCOMES:
 - O1: <test node id>[, <test node id>]
 RED: <command> -> <one-line result, including the exit code>
-SUITE: <full suite command> -> <one-line result>
 STUBS: <exact signatures you created, file:name>
 NOTES: <at most 3 lines: naming choices, what an implementer must know, or what blocks you>
 ```

@@ -11,8 +11,11 @@
 #   knowledge-paths.sh [--root <dir>]
 #
 # Checks the Entry point column of config.md's `## Surfaces` and the `## Git moves` table
-# whatever the mode, then, when the mode is on, CONTEXT.md and .claude/workflow/project.md. A path is any backtick span holding no
-# whitespace and at least one `/`; URLs and globs are skipped. Bare filenames are skipped,
+# whatever the mode, then, when the mode is on, CONTEXT.md and .claude/workflow/project.md, and
+# for each package the Project knowledge section lists on its `Packages:` line (paths or globs),
+# <package>/PROJECT.md (required) and <package>/CONTEXT.md (when present). A path is any
+# backtick span holding no whitespace and at least one `/`; URLs, globs and brace patterns
+# are skipped. Bare filenames are skipped,
 # because prose says `config.md` far more often than it cites a file.
 #
 # Ceilings default to 100 lines for CONTEXT.md and 120 for project.md; override with
@@ -88,17 +91,32 @@ if [ "$mode" = off ]; then
   exit "$rc"
 fi
 
-for f in "$context" "$project"; do
+# Packages: the `Packages:` line of the Project knowledge section, as backtick paths or globs.
+# Each package has a required PROJECT.md and an optional CONTEXT.md beside its code.
+files=("$context" "$project")
+optional=" "
+pkgline="$(sed -n '/^## Project knowledge/,/^## /p' "$config" | tr -d '\r' | grep -E '^Packages:' | head -n 1)"
+for spec in $(printf '%s\n' "$pkgline" | grep -oE '`[^`]+`' | tr -d '`'); do
+  # shellcheck disable=SC2086
+  for d in $(cd "$root" && ls -d $spec 2>/dev/null || printf '%s\n' "$spec"); do
+    d="${d%/}/"
+    files+=("$root/${d}PROJECT.md" "$root/${d}CONTEXT.md")
+    optional="$optional$root/${d}CONTEXT.md "
+  done
+done
+
+for f in "${files[@]}"; do
   rel="${f#"$root"/}"
   if [ ! -f "$f" ]; then
+    [[ "$optional" == *" $f "* ]] && continue
     echo "knowledge-paths: mode is on but $rel is missing (run /knowledge-layer)"
     rc=1
     continue
   fi
 
   case "$rel" in
-    CONTEXT.md) max="${CONTEXT_MAX:-100}" ;;
-    *)          max="${PROJECT_MAX:-120}" ;;
+    CONTEXT.md|*/CONTEXT.md) max="${CONTEXT_MAX:-100}" ;;
+    *)                       max="${PROJECT_MAX:-120}" ;;
   esac
   lines="$(wc -l <"$f" | tr -d '[:space:]')"
   if [ "$lines" -gt "$max" ]; then
@@ -110,7 +128,7 @@ for f in "$context" "$project"; do
   while IFS= read -r p; do
     [ -n "$p" ] || continue
     case "$p" in
-      *://*|*'*'*|*'?'*) continue ;;
+      *://*|*'*'*|*'?'*|*'{'*) continue ;;
       */*) ;;
       *) continue ;;
     esac

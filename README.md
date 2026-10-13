@@ -205,7 +205,8 @@ When a push to PAD needs more than file copies in the projects that use it, add 
 .claude/workflow/writing-files.md       which tool writes a prose file, and why not a heredoc
 .claude/workflow/agent-memory.md        what an agent may write to its memory, and how
 .claude/workflow/trackers/{jira,github,local}.md
-.claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths}.sh
+.claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths,rules}.sh
+.claude/workflow/rules/                 rules agents load at start; add your own beside them
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
 .claude/statusline.py                   model, branch, context, cost, run and epic progress
 .claude/settings.json                   ← yours: worktree.baseRef + permissions (never overwritten)
