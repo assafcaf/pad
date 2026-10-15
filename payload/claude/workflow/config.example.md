@@ -35,37 +35,28 @@ in the agent file.
 
 | Role | Agent | Model | Notes |
 |---|---|---|---|
-| Tracker | `tracker` | `haiku` | The only agent with tracker tools. Every ticket read and write goes through it |
+| Tracker | `tracker` | `haiku` | The only agent with tracker tools: reads, creates, links. Status writes go through `bin/ledger.sh` |
 | Planning | `task-planner` | `sonnet` | Read-only. Runs once per `/batch-implement` run |
-| Task ownership | `ticket-owner` | `sonnet` | One per task. Runs the task's test-designer and code-writer, proves red, gates the branch, moves the ticket |
-| Tests | `test-designer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Writes the failing tests and stubs |
-| Code | `code-writer` | `sonnet` | Its own worktree, dispatched by the ticket owner. Cherry-picks the red commit; may not change tests |
+| Ownership | `owner` | `sonnet` | One per ticket, its own worktree, start to merged: writes the code (and the tests unless strict), proves red, gates, rebases, reports one line |
+| Tests | `test-designer` | `sonnet` | Its own worktree, a blocking child of an owner whose ticket needs the strict discipline. Writes the failing tests and stubs |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 | Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end. Keeps the agents' memory clean; never adds a lesson |
 
 ### Tiers
 
 `/tickets` gives every task a tier (`.claude/workflow/ticket-template.md`, "Tiers"). The tier
-picks the flow and the models; the Tests and Code rows above are the `standard` defaults.
+decides only who writes the tests: `standard` and `complex` take the strict discipline (the
+owner's `test-designer` writes them, and they are read-only to the owner); `small` lets the
+owner write them first. Models come from the Agents table above, one per agent. A ticket with
+no `## Tier` section is `standard`; one labelled `complex` is `complex`.
 
-| Tier | Flow | Test-designer | Code-writer | Retry |
-|---|---|---|---|---|
-| `small` | one `code-writer` in solo mode: red commit, then green | — | `sonnet` | `opus`, standard flow |
-| `standard` | `test-designer`, with a `code-writer` started alongside that implements once red is proven | `sonnet` | `sonnet` | `opus` code-writer |
-| `complex` | as standard, wider reading brief | `opus` | `opus` | `opus` code-writer |
+**Thinking effort** is set in an agent file's `effort:` field, and a dispatch can't override it.
+The agents inherit the session's effort.
 
-A ticket with no `## Tier` section is `standard`; one labelled `complex` is `complex`.
-
-**Thinking effort** is set in an agent file's `effort:` field, and a dispatch can't override it,
-so it can't follow a task's tier. The coordinators, whose work is the same in every task, have
-one: `ticket-owner` `medium` (it makes the occasional ruling). The test
-and code agents inherit the session's effort; their tier brief ("Effort by tier") is what
-scales their reading and thinking.
-
-**Memory.** `test-designer`, `code-writer`, `ticket-owner` and `tracker` have
-`memory: project`: each keeps lessons in `.claude/agent-memory/<agent>/MEMORY.md`, committed and
-loaded on every start. The rules are in `.claude/workflow/agent-memory.md`, and
-`memory-curator` enforces them at the end of each epic.
+**Memory.** `owner`, `test-designer` and `tracker` have `memory: project`: each keeps lessons
+in `.claude/agent-memory/<agent>/MEMORY.md`, committed and loaded on every start. The rules
+are in `.claude/workflow/agent-memory.md`, and `memory-curator` enforces them at the end of
+each epic.
 
 ## Tracker updates during a run
 
@@ -137,7 +128,7 @@ detects the real runner and fills this table in.
 | Lockfile | none (e.g. `package-lock.json`; setup runs again only when it changes from the base) |
 | Red means | exit code `1`: tests collected, ran, and failed. Collection errors (exit `2`) do not count |
 | Test paths | `tests/` |
-| Dev tests | `tests/_dev/` — where code-writers keep development tests, never committed (`.claude/workflow/testing.md`, "Permanent and development tests") |
+| Dev tests | `tests/_dev/` — where owners keep development tests, never committed (`.claude/workflow/testing.md`, "Permanent and development tests") |
 | Derived files | none (e.g. `README.md: python scripts/readme_counts.py`; `uv.lock: uv lock`). One `<path>: <command>` per file every task may change that is rebuilt, not merged: `merge-task.sh --derived` takes the epic's copy on a conflict that touches only these files, runs the command on the merged tree and gates the result. Pair a rebuilt lockfile with a check in Lint (`uv lock --check`, `npm ci --dry-run`) so a stale lock fails the gate |
 | Weakened tests | `bash .claude/workflow/bin/weakened-tests.sh <base> <head>` (pytest patterns by default; set `WEAK_ADDED` and `TEST_DEF` for another stack — see the script's header) |
 
@@ -167,6 +158,7 @@ that matches neither would stop the run on a prompt. A failing row prints the al
 | `move-onto-sha` | `git reset --hard <sha>` |
 | `take-red` | `git merge --ff-only <sha>` |
 | `rebase-red` | `git rebase <sha>` |
+| `rebase-onto-epic-head` | `git rebase <sha>` |
 | `discard-changes` | `git checkout -- <path>` |
 | `set-aside-work` | `git stash push -u` |
 | `try-merge` | `git merge --no-ff --no-commit <branch>` |
@@ -210,9 +202,7 @@ The places where the product is seen or used. Optional; none are configured.
 - **Branches:** epic branch `epic/<KEY>-<slug>`, in worktree `.claude/worktrees/<KEY>`.
   `.claude/settings.json` must set `worktree.baseRef: head`, so implementer worktrees branch
   from the epic branch.
-- **Mode:** `owner`. How `/batch-implement` runs a task: `owner` (ticket-owner agents) or
-  `workflow` (the Workflow tool). `--mode` overrides it for one run.
-- **Parallelism:** `none`: every ready task starts at once. Set a number only to cap ticket
+- **Parallelism:** `none`: every ready task starts at once. Set a number only to cap
   owners; host load is already bounded by suite slots, below.
 - **Gate:** `full`. What `merge-task.sh` runs per merge: `full` (the full suite) or `affected`
   (the named-tests command on the tests the change reaches through imports, from

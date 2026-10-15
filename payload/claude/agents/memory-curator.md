@@ -43,7 +43,7 @@ Keep a line only if all of these hold:
    `project.md`, or another line of the same memory.
 4. **It fits the rules' shape.** One line, under about 200 characters, with a task key and a
    date.
-5. **It belongs to this agent.** A code-writer lesson in the tracker's memory helps nobody.
+5. **It belongs to this agent.** An owner lesson in the tracker's memory helps nobody.
 
 What to do with a line that fails:
 

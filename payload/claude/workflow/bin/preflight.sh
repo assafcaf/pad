@@ -18,8 +18,7 @@
 #                         config.example.md
 #   dependency-directory  the Commands `Dependency directory`, when named, exists
 #   lockfile              the Commands `Lockfile`, when named, exists
-#   models                each agent file's `model:` matches the Agents table, with the Tiers
-#                         table's `standard` row for test-designer and code-writer
+#   models                each agent file's `model:` matches the Agents table
 #   plugins               every file the Plugins table lists exists, and its Extends names an
 #                         agent in .claude/agents/ or a skill in .claude/skills/
 #   rules                 rules.sh validate passes: every file in .claude/workflow/rules/ is well
@@ -236,7 +235,7 @@ check_lockfile() {
 }
 
 check_models() {
-  local agents=() models=() a m t td cw i file got
+  local agents=() models=() a m i file got
   set_model() { # set_model <agent> <model>
     local j
     [[ "$2" =~ ^[A-Za-z0-9._-]+$ ]] || return 0
@@ -248,11 +247,6 @@ check_models() {
   while IFS="$US" read -r a m; do
     a="$(value "$a")"; [ -n "$a" ] && set_model "$a" "$(value "$m")"
   done <<<"$(table "## Agents" "Agent,Model")"
-  while IFS="$US" read -r t td cw; do
-    [ "$(value "$t")" = standard ] || continue
-    set_model test-designer "$(value "$td")"
-    set_model code-writer "$(value "$cw")"
-  done <<<"$(table "### Tiers" "Tier,Test-designer,Code-writer")"
 
   for i in "${!agents[@]}"; do
     a="${agents[$i]}"; m="${models[$i]}"

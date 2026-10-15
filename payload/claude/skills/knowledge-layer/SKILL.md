@@ -136,7 +136,7 @@ from a scanner and which are theirs.
    | `/tickets` | `project.md` Module map, for each task's Files and Interfaces |
    | `task-planner` | `project.md` Module map and Standing overlaps, before computing waves |
    | `test-designer` | `CONTEXT.md`, so test names use the project's words |
-   | `code-writer` | `CONTEXT.md`, plus `project.md` Invariants and Pitfalls |
+   | `owner` | `CONTEXT.md`, plus `project.md` Invariants and Pitfalls |
 
    In a multi-package repo, add the `Packages:` line under `Mode: on` and this line under the
    table: each reader reads the repo-level files

@@ -70,9 +70,9 @@ def test_pad_ships_the_agreed_rules(run_script, repo):
 def test_for_prints_only_the_rules_that_name_the_agent(run_script, repo, tmp_path):
     d = tmp_path / "r"
     d.mkdir()
-    (d / "a.md").write_text(_rule("a", "practice", "code-writer", body="Alpha guidance."), encoding="utf-8")
+    (d / "a.md").write_text(_rule("a", "practice", "owner", body="Alpha guidance."), encoding="utf-8")
     (d / "b.md").write_text(_rule("b", "practice", "task-planner", body="Beta guidance."), encoding="utf-8")
-    r = run_script("rules.sh", "for", "code-writer", cwd=repo, env={"PAD_RULES_DIR": str(d)})
+    r = run_script("rules.sh", "for", "owner", cwd=repo, env={"PAD_RULES_DIR": str(d)})
     assert r.returncode == 0, r.stderr
     assert "Alpha guidance." in r.stdout
     assert "Beta guidance." not in r.stdout
@@ -82,20 +82,20 @@ def test_a_repo_rule_dropped_in_the_folder_is_live_for_its_agent(run_script, rep
     example = (FIXTURES / "restore-global-state.md").read_text(encoding="utf-8")
     d = _rules_copy(tmp_path, {"restore-global-state.md": example})
     env = {"PAD_RULES_DIR": str(d)}
-    r = run_script("rules.sh", "for", "code-writer", cwd=repo, env=env)
+    r = run_script("rules.sh", "for", "owner", cwd=repo, env=env)
     assert "restore-global-state" in r.stdout
     assert run_script("rules.sh", "validate", cwd=repo, env=env).returncode == 0
 
 
 def test_validate_rejects_a_rule_naming_an_unknown_agent(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": _rule("x", "practice", "code-writer, nobody")})
+    d = _rules_copy(tmp_path, {"x.md": _rule("x", "practice", "owner, nobody")})
     r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
     assert r.returncode == 1
     assert "RULES FAIL x: applies-to names nobody" in r.stdout
 
 
 def test_validate_rejects_a_kind_with_no_enforcement_point(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": _rule("x", "vibes", "code-writer")})
+    d = _rules_copy(tmp_path, {"x.md": _rule("x", "vibes", "owner")})
     r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
     assert r.returncode == 1
     assert "RULES FAIL x: kind vibes" in r.stdout
@@ -124,7 +124,7 @@ def test_validate_rejects_a_missing_field(run_script, repo, tmp_path):
 
 def test_every_agent_a_rule_can_name_loads_its_rules_at_start():
     loaders = [p.stem for p in AGENTS.glob("*.md") if f"rules.sh for {p.stem}" in p.read_text(encoding="utf-8")]
-    for agent in ("code-writer", "test-designer", "ticket-owner", "task-planner",
+    for agent in ("owner", "test-designer", "task-planner",
                   "memory-curator", "knowledge-scanner"):
         assert agent in loaders, agent
     skill = (PAYLOAD / "claude" / "skills" / "batch-implement" / "SKILL.md").read_text(encoding="utf-8")

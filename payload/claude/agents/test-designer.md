@@ -1,6 +1,6 @@
 ---
 name: test-designer
-description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the task's ticket-owner.
+description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the ticket's owner, as a blocking child, when the ticket needs the strict discipline.
 tools: Read, Edit, Write, Bash, Grep, Glob, SendMessage
 isolation: worktree
 model: sonnet
@@ -70,7 +70,7 @@ Your ticket owner may message you after your report. Answer from the same worktr
 
 - **A test your owner says is wrong, or red that wasn't proven:** fix only your own tests
   and stubs in a new commit on top, `test(<KEY>): fix <outcome ids> [red]` — never amend or
-  rewrite the red commit, since the code-writer may already have it — and report as before,
+  rewrite the red commit, since the owner may already have it — and report as before,
   with that commit as `RED_COMMIT`.
 - **Rebase onto `<sha>`:** run the `rebase-red` move from `config.md`'s Git moves (the
   command that table lists for it, with `<sha>` in its placeholder), resolving conflicts only in your own tests and

@@ -1,7 +1,7 @@
 # Template: `.claude/agents/tracker.md`
 
 Copy to `.claude/agents/tracker.md`, replacing `<…>`. Keep the body as it is: the operations,
-rules and response format are what `/tickets`, `/batch-implement` and `ticket-owner` expect. Per-project values
+rules and response format are what `/tickets`, and `/batch-implement` expect. Per-project values
 (cloud id, project key, issue types, statuses, transition ids, link type, label) live in
 `.claude/workflow/config.md`, so this file stays stable when they change.
 

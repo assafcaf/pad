@@ -1,7 +1,7 @@
 ---
 name: append-only-sorted
 kind: practice
-applies-to: code-writer, test-designer, task-planner
+applies-to: owner, test-designer, task-planner
 ---
 
 Where a shared list can't be avoided (`__all__`, a dependency list, an import block), put one

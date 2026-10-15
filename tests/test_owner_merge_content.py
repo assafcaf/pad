@@ -1,4 +1,4 @@
-"""E1-T11 (O13, O19): owner mode merges through merge-task.sh run by the orchestrator.
+"""E1-T11 (O13, O19): a ticket merges through merge-task.sh run by the orchestrator.
 
 No revert of a revert, no merger agent to stall a merge, and neither a merge failure nor a
 tracker FAIL stops the run. Content tests: the skill and agent prose is the product.
@@ -10,8 +10,14 @@ import re
 from conftest import PAYLOAD
 
 SKILL = "claude/skills/batch-implement/SKILL.md"
-OWNER = "claude/agents/ticket-owner.md"
-MERGER = "claude/agents/epic-merger.md"
+OWNER = "claude/agents/owner.md"
+RETIRED = (
+    "claude/agents/ticket-owner.md",
+    "claude/agents/code-writer.md",
+    "claude/agents/epic-merger.md",
+    "claude/agents/gate-runner.md",
+    "claude/workflows/pad-task.js",
+)
 
 
 def blocks(text: str) -> list[str]:
@@ -36,9 +42,10 @@ def blocks_matching(text: str, *patterns: str) -> list[str]:
     return [b for b in blocks(text) if all(re.search(p, b, re.I) for p in patterns)]
 
 
-def submitted_row(text: str) -> str:
-    rows = [l for l in text.splitlines() if re.match(r"\|\s*Owner `SUBMITTED`", l)]
-    assert len(rows) == 1, "reports table has no single `Owner SUBMITTED` row"
+def report_row(text: str, start: str) -> str:
+    """The one row of the reports table whose first cell starts with `start`."""
+    rows = [l for l in text.splitlines() if l.lstrip().startswith(f"| {start}")]
+    assert len(rows) == 1, f"reports table has no single row starting {start!r}"
     return rows[0]
 
 
@@ -60,8 +67,8 @@ def test_o13_no_payload_file_mentions_remerge():
     assert offenders == []
 
 
-def test_o13_no_revert_of_a_revert_in_skill_owner_or_merger(payload_text):
-    for rel in (SKILL, OWNER, MERGER):
+def test_o13_no_revert_of_a_revert_in_skill_or_owner(payload_text):
+    for rel in (SKILL, OWNER):
         text = payload_text(rel)
         assert not re.search(r"revert sha|<revert", text, re.I), rel
         assert not re.search(r"false[- ]positive revert", text, re.I), rel
@@ -82,20 +89,10 @@ def test_o13_false_positive_rejection_is_resubmitted_with_the_same_task_head(pay
     ), hits
 
 
-def test_o13_false_positive_rejection_does_not_use_the_retry(payload_text):
-    hits = [
-        b
-        for rel in (SKILL, OWNER)
-        for b in blocks_matching(payload_text(rel), r"false[- ]positive", r"REJECTED")
-    ]
+def test_o13_false_positive_rejection_costs_the_owner_nothing(payload_text):
+    hits = blocks_matching(payload_text(SKILL), r"false[- ]positive", r"REJECTED")
     assert any(
-        re.search(
-            r"(doesn't|does not|never|without) us(e|es|ing) (up )?(the|its|the task's) retry"
-            r"|not (the|a) retry|is free",
-            b,
-            re.I,
-        )
-        for b in hits
+        re.search(r"owner hears only the rerun's last line", b, re.I) for b in hits
     ), hits
 
 
@@ -114,40 +111,45 @@ def test_o13_every_revert_in_skill_and_owner_is_for_a_serial_resource(payload_te
 
 
 def test_o13_resource_failure_reverts_with_the_revert_merge_capability(payload_text):
-    hits = blocks_matching(payload_text(SKILL), r"MERGED_PENDING_RESOURCE")
-    rows = [b for b in hits if b.lstrip().startswith("|")]
-    assert rows, "reports table has no MERGED_PENDING_RESOURCE row"
-    row = rows[0]
-    assert "revert-merge" in row
-    assert not re.search(r"message the merger", row, re.I)
+    hits = blocks_matching(payload_text(SKILL), r"RESOURCE_PROBES", r"revert")
+    assert hits, "skill never reverts a merge whose resource probe failed"
+    assert any("the `revert-merge` move" in b for b in hits), hits
     assert "`REVERT " not in payload_text(SKILL)
 
 
-def test_o13_epic_merger_is_a_stub_pointing_at_merge_task(payload_text):
-    text = payload_text(MERGER)
-    assert "merge-task.sh" in text
-    assert "git revert" not in text
-    assert "git merge --no-ff" not in text
-    assert not re.search(r"^## A `", text, re.M), "merger still handles messages"
+def test_o13_retired_agents_and_workflow_are_gone():
+    left = [rel for rel in RETIRED if (PAYLOAD / rel).exists()]
+    assert left == [], left
 
 
 # O19: the orchestrator runs merge-task.sh; a failure retries fresh; tracker FAIL never stops.
 
-def test_o19_orchestrator_runs_merge_task_in_background_for_each_submitted(payload_text):
-    row = submitted_row(payload_text(SKILL))
+def test_o19_orchestrator_runs_merge_task_in_background_for_each_ready(payload_text):
+    row = report_row(payload_text(SKILL), "Owner `READY")
     assert "merge-task.sh" in row
     assert re.search(r"background", row, re.I)
+    assert re.search(r"end your turn", row, re.I)
 
 
-def test_o19_orchestrator_messages_the_owner_merge_task_last_line(payload_text):
-    row = submitted_row(payload_text(SKILL))
-    assert re.search(r"last line", row, re.I)
-    assert re.search(r"owner", row, re.I)
+def test_o19_orchestrator_sends_conflict_or_rejected_to_the_owner_unchanged(payload_text):
+    row = report_row(payload_text(SKILL), "`merge-task.sh` `CONFLICT")
+    assert "REJECTED" in row
+    assert re.search(r"SendMessage. the owner that line unchanged", row, re.I)
 
 
-def test_o19_submitted_row_reintroduces_no_sha_check(payload_text):
-    row = submitted_row(payload_text(SKILL))
+def test_o19_merged_needs_no_write_from_the_orchestrator(payload_text):
+    row = report_row(payload_text(SKILL), "`merge-task.sh` `MERGED")
+    assert re.search(r"nothing to write", row, re.I)
+
+
+def test_o19_ready_row_reintroduces_no_sha_check(payload_text):
+    row = report_row(payload_text(SKILL), "Owner `READY")
     assert not re.search(r"\bshas?\b", row, re.I), row
+
+
+def test_o19_submitted_report_is_gone(payload_text):
+    for rel in (SKILL, OWNER):
+        assert "SUBMITTED" not in payload_text(rel), rel
 
 
 def test_o19_merge_error_is_retried_once_from_a_fresh_start(payload_text):

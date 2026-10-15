@@ -3,17 +3,17 @@ never reaches the epic branch.
 
 The dev-tests-stay-out rule (test-authoring) makes task-submit.sh, and so merge-task.sh, reject a
 branch that adds a file under the dev path (config Commands row `Dev tests`, default
-`tests/_dev/`) or a `pytest.mark.dev` test. The prose tells the code-writer where to put dev
-tests and the ticket-owner to triage each one: promote or discard.
+`tests/_dev/`) or a `pytest.mark.dev` test. The prose tells the owner where to put dev tests
+and to triage each one before it submits: promote or delete.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from conftest import git
 
-WRITER = "claude/agents/code-writer.md"
-OWNER = "claude/agents/ticket-owner.md"
+OWNER = "claude/agents/owner.md"
 TESTING = "claude/workflow/testing.md"
 CONFIG = "claude/workflow/config.example.md"
 
@@ -110,17 +110,28 @@ def test_testing_guide_describes_both_tiers(payload_text):
     assert "promote" in text and "discard" in text
 
 
-def test_code_writer_keeps_dev_tests_uncommitted_and_reports_them(payload_text):
-    text = payload_text(WRITER)
-    assert "never commit a dev test" in text
-    assert "DEV_TESTS:" in text
+def _dev_step(text: str) -> str:
+    paras = [p for p in re.split(r"\n(?=\s*(?:\d+\.|##)\s)", text) if "**Dev tests.**" in p]
+    assert paras, "owner.md has no Dev tests step"
+    return " ".join(paras[0].split())
 
 
-def test_owner_triages_every_dev_test_and_reports_it(payload_text):
-    text = payload_text(OWNER)
-    assert "**Triage the dev tests.**" in text
-    assert "DEV_TESTS:" in text
-    assert "<test> | promote | <outcome test it became>" in text
+def test_owner_writes_dev_tests_under_the_dev_path_and_never_commits_one(payload_text):
+    step = _dev_step(payload_text(OWNER))
+    assert "under the config's dev path" in step
+    assert "Never commit one." in step
+
+
+def test_owner_promotes_or_deletes_every_dev_test_before_it_submits(payload_text):
+    step = _dev_step(payload_text(OWNER))
+    assert "Before you submit, promote any that checks behaviour a caller relies on" in step
+    assert "delete the rest" in step
+
+
+def test_owner_under_strict_gets_a_promoted_dev_test_as_a_follow_up_red(payload_text):
+    step = _dev_step(payload_text(OWNER))
+    assert "strict: ask `<KEY>-tests` for a follow-up red commit" in step
+    assert "the `rebase-red` move" in step
 
 
 def test_config_names_the_dev_test_path(payload_text):

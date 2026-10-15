@@ -36,8 +36,10 @@
 # running and the epic worktree is left as it was.
 #
 # --run <id> writes the bookkeeping once the merge is pushed, so no agent does: the evidence file
-# and run-log line through render-evidence.sh (its PR-table row is printed), and the ticket to
-# done through ledger.sh with the run's board.md row (branch, merge sha, evidence path).
+# and run-log line through render-evidence.sh (its PR-table row is printed), a `REMOVALS <KEY>:`
+# line (printed and logged) naming each test the merge removed and the rule that explains it,
+# and the ticket to done through ledger.sh with the run's board.md row (branch, merge sha,
+# evidence path).
 # --outcomes "<ids>" fills the evidence's outcome column (default `-`). A bookkeeping write that
 # fails prints `BOOKKEEPING FAIL <KEY>: <what>` and is logged with run-log.sh to be made again
 # before the PR; it never turns the merge into a failure: the last line is still MERGED.
@@ -321,6 +323,15 @@ if [ -n "$run" ]; then
   [ -z "$typecheck" ] || green="$green; $typecheck -> pass"
   out="$(cd "$wt" && bash "$bin/render-evidence.sh" --run "$run" --key "$key" --red "$red"     --merge "$sha" --outcomes "${outcomes:--}" --red-result "red commit ${red:0:7} checked by task-submit.sh"     --green-result "$green" 2>&1)" && printf '%s
 ' "$out" || bk_fail "evidence: $(printf '%s' "$out" | tail -n 1)"
+  # The tests this merge removed, each with the rule that explains it, for the PR body.
+  removals="$(cd "$wt" && bash "$bin/weakened-tests.sh" "$base" "$head" 2>/dev/null |
+    sed -n '/^weakened-tests: removed tests explained by rules:/,/^weakened-tests: [^r]/p' |
+    sed -n 's/^  \(.*\)/\1/p' | tr -s ' ' | paste -sd ';' - | sed 's/;/; /g')"
+  if [ -n "$removals" ]; then
+    echo "REMOVALS $key: $removals"
+    (cd "$wt" && bash "$bin/run-log.sh" "$run" "REMOVALS $key: $removals") >/dev/null 2>&1 ||
+      bk_fail "run-log: REMOVALS line"
+  fi
   out="$(cd "$wt" && bash "$bin/ledger.sh" "$key" status done "merged ${sha:0:7} into $branch (run $run)"     --run "$run" --branch "$branch" --sha "${sha:0:7}" --evidence ".work/runs/$run/$key.md" 2>&1)" ||
     bk_fail "ledger: $(printf '%s' "$out" | tail -n 1)"
 fi

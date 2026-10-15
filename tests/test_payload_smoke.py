@@ -10,13 +10,11 @@ PAYLOAD = ROOT / "payload" / "claude"
 
 SKILLS = ["batch-implement", "knowledge-layer", "pad-update", "setup-workflow", "spec", "tickets"]
 AGENTS = [
-    "code-writer",
-    "epic-merger",
     "knowledge-scanner",
     "memory-curator",
+    "owner",
     "task-planner",
     "test-designer",
-    "ticket-owner",
     "tracker",
 ]
 

@@ -1,4 +1,4 @@
-"""install.sh ships the workflows, the gate-runner agent, the scripts, and the PAD version."""
+"""install.sh ships the agents, the scripts, and the PAD version."""
 from __future__ import annotations
 
 import shutil
@@ -23,23 +23,15 @@ def _is_executable(path: Path) -> bool:
     ).returncode == 0
 
 
-def test_install_copies_the_pad_task_workflow(repo):
-    result = _install(repo)
-    assert result.returncode == 0, result.stderr
-    installed = repo / ".claude" / "workflows" / "pad-task.js"
-    assert installed.is_file()
-    assert installed.read_text(encoding="utf-8") == (
-        PAYLOAD / "claude" / "workflows" / "pad-task.js"
-    ).read_text(encoding="utf-8")
-
-
-def test_install_copies_the_gate_runner_agent(repo):
+def test_install_copies_the_owner_agent_and_no_retired_one(repo):
     assert _install(repo).returncode == 0
-    installed = repo / ".claude" / "agents" / "gate-runner.md"
-    assert installed.is_file()
-    assert installed.read_text(encoding="utf-8") == (
-        PAYLOAD / "claude" / "agents" / "gate-runner.md"
+    agents = repo / ".claude" / "agents"
+    assert (agents / "owner.md").read_text(encoding="utf-8") == (
+        PAYLOAD / "claude" / "agents" / "owner.md"
     ).read_text(encoding="utf-8")
+    for retired in ("ticket-owner", "code-writer", "epic-merger", "gate-runner"):
+        assert not (agents / f"{retired}.md").exists()
+    assert not (repo / ".claude" / "workflows").exists()
 
 
 def test_install_copies_every_script_and_leaves_it_executable(repo):

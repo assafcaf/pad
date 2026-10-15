@@ -1,7 +1,7 @@
 ---
 name: no-pinned-aggregates
 kind: test-authoring
-applies-to: test-designer, code-writer, task-planner
+applies-to: test-designer, owner, task-planner
 ---
 
 No test pins a number that every task changes: a suite's test count in the README, the number

@@ -1,7 +1,7 @@
 ---
 name: no-full-suite-in-agents
 kind: practice
-applies-to: code-writer, test-designer, ticket-owner
+applies-to: owner, test-designer
 ---
 
 Agents run the task's named tests, the typecheck and lint, never the full suite. The full suite

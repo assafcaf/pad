@@ -1,7 +1,7 @@
 ---
 name: platform-neutral
 kind: test-authoring
-applies-to: test-designer, code-writer
+applies-to: test-designer, owner
 check: platform-neutral.sh
 ---
 

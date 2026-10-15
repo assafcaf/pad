@@ -135,12 +135,6 @@ for f in $(cd "$SRC" && find claude/workflow -type f | sort); do
 done
 install_file "claude/statusline.py" ".claude/statusline.py"
 
-say ""
-say "Workflows -> .claude/workflows/"
-for f in $(cd "$SRC" && find claude/workflows -type f | sort); do
-  install_file "$f" ".${f}"
-done
-
 # --- The PAD commit these files came from --------------------------------------------------
 # /pad-update merges from the commit recorded here. Only a clean git checkout knows its commit;
 # a lock left by an earlier install no longer describes the files just written, so it goes.

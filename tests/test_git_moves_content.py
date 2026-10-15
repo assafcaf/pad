@@ -4,9 +4,6 @@ Content tests: the agents' and skills' prose is the product, so these read it. A
 inline code span, or a line of a fenced block, that starts with `git `. The deny rules come from
 `settings.example.json`; the capabilities from the `## Git moves` table of `config.example.md`.
 The convention a prompt follows is "run the `<capability>` move from `config.md`'s Git moves".
-
-`epic-merger.md` is left out of the raw-command check only: its merge steps belong to E1-T11,
-which rewrites them in the same epic. It is still held to the deny check.
 """
 from __future__ import annotations
 
@@ -17,10 +14,8 @@ from conftest import PAYLOAD
 
 SETTINGS = "claude/settings.example.json"
 CONFIG = "claude/workflow/config.example.md"
-WRITER = "claude/agents/code-writer.md"
 DESIGNER = "claude/agents/test-designer.md"
-OWNER = "claude/agents/ticket-owner.md"
-MERGER = "claude/agents/epic-merger.md"
+OWNER = "claude/agents/owner.md"
 MEMORY_RULES = "claude/workflow/agent-memory.md"
 
 PLACEHOLDER = re.compile(r"<[^<>]+>")
@@ -128,15 +123,10 @@ def procedure_steps(text: str) -> dict[int, str]:
     return {int(parts[i]): parts[i + 1] for i in range(1, len(parts) - 1, 2)}
 
 
-def base_check(text: str) -> str:
-    m = re.search(r"\*\*Base check\.\*\*(.*?)(?:\n\s*\n|\Z)", text, re.S)
-    assert m, "no Base check paragraph in ticket-owner.md"
-    return m.group(1)
-
-
-def owner_cleanup(text: str) -> str:
-    steps = [s for s in procedure_steps(text).values() if flat(s).startswith("finish.")]
-    assert steps, "no Finish step in ticket-owner.md"
+def owner_step(text: str, title: str) -> str:
+    """The owner's Procedure step whose bold title starts with `title`."""
+    steps = [s for s in procedure_steps(text).values() if flat(s).startswith(title)]
+    assert steps, f"no {title!r} step in owner.md's Procedure"
     return steps[0]
 
 
@@ -170,8 +160,6 @@ def test_o1_no_prompt_spells_a_git_moves_command_raw(payload_text):
     moves = git_moves(payload_text)
     hits = []
     for path in prompt_files():
-        if path == MERGER:
-            continue
         for cmd in git_commands(payload_text(path)):
             words = cmd.split()
             for cap, move in moves.items():
@@ -198,14 +186,14 @@ def test_o1_every_prompt_naming_a_move_points_to_config_git_moves(payload_text):
     assert not missing, missing
 
 
-def test_o1_code_writer_takes_the_tests_with_the_take_red_move(payload_text):
-    steps = procedure_steps(payload_text(WRITER))
+def test_o1_owner_takes_the_tests_with_the_take_red_move(payload_text):
+    steps = procedure_steps(payload_text(OWNER))
     take = [s for s in steps.values() if "take-red" in named_moves(s)]
-    assert take, "no code-writer Procedure step names the `take-red` move"
+    assert take, "no owner Procedure step names the `take-red` move"
 
 
-def test_o1_code_writer_takes_a_follow_up_red_with_the_rebase_red_move(payload_text):
-    assert "rebase-red" in named_moves(payload_text(WRITER))
+def test_o1_owner_takes_a_follow_up_red_with_the_rebase_red_move(payload_text):
+    assert "rebase-red" in named_moves(payload_text(OWNER))
 
 
 def test_o1_test_designer_rebases_its_red_with_the_rebase_red_move(payload_text):
@@ -214,31 +202,25 @@ def test_o1_test_designer_rebases_its_red_with_the_rebase_red_move(payload_text)
     assert any("rebase-red" in named_moves(p) for p in paras)
 
 
-def test_o1_owner_base_check_names_the_move_onto_sha_move(payload_text):
-    assert "move-onto-sha" in named_moves(base_check(payload_text(OWNER)))
+def test_o1_owner_base_step_names_the_move_onto_sha_move(payload_text):
+    assert "move-onto-sha" in named_moves(owner_step(payload_text(OWNER), "base."))
 
 
-def test_o1_owner_cleanup_removes_worktrees_with_the_remove_worktree_move(payload_text):
-    assert "remove-worktree" in named_moves(owner_cleanup(payload_text(OWNER)))
+def test_o1_owner_rebases_with_the_rebase_onto_epic_head_move(payload_text):
+    step = owner_step(payload_text(OWNER), "rebase onto the epic head.")
+    assert "rebase-onto-epic-head" in named_moves(step)
 
 
-def test_o1_owner_cleanup_deletes_branches_with_the_delete_merged_branch_move(payload_text):
-    assert "delete-merged-branch" in named_moves(owner_cleanup(payload_text(OWNER)))
+def test_o1_config_lists_the_rebase_onto_epic_head_move(payload_text):
+    assert "rebase-onto-epic-head" in git_moves(payload_text)
 
 
-# --- O3's prose: the red commit is taken, not copied, so every branch deletes ---
+# --- O3's prose: the red commit is taken, not copied ---
 
 
-def test_o3_code_writer_never_cherry_picks(payload_text):
-    assert "cherry" not in flat(payload_text(WRITER))
+def test_o3_owner_never_cherry_picks(payload_text):
+    assert "cherry" not in flat(payload_text(OWNER))
 
 
-def test_o3_code_writer_report_has_no_cherry_picked_red_field(payload_text):
-    assert "CHERRY_PICKED_RED" not in payload_text(WRITER)
-
-
-def test_o3_owner_cleanup_expects_no_branch_to_be_left_undeleted(payload_text):
-    step = flat(owner_cleanup(payload_text(OWNER)))
-    assert "cherry" not in step
-    assert "refuses" not in step
-    assert "is left" not in step
+def test_o3_owner_report_has_no_cherry_picked_red_field(payload_text):
+    assert "CHERRY_PICKED_RED" not in payload_text(OWNER)

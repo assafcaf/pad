@@ -28,9 +28,35 @@ The redesign lands in seven steps. Recorded so far:
    bookkeeping write prints `BOOKKEEPING FAIL` and is logged; it never fails a landed merge.
    `merge-task.sh --typecheck` adds the typecheck to the merge gate.
 
+2. **One owner per ticket.** `owner` replaces `ticket-owner` and `code-writer`: it writes the
+   code, and the tests unless the ticket needs the strict discipline, in which case a
+   `test-designer` writes them as a blocking child and they are read-only to the owner. It
+   gates (named tests, typecheck, lint), runs `task-submit.sh`, rebases onto the epic head and
+   reports one line: `READY <KEY> <head> <red>`, `FAILED` or `NEEDS_RULING`. The orchestrator
+   lands a `READY` with one background `merge-task.sh` and sends the owner only a `CONFLICT` or
+   `REJECTED` line, which the owner fixes and re-reports. The orchestrator's removal review is
+   gone: `weakened-tests.sh` passes a removal only when a rule explains it, and `merge-task.sh`
+   logs each explained removal for the PR. `epic-merger`, `gate-runner`, the `pad-task`
+   workflow and `--mode workflow` are deleted. Models are one Agents-table column per agent;
+   until step 3 the tier only decides the strict discipline.
+
+Open questions from the brief, as settled:
+- (a) The owner's rebase uses `git rebase <sha>`, the form `rebase-red` already needed, under
+  its own capability `rebase-onto-epic-head`, so `check-moves.sh` proves it is allowed. Whether
+  the permission classifier lets the rebase-and-resubmit loop run unattended is confirmed only
+  by a live run; the first one should watch for it.
+- (b) Jira status writes use the REST token (step 1).
+- (c) The orchestrator skill becomes `/pad-run`, not `/run`: Claude Code ships a built-in `run`
+  skill, and the `pad-` prefix matches `/pad-update`. `/batch-implement` stays one version as
+  an alias.
+
 ## Alternatives rejected
 - Jira status through a `tracker` dispatch per merge: one agent and one orchestrator turn per
   task for a write a script can make.
+- Keeping a ticket-owner over a test-designer and a code-writer: a relay by design. Every
+  objection, red sha and merge result crossed it, and the code-writer never saw the reference.
+- Owners driving their own merges against the epic worktree: E8 broke that way. Merges stay
+  orchestrator-run, one background script per `READY`.
 
 ## Consequences
 The orchestrator no longer spends turns on ledger, evidence or run-log lines. A Jira project

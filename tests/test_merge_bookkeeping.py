@@ -91,3 +91,36 @@ def test_failing_typecheck_rejects_and_leaves_epic_untouched(repo, worktree, run
     assert _last(r) == f"REJECTED {KEY}: typecheck failed (exit 3)"
     assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head
     assert not (repo / ".work" / "runs" / RUN / f"{KEY}.md").exists()
+
+
+def test_merged_with_run_logs_each_rule_explained_removal(repo, worktree, run_script):
+    _ticket(repo)
+    epic_wt = worktree(repo, "epic")
+    old = epic_wt / "tests" / "test_old.py"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"def test_old():\n    assert True\n")
+    git("add", "tests/test_old.py", cwd=epic_wt)
+    git("commit", "-q", "-m", "epic: old test", cwd=epic_wt)
+    git("push", "-q", "-u", "origin", "epic", cwd=epic_wt)
+    epic_head = git("rev-parse", "HEAD", cwd=epic_wt)
+
+    task = worktree(repo, "task")
+    git("reset", "-q", "--hard", epic_head, cwd=task)
+    git("rm", "-q", "tests/test_old.py", cwd=task)
+    (task / "tests").mkdir(exist_ok=True)
+    (task / "tests" / "test_new.py").write_bytes(
+        b"# ported-from: tests/test_old.py::test_old\ndef test_new():\n    assert False\n")
+    git("add", "tests/test_new.py", cwd=task)
+    git("commit", "-q", "-m", f"test({KEY}): O1 [red]", cwd=task)
+    red = git("rev-parse", "HEAD", cwd=task)
+    (task / "src").mkdir()
+    (task / "src" / "impl.py").write_bytes(b"X = 1\n")
+    git("add", "src/impl.py", cwd=task)
+    git("commit", "-q", "-m", f"feat({KEY}): impl", cwd=task)
+    head = git("rev-parse", "HEAD", cwd=task)
+
+    r = _merge(run_script, repo, epic_wt, red, head, extra=("--run", RUN))
+    assert r.returncode == 0, r.stdout + r.stderr
+    line = f"REMOVALS {KEY}: tests/test_old.py::test_old ported-from"
+    assert line in r.stdout
+    assert line in (_runs(repo) / "progress.md").read_text(encoding="utf-8")

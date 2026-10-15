@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 
 SKILL = "claude/skills/batch-implement/SKILL.md"
-OWNER = "claude/agents/ticket-owner.md"
+OWNER = "claude/agents/owner.md"
 TRACKER = "claude/agents/tracker.md"
 TEMPLATE = "claude/skills/setup-workflow/tracker-agent-template.md"
 
@@ -34,20 +34,22 @@ def test_o5_orchestrator_writes_ledger_through_ledger_sh(payload_text):
     assert "ledger.sh" in payload_text(SKILL)
 
 
-def test_o5_orchestrator_records_done_failed_blocked_from_owner_report(payload_text):
+def test_o5_orchestrator_comments_a_failed_ticket_with_the_owners_reason(payload_text):
     text = payload_text(SKILL)
-    assert "LEDGER_COMMENT" in text
+    assert "ledger.sh <KEY> comment \"<the owner's reason>\"" in text
     assert "TRACKER_PENDING" not in text
 
 
-def test_o5_ticket_owner_dispatches_no_tracker(payload_text):
+def test_o5_owner_never_calls_the_tracker(payload_text):
     text = payload_text(OWNER)
     assert not re.search(r"[Dd]ispatch `tracker`", text)
+    assert "call the tracker" in text
     assert "TRACKER_PENDING" not in text
 
 
-def test_o5_ticket_owner_reports_ledger_comment_line(payload_text):
-    assert re.search(r"^LEDGER_COMMENT:", payload_text(OWNER), re.M)
+def test_o5_ledger_comment_report_line_is_gone(payload_text):
+    assert "LEDGER_COMMENT" not in payload_text(OWNER)
+    assert "LEDGER_COMMENT" not in payload_text(SKILL)
 
 
 def test_o5_red_proven_ledger_comment_is_gone(payload_text):

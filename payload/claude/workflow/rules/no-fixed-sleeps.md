@@ -1,7 +1,7 @@
 ---
 name: no-fixed-sleeps
 kind: test-authoring
-applies-to: test-designer, code-writer
+applies-to: test-designer, owner
 check: no-fixed-sleeps.sh
 ---
 
