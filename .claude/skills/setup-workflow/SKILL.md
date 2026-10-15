@@ -1,15 +1,32 @@
 ---
 name: setup-workflow
 description: Wire this repo's delivery workflow to a machine and a tracker - detect the environment and the test stack, verify the tracker connection, write the config and the tracker agent, and check the harness is sound. Run once per machine, and again when the tracker or the toolchain changes.
-argument-hint: "[jira | github | local]"
+argument-hint: "[jira | github | local | moves | surfaces | load | capabilities | rehearse | upgrade]"
 disable-model-invocation: true
 ---
 
 # Set up the workflow here
 
-Input: `$ARGUMENTS` names the tracker adapter; ask if it's missing. Nothing in this skill
-creates a ticket or changes product code. Report findings as a checklist: what is ready, what
-you fixed, what the operator must do.
+Input: `$ARGUMENTS` names the tracker adapter (`jira`, `github` or `local`), or one sub-run
+from the table below; ask if it's missing. With no sub-run, setup runs every step in order.
+Nothing in this skill creates a ticket or changes product code. Report findings as a checklist:
+what is ready, what you fixed, what the operator must do.
+
+A sub-run redoes only its own step and skips all the others, so fixing one part of setup does
+not mean running all of it again. It reads the tracker adapter from the config, so a sub-run
+does not ask for the tracker. For an unknown argument, anything else than a tracker or a sub-run
+named here, stop and ask, naming the sub-runs.
+
+| Argument | Redoes |
+|---|---|
+| `moves` | step 5, only its `check-moves.sh` run: the permission rules the Git moves need |
+| `surfaces` | step 7b: rescan the config's surface rows |
+| `load` | step 7c: calibrate suite slots again |
+| `capabilities` | step 7e: what Claude Code features this machine has |
+| `rehearse` | step 8: the closing dry run of the delivery path |
+| `upgrade` | step 7f: bring the config up to the installed PAD version |
+
+Preflight names these sub-runs in its failures (`/setup-workflow upgrade`); run the one it names.
 
 ## 1. The machine
 
@@ -48,6 +65,8 @@ Observed <yyyy-mm-dd> by /setup-workflow.
 - Text-file escape hatch: `<python3 | python | py -3>`; stdout <does | does not> need
   `sys.stdout.reconfigure(encoding='utf-8')` before printing non-ASCII
 - Serial resources: <tag: reachable / unreachable>
+- Workflow tool: <available | not available>
+- Push notifications: <test push confirmed received | not confirmed> on <yyyy-mm-dd>
 ```
 
 Anything true on every machine belongs in `CLAUDE.md` or a skill instead, not here.
@@ -62,8 +81,10 @@ runs — a repo can change stacks between visits.
   `package.json` → whatever its `test` script or devDependencies name (vitest, jest), `go.mod`
   → `go test`, `Cargo.toml` → `cargo test`. Ask the operator if none matches, or more than one
   does.
-- **Fill in the table.** Setup, run-named-tests, full-suite and lint commands that actually
-  work here — confirm each by running it, same as step 1's suite check.
+- **Fill in the table.** Setup, run-named-tests, full-suite, typecheck and lint commands that
+  actually work here — confirm each by running it, same as step 1's suite check. Owners run
+  the named tests, the typecheck and lint before every `READY`; `merge-task.sh` runs all of
+  them on the merged tree.
 - **Settle the exit-code contract.** The red gate needs to tell "ran and failed" apart from
   "never ran" (`definition-of-done.md`, item 2). Run the detected runner against a file with a
   failing assertion and against a file with an import error, and compare the exit codes.
@@ -81,6 +102,25 @@ runs — a repo can change stacks between visits.
   `pytest.mark.skip`). Work out `WEAK_ADDED` and `TEST_DEF` for the detected syntax (see the
   script's header), verify each catches a real case, and record them in the Commands table's
   Weakened tests row so a run knows to export them.
+
+## 2b. Protected paths and review
+
+Ceremony follows what a diff touches, not a guessed size, so the config names where it is
+strict.
+
+- **Protected paths.** Ask the operator which paths have tests as their only oracle: storage,
+  sync, auth, migrations, the data model. List each as a backticked glob bullet under the
+  config's `## Protected paths`; leave "None are configured." when they name none. A ticket
+  whose `Owns` or `Touches` matches one takes the strict discipline (a `test-designer` writes
+  its red as the owner's blocking child), `plan-check.sh` fails a ticket that matches but says
+  `Protected: no`, and `merge-task.sh --protected` rejects such a diff without that red.
+- **Review cadence.** Under `## Review`, `Cadence` is `per-wave` unless the operator picks
+  `after-first-wave`, `end-only` or `none`. At each checkpoint `/pad-run` writes a review
+  packet with `review.sh` and the operator's feedback becomes new tickets.
+
+There are no tiers and no execution mode: one pipeline, with the reference class and the
+protected paths deciding the ceremony. Delete a `### Tiers` subsection or an Execution `Mode`
+line left from an older config.
 
 ## 3. The tracker
 
@@ -105,7 +145,8 @@ connection to check.
 
 Then write `.claude/agents/tracker.md` from
 `.claude/skills/setup-workflow/tracker-agent-template.md`: fill in the adapter name and the
-tools it needs (`mcp__atlassian` for Jira, `Bash` for GitHub, `Read, Edit, Write` for local).
+tools from the template's table: for Jira, the eight Jira tools the adapter's operations use,
+never the whole `mcp__atlassian` server; `Bash` for GitHub; `Read, Edit, Write, Glob` for local.
 Everything else the agent reads from the config at run time.
 
 ## 4. The status line
@@ -128,8 +169,8 @@ rather than overwriting it:
 - Write the checkout's **absolute path with forward slashes**, even on Windows: Git Bash eats
   backslashes in this field and the status line then fails silently.
 - If the operator already has a `statusLine` in their user settings, say what this one adds
-  (progress through the epic this session is on: live from the run log during
-  `/batch-implement`, and from the ledger between runs) and ask before shadowing it for this project. Porting the segment
+  (progress through the epic this session is on: live from the run's `board.md` during
+  `/pad-run`, and from the ledger between runs) and ask before shadowing it for this project. Porting the segment
   into their own status line is often the better trade — it reads two files and calls no API.
 - Test it before reporting success:
   `echo '{"model":{"display_name":"test"}}' | python3 .claude/statusline.py`
@@ -146,12 +187,39 @@ Check, fix what you safely can, and report the rest:
 - `.gitignore` covers `.work/`, `.claude/worktrees/`, `CLAUDE.local.md` and
   `.claude/settings.local.json`.
 - `.claude/workflow/bin/*.sh` are executable (`git ls-files -s`, mode `100755`).
+- The agents are installed, one file each in `.claude/agents/`, and the config's Agents table
+  has a row for each with the model this repo uses (`preflight.sh`'s `models` check compares
+  them):
+
+  | Agent | Does | Dispatched by |
+  |---|---|---|
+  | `owner` | One ticket from start to merged, in its own worktree | `/pad-run`, one per ticket |
+  | `test-designer` | A protected ticket's failing tests and stubs, committed red | Its owner, as a blocking child |
+  | `evaluator` | A fresh-context verdict on a visual ticket's render against its reference | Its owner |
+  | `tracker` | Tracker reads, creates and links; status writes go through `ledger.sh` | `/tickets` and `/pad-run` |
+  | `knowledge-scanner` | Read-only scan of one area of the repo | `/knowledge-layer`, and step 7b here |
+  | `memory-curator` | Cleans the agents' memory at the end of an epic | `/pad-run`, once per epic |
+
+  A `ticket-owner`, `code-writer`, `task-planner`, `epic-merger` or `gate-runner` file left
+  from an older PAD is gone from the payload: delete it, and its config row
+  (`payload/migrations/0003-ownership-units.md` moves its memory).
+- The Git moves are allowed: run `bash .claude/workflow/bin/check-moves.sh`. It proves each row
+  of the config's Git moves table against the effective settings; report each row it fails,
+  with the permission rule that would allow it.
 - The config's commands all run here: setup, full suite, lint. Quote the results.
 - Serial resources in the config are reachable, or say which are not.
-- The permission rules still cover what `/batch-implement` runs unattended: `git worktree add`
-  and `remove`, `add`, `commit`, `cherry-pick`, `merge`, `revert`, `rev-parse`, `fetch`,
-  `push origin`, and `gh pr create`; with pushes to the default branch denied. Report anything
-  missing rather than adding it — widening permissions is the operator's to approve.
+- The permission rules still cover what `/pad-run` and its owners run unattended — the allow
+  list in `.claude/settings.example.json`: `git worktree add`, `list` and `remove`, `add`,
+  `commit`, `cherry-pick`, `merge`, `rebase` (`Bash(git rebase *)`: owners rebase onto the epic
+  head), `revert`, `rev-parse`, `fetch`, `branch -d`,
+  `restore -- .claude/agent-memory`, `push origin` and `push -u origin`, `gh pr create`, `view`
+  and `checks`, and one `Bash(bash .claude/workflow/bin/<script>.sh *)` per script the run
+  calls: `verify-red`, `weakened-tests`, `rules`, `affected-tests`, `task-submit`,
+  `merge-task`, `ledger`, `run-log`, `channel`, `plan-check`, `review`, `render-check`,
+  `run-stats` and `cleanup-run`. Pushes to the default branch, force pushes, `checkout`,
+  `switch`, `stash`, `reset --hard` and `branch -D` stay denied, as that file's deny list
+  has them. `preflight.sh`'s `commands` check names each script rule still missing. Report
+  anything missing rather than adding it — widening permissions is the operator's to approve.
 
 ## 6. Project knowledge
 
@@ -178,8 +246,115 @@ Offer the sections in `.claude/workflow/claude-md-snippet.md` — how work flows
 writing rules — for the repo's `CLAUDE.md`. Show them, add only what the operator accepts, and
 keep each addition short: every line of `CLAUDE.md` loads into every session.
 
-## 8. Report
+## 7b. Surfaces
 
-One checklist. For anything unresolved, name the command the operator should run. Finish with
-the flow they can now use: `/spec` → `/tickets` → `/batch-implement`. Where the knowledge
-layer is on, say that `/knowledge-layer refresh` re-scans it when the repo moves.
+The config's `## Surfaces` rows come from a scan, not from guesswork: the operator is asked only
+for what a scan cannot know. The scan's `SURFACES:` section gives one line
+`<surface> | <entry path> | <how invoked>` per candidate.
+
+Dispatch one `knowledge-scanner` agent over the repo root, put each entry path in the Entry
+point column, and ask the operator for the other columns. This runs even when knowledge mode is
+off: the rows belong to the config, not to the knowledge layer. Then run `knowledge-paths.sh`,
+which fails on an entry point that does not resolve.
+
+Three columns decide whether a surface has a visual reference class:
+
+- **Reference dir**: where the mock crops for this surface live (a repo path).
+- **Render command**: a command that writes an image of one state to `{out}`, given `{route}`,
+  `{viewport}` (or `{width}` and `{height}`) and `{state}`: a headless browser, a terminal
+  capture, a native screenshot tool. Run it once by hand through
+  `bash .claude/workflow/bin/render-check.sh --surface <name> --route / --viewport <WxH> --out <tmp file>`
+  and confirm `RENDER OK`.
+- **Viewport**: the `WxH` the mocks were drawn at.
+
+Leave all three as `-` for a surface that is not seen as an image (a CLI, a backend, a
+library): it has no visual class, and nothing in PAD assumes a web app. `preflight.sh` renders
+every surface with a Render command once and fails its `render` check when that fails.
+
+## 7c. Load probe
+
+Calibrate how many suites can run at once. Run, with the config's full suite command:
+
+```bash
+bash .claude/workflow/bin/load-probe.sh <N> -- <full suite cmd>
+```
+
+It runs the suite alone, then N copies at once, and lists the tests that failed only under load.
+Its last line, `SUGGEST slots=<n> parallelism=<n>`, gives the suite slots to propose to the
+operator. Write them only once the operator accepts. Leave parallelism `none` unless the operator
+asks for a cap: the slots already bound how many suites load the host at once.
+
+## 7d. Line endings
+
+Preflight's `line-endings` check fails when `core.autocrlf` and the repo's `.gitattributes`
+disagree. When it does, or when the repo has no `.gitattributes` and the operator is on Windows,
+propose a `.gitattributes` (for example `* text=auto eol=lf`) and show it in full. Never write it
+without the operator's approval: it renormalizes files, and the operator decides. Once approved,
+write it and commit it on its own.
+
+## 7e. Capabilities
+
+Find out which Claude Code features this machine has, and record them.
+
+- **Workflow tool.** Check whether the Workflow tool is available in this session's tools, and
+  record the answer. Nothing in the config depends on it: `/pad-run` has one pipeline, so
+  there is no execution mode to set (delete an Execution `Mode` line an older config has).
+- **Push notifications.** Send a test push notification to the operator's phone (Remote
+  Control connected), then ask the operator to confirm they received it. Record the answer: an
+  operator who did not receive it, or does not answer, is recorded as not confirmed.
+
+Write both results to `CLAUDE.local.md` (the `Workflow tool:` and `Push notifications:` lines
+of step 1's template), replacing the lines already there.
+
+## 7f. Upgrade
+
+Bring an existing config up to the installed PAD. Run `bash .claude/workflow/bin/preflight.sh`
+and read its `version` failure: it names the sections missing from `config.md`. Add each
+missing section from `.claude/workflow/config.example.md`, keeping every value already in the
+config and leaving its other sections as they are. Add, the same way, each table row and
+Execution bullet of `config.example.md` that the config lacks (0.3.0 added Commands `Dev tests`
+and `Derived files`, Execution `Gate` and `Test workers`; 0.4.0 added `## Protected paths`, the
+Surfaces columns `Reference dir`, `Render command` and `Viewport` — `-` in each row unless the
+surface is seen as an image — the Review `Cadence` default `per-wave`, and the Git moves row
+`rebase-onto-epic-head`), with the example's default. Remove what the installed version
+dropped: 0.4.0 has no `### Tiers` subsection and no Execution `Mode` line, and its Agents table
+is `config.example.md`'s. The steps copying files cannot make are in the payload's
+`migrations/` notes (`/pad-update` runs them). Then set
+the config's `PAD version:` line to the installed version in `.claude/workflow/VERSION`, and run
+preflight again: the `version` check must pass. Each `commands` failure that names a workflow
+script also names the allow rule it needs: show the operator those lines for
+`.claude/settings.json` and add them once they agree; the settings are theirs.
+
+## 8. Rehearsal
+
+The closing step: run it after every other step, once the config and the harness are final.
+From the main checkout, with its work committed:
+
+```bash
+bash .claude/workflow/bin/rehearse.sh
+```
+
+It runs the mechanical delivery path in throwaway worktrees — move onto the epic head, a
+trivial red, `verify-red`, a trivial green, `task-submit`, an `ownership` check
+(`task-submit.sh --ticket` refuses a commit outside a throwaway ticket's `Owns`), `merge-task`
+into a throwaway epic branch (pushed, then deleted from `origin`) with its bookkeeping, a
+preview restart of the configured preview, a ledger write from a worktree to a temporary
+ticket, and a `channel-post` to a throwaway run's channel read back from the main checkout —
+and prints `STEP <name> PASS|FAIL <detail>` for each: `move-onto-epic-head`, `red`,
+`verify-red`, `green`, `task-submit`, `ownership`, `merge-task`, `merge-bookkeeping`,
+`preview-restart`, `ledger-write`, `channel-post`. It removes every branch, worktree and ledger change it made, whether a step
+passed or not. The last line is `REHEARSAL OK` or `REHEARSAL FAILED <n>`.
+
+- `REHEARSAL OK`: the delivery path works on this machine. Setup is done.
+- `REHEARSAL FAILED <n>`: setup is **not** done. Quote each failing `STEP` line, fix what it
+  names (a permission rule, the preview command, an unreachable `origin`, a ledger path), and
+  run the rehearsal again. `rehearse.sh --keep` leaves the worktrees and branches for
+  inspection; remove them afterwards.
+
+## 9. Report
+
+One checklist, ending with the rehearsal result: quote its last line. Report setup as done only
+when the rehearsal printed `REHEARSAL OK`; on `REHEARSAL FAILED <n>`, report setup as not done
+and list the failing steps. For anything unresolved, name the command the operator should run.
+Finish with the flow they can now use: `/spec` → `/tickets` → `/pad-run`. Where the
+knowledge layer is on, say that `/knowledge-layer refresh` re-scans it when the repo moves.

@@ -32,3 +32,10 @@ reads `gitdir: <main checkout>/.git/worktrees/<name>`; the main checkout is the 
 | Update a ticket | rewrite the body below the frontmatter |
 | Move status | edit `status` |
 | Comment | append under a `## Log` heading: `- <yyyy-mm-dd>: <comment>` |
+
+From any worktree, `bin/ledger.sh <KEY> status <todo|doing|review|done> "<comment>"` or
+`bin/ledger.sh <KEY> comment "<text>"` does the two edits above in the main checkout's ledger
+and prints `LEDGER OK <KEY> <status>`; a missing ticket exits 1 with `LEDGER FAIL <KEY>: no ticket at <path>`.
+
+With `--run <id>` (and optionally `--owner`, `--branch`, `--sha`, `--evidence`), every adapter
+also writes or refreshes the ticket's row in `.work/runs/<id>/board.md`, the run's board.
