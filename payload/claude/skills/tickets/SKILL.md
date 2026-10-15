@@ -31,7 +31,7 @@ Nothing is published before the operator approves the list.
 
 Each ticket must pass the four tests in `ticket-template.md`: ownable, checkable, finishable by
 one owner, one owner start to merged. Plan the outcomes up front; the decomposition is for the
-first waves only, and `/batch-implement` writes later tickets once the first ones have landed.
+first waves only, and `/pad-run` writes later tickets once the first ones have landed.
 
 - **Split by surface or module, never by concern.** A screen, an endpoint, a module, a
   migration. Never "all colours", "all fonts", "every button": a transverse sweep touches
@@ -112,11 +112,11 @@ If `tracker` reports `FAIL`, stop and report what exists, with the keys from the
 
 ## Mid-run: replan tickets
 
-`/batch-implement` writes new tickets during a run: a split after a ticket fails twice, the
+`/pad-run` writes new tickets during a run: a split after a ticket fails twice, the
 next wave's decomposition, a finding from a wave review. Those go through sections 1 and 2 of
 this skill, lint included, and the operator's approval at the next review gate, before they are
 published as in section 4.
 
 ## 5. Hand off
 
-Print the epic key, the wave table with keys, and: `/batch-implement <epic key>`.
+Print the epic key, the wave table with keys, and: `/pad-run <epic key>`.

@@ -58,3 +58,9 @@ What each failure means and what to report.
 | Extends | Reads plugins at | Tools |
 |---|---|---|
 | `tracker` | start, after the config's Tracker section and the adapter | add `Bash` to its `tools:` when a listed plugin has a `## Scripts` section |
+| `owner` | start, after the brief and the ticket (e.g. a project render harness, a fixture builder, a domain check to run before `READY`) | it has `Bash` already; it runs only the scripts a listed plugin names |
+| `pad-run` | start, before writing the brief, which links each plugin owners must follow (e.g. an extra gate before `merge-task.sh`, a step at review) | the orchestrator's own; a plugin's scripts still need their allow rules |
+
+A plugin for any other agent or skill is listed and checked the same way, but nothing reads it
+until that agent's or skill's file says so: add the reading line there in a PAD change, not a
+plugin.

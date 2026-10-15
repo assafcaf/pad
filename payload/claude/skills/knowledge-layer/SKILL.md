@@ -145,7 +145,7 @@ from a scanner and which are theirs.
 3. `bash .claude/workflow/bin/knowledge-paths.sh`. It must pass before you report done. It
    checks every file of both levels: each exists, each is under its ceiling (120 lines for a
    `PROJECT.md` or `project.md`, 100 for a `CONTEXT.md`), and every path in it resolves.
-4. Tell the operator that `/spec`, `/tickets`, `/batch-implement` and the implementer agents
+4. Tell the operator that `/spec`, `/tickets`, `/pad-run` and the implementer agents
    now read these, and that `/knowledge-layer refresh` re-scans.
 
 ## Refresh
@@ -181,7 +181,7 @@ silently regenerate: a file deleted on purpose is a decision.
 
 ## This skill never writes decisions
 
-`docs/decisions/` is the committed development record, owned by `/spec` and `/batch-implement`
+`docs/decisions/` is the committed development record, owned by `/spec` and `/pad-run`
 (`docs/decisions/README.md`). Read it, link to it from a term, and leave it alone. A decision
 inferred from a scan is a record of a decision nobody made.
 

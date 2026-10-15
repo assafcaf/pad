@@ -3,13 +3,14 @@
     rehearse.sh [--keep]
 
 Run from a set-up repo's main checkout. In detached throwaway worktrees it moves onto the epic
-head, makes a trivial red, runs verify-red, makes a trivial green, runs task-submit, merges with
-merge-task into a throwaway head, restarts the configured preview, and writes the ledger from a
-worktree. It prints `STEP <name> PASS|FAIL <detail>` per step, then `REHEARSAL OK` or
+head, makes a trivial red, runs verify-red, makes a trivial green, runs task-submit, proves
+task-submit --ticket refuses a write outside a throwaway ticket's Owns, merges with merge-task
+into a throwaway head, restarts the configured preview, writes the ledger from a worktree, and
+posts to a throwaway run's channel and reads it back. It prints `STEP <name> PASS|FAIL <detail>` per step, then `REHEARSAL OK` or
 `REHEARSAL FAILED <n>`, and leaves no branches (local or on origin), worktrees or ledger changes.
 
-Step names, in order: move-onto-epic-head, red, verify-red, green, task-submit, merge-task,
-preview-restart, ledger-write. Exit 0 on REHEARSAL OK, non-zero on REHEARSAL FAILED.
+Step names, in order: move-onto-epic-head, red, verify-red, green, task-submit, ownership,
+merge-task, merge-bookkeeping, preview-restart, ledger-write, channel-post. Exit 0 on REHEARSAL OK, non-zero on REHEARSAL FAILED.
 
 The fixture is a set-up repo: the payload's bin copied to `.claude/workflow/bin`, the example
 config with a `web` preview (a bash loop that ends by itself), `.work/` ignored, and one
@@ -29,8 +30,8 @@ from conftest import BASH, BIN, PAYLOAD, git
 from test_preview import _app, _row
 
 STEPS = [
-    "move-onto-epic-head", "red", "verify-red", "green", "task-submit", "merge-task", "merge-bookkeeping",
-    "preview-restart", "ledger-write",
+    "move-onto-epic-head", "red", "verify-red", "green", "task-submit", "ownership", "merge-task",
+    "merge-bookkeeping", "preview-restart", "ledger-write", "channel-post",
 ]
 STEP_LINE = re.compile(r"^STEP (\S+) (PASS|FAIL)(?: .*)?$")
 TICKET = ".work/tickets/E9/E9-T1.md"
@@ -186,6 +187,30 @@ def test_o46_existing_ticket_is_byte_identical_after_the_ledger_write_step(setup
     r = _rehearse(setup_repo)
     assert ("ledger-write", "PASS") in _steps(r), _out(r)
     assert (setup_repo / TICKET).read_bytes() == TICKET_TEXT.encode("utf-8")
+
+
+def test_ownership_step_reports_the_refused_stray_write(setup_repo):
+    r = _rehearse(setup_repo)
+    line = next((l for l in _lines(r) if l.startswith("STEP ownership ")), "")
+    assert line.startswith("STEP ownership PASS"), _out(r)
+    assert "SUBMIT FAIL ownership: pad-rehearsal-stray.txt" in line, _out(r)
+
+
+def test_channel_post_step_passes_and_leaves_no_run_directory(setup_repo):
+    r = _rehearse(setup_repo)
+    assert ("channel-post", "PASS") in _steps(r), _out(r)
+    assert not (setup_repo / ".work" / "runs").exists(), _out(r)
+
+
+def test_channel_post_keeps_a_runs_directory_that_was_already_there(setup_repo):
+    runs = setup_repo / ".work" / "runs" / "E9"
+    runs.mkdir(parents=True)
+    (runs / "channel.md").write_bytes(b"# Channel: E9\n\n- 2026-10-01T00:00:00Z E9-T1: real\n")
+    before = _snapshot(setup_repo)
+    r = _rehearse(setup_repo)
+    assert _last(r) == "REHEARSAL OK", _out(r)
+    _assert_left_nothing(before, _snapshot(setup_repo))
+    assert sorted(p.name for p in (setup_repo / ".work" / "runs").iterdir()) == ["E9"]
 
 
 # --- O46: failures are reported, and still clean up -------------------------------------------

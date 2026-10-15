@@ -29,7 +29,7 @@ Stop, and say which, when either is true:
 
 - `git status --porcelain -- .claude` prints anything in the main checkout: the update would be
   cut from a harness that is not committed.
-- a `/batch-implement` run is in progress (a run log under the config's run-log path with no
+- a `/pad-run` run is in progress (a run log under the config's run-log path with no
   closing entry, or a live epic worktree an agent is writing in): a run must not have its
   harness changed under it.
 

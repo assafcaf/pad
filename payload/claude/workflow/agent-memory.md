@@ -1,6 +1,6 @@
 # Agent memory
 
-The agents `/batch-implement` runs have a persistent memory: `memory: project` in their
+The agents `/pad-run` runs have a persistent memory: `memory: project` in their
 frontmatter. Each one has `.claude/agent-memory/<agent name>/MEMORY.md`, which Claude Code loads
 into the agent's context every time it starts (the first 200 lines). It lives in the main
 checkout even when the agent works in a worktree, and it is committed, so every run and every
@@ -45,7 +45,7 @@ For example:
 
 ## The orchestrator's halt log
 
-The orchestrator (the `/batch-implement` session) keeps `orchestrator/HALTS.md`, one line per
+The orchestrator (the `/pad-run` session) keeps `orchestrator/HALTS.md`, one line per
 halt: a parked question or a run-wide pause. It never edits the file by hand: `bin/halt-log.sh
 <run id> <KEY|-> <class> "<cause>" "<resolution>"` appends `- <yyyy-mm-dd> <run id> <KEY>
 [<class>] <cause> — <resolution>` to the main checkout's copy. The class is where the fix
@@ -55,7 +55,7 @@ again with what unblocked it when it resolves.
 
 ## Who keeps it clean
 
-Each agent owns its own memory. At the end of every epic, `/batch-implement` runs the
+Each agent owns its own memory. At the end of every epic, `/pad-run` runs the
 `memory-curator`, which keeps, tightens, merges or deletes lines against the rules above, and
 never adds new ones. It commits the result on the epic branch, so its changes show in the epic's
 PR.

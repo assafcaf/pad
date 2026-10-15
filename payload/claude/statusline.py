@@ -76,8 +76,50 @@ def work_dir(start: Path, *children: str) -> Path | None:
     return None
 
 
+def board_progress(project_dir: Path) -> str:
+    """`E2 3/7 ▶E2-T4,E2-T5` from the newest run's `board.md`, when there is one.
+
+    `ledger.sh --run` keeps one row per ticket (`| Key | Owner | Status | Branch | Sha |
+    Evidence |`), so the board already holds the whole run's state: count it, don't replay it.
+    """
+    work = work_dir(project_dir, "runs")
+    if work is None:
+        return ""
+    try:
+        boards = sorted(
+            work.glob("runs/*/board.md"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return ""
+    for board in boards:
+        try:
+            text = board.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        done, total, doing = 0, 0, []
+        for line in text.splitlines():
+            cells = [cell.strip() for cell in line.strip().split("|")]
+            if len(cells) < 8 or cells[0] or cells[-1]:
+                continue
+            key, status = cells[1], cells[3].lower()
+            if not key or key == "Key" or set(key) <= set("-: "):
+                continue
+            total += 1
+            if status == "done":
+                done += 1
+            elif status == "doing":
+                doing.append(key)
+        if not total:
+            continue
+        label = f"{board.parent.name} {done}/{total}"
+        return f"{label} ▶{','.join(doing)}" if doing else label
+    return ""
+
+
 def run_progress(project_dir: Path) -> str:
-    """`PROJ-70 2/5` for the newest /batch-implement run log, when there is one.
+    """`PROJ-70 2/5` for the newest /pad-run run log, when no board says more.
 
     The run log is append-only, one line per task outcome, so counting lines is enough.
     """
@@ -221,7 +263,7 @@ def from_tickets(tickets: Path, names: list[str]) -> tuple[str, str] | None:
 
 
 def from_snapshot(path: Path, names: list[str]) -> tuple[str, str] | None:
-    """`(PROJ-7, "PROJ-7 4/7 ▶PROJ-12")` from the snapshot `/batch-implement` leaves behind.
+    """`(PROJ-7, "PROJ-7 4/7 ▶PROJ-12")` from the snapshot `/pad-run` leaves behind.
 
     A status line renders on every event, so it may never call a tracker API; the snapshot is
     the only thing it is allowed to read. One older than SNAPSHOT_STALE_HOURS, or carrying no
@@ -347,7 +389,11 @@ def main() -> None:
     if not get(payload, "prompt_cache", "warm", default=True):
         parts.append("cache cold")
 
-    progress = run_progress(project_dir) or epic_progress(payload, project_dir, cwd, head)
+    progress = (
+        board_progress(project_dir)
+        or run_progress(project_dir)
+        or epic_progress(payload, project_dir, cwd, head)
+    )
     if progress:
         parts.append(progress)
 

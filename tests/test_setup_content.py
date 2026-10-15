@@ -214,11 +214,12 @@ def test_o42_capabilities_step_checks_whether_the_workflow_tool_is_available(pay
     assert re.search(r"availab", step, re.I), step
 
 
-def test_o42_capabilities_step_sets_execution_mode_workflow_when_available_else_owner(payload_text):
+def test_capabilities_step_sets_no_execution_mode(payload_text):
+    """0.4.0: one pipeline, so the Workflow tool's presence is recorded, not configured."""
     step = capabilities_step(payload_text(SKILL))
-    assert re.search(r"\bMode\b", step), step
-    assert "`workflow`" in step and "`owner`" in step, step
-    assert "config.md" in step, step
+    assert "set it to `owner`" not in step, step
+    assert "`workflow` in `config.md`" not in step, step
+    assert re.search(r"no execution mode", step, re.I), step
 
 
 def test_o42_capabilities_step_sends_a_test_push_notification(payload_text):
@@ -253,3 +254,75 @@ def test_o42_local_md_template_has_a_push_notification_line(payload_text):
     template = local_md_template(payload_text(SKILL))
     assert re.search(r"^- Push notifications?:", template, re.M), template
     assert re.search(r"confirm", template, re.I), template
+
+
+# --- 0.4.0: agents, config sections, allow rules, rehearsal steps -------------------------------
+
+AGENTS_040 = ["owner", "test-designer", "evaluator", "tracker", "knowledge-scanner",
+              "memory-curator"]
+
+
+def _harness_step(text: str) -> str:
+    return next(body for number, title, body in sections(text) if title == "The harness")
+
+
+def test_harness_step_lists_the_current_agents(payload_text):
+    body = _harness_step(payload_text(SKILL))
+    rows = re.findall(r"^\s*\| `([a-z-]+)` \|", body, re.M)
+    assert rows == AGENTS_040, rows
+
+
+def test_harness_step_names_retired_agents_only_to_delete_them(payload_text):
+    body = _harness_step(payload_text(SKILL))
+    para = next(p for p in paragraphs(body) if "ticket-owner" in p)
+    assert "delete" in para and "code-writer" in para and "task-planner" in para
+
+
+def test_harness_allow_rules_match_settings_example(payload_text):
+    import json
+    body = _harness_step(payload_text(SKILL))
+    flat = " ".join(body.split())
+    assert "Bash(git rebase *)" in flat
+    allow = json.loads(payload_text("claude/settings.example.json"))["permissions"]["allow"]
+    scripts = [m.group(1) for r in allow
+               for m in [re.match(r"Bash\(bash \.claude/workflow/bin/([a-z-]+)\.sh \*\)", r)] if m]
+    assert scripts, allow
+    for script in scripts:
+        assert f"`{script}`" in flat, script
+
+
+def test_config_step_names_protected_paths_and_cadence_and_drops_tiers_and_mode(payload_text):
+    text = payload_text(SKILL)
+    body = next(b for n, t, b in sections(text) if t == "Protected paths and review")
+    assert "## Protected paths" in body
+    assert "`per-wave`" in body
+    assert re.search(r"no tiers and no execution mode", body, re.I)
+
+
+def test_surfaces_step_names_the_three_visual_columns(payload_text):
+    text = payload_text(SKILL)
+    body = "\n".join(b for _, _, b in step_for(text, "surfaces"))
+    for column in ("Reference dir", "Render command", "Viewport"):
+        assert f"**{column}**" in body, column
+    assert "render-check.sh" in body
+    assert re.search(r"no visual class", body)
+
+
+def test_upgrade_step_names_the_040_config_changes(payload_text):
+    body = "\n".join(b for _, _, b in step_for(payload_text(SKILL), "upgrade"))
+    for part in ("## Protected paths", "Render command", "Viewport", "Reference dir",
+                 "rebase-onto-epic-head", "### Tiers", "Mode"):
+        assert part in body, part
+
+
+def test_rehearsal_step_lists_every_rehearse_step(payload_text):
+    from test_rehearse import STEPS
+    body = "\n".join(b for _, _, b in step_for(payload_text(SKILL), "rehearse"))
+    for step in STEPS:
+        assert f"`{step}`" in body, step
+
+
+def test_setup_has_no_tier_or_mode_instructions_left(payload_text):
+    text = payload_text(SKILL)
+    assert "Execution → Mode" not in text
+    assert "/batch-implement" not in text

@@ -26,7 +26,7 @@ import pytest
 from conftest import BIN, PAYLOAD, git
 
 SCRIPT = "preflight.sh"
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 CONFIG_EXAMPLE = "claude/workflow/config.example.md"
 OLD_VERSION = "0.1.0"
 
@@ -75,13 +75,12 @@ ALLOW = MOVES_ALLOW + [
     SETUP_RULE, PYTEST_RULE, TRUE_RULE, PREVIEW_RULE, WEAKENED_RULE, SCRIPTS_RULE,
 ]
 
-# Agent -> model, as the fixture config's Agents table and Tiers `standard` row say.
+# Agent -> model, as the fixture config's Agents table says.
 AGENTS = {
     "tracker": "haiku",
-    "task-planner": "sonnet",
-    "ticket-owner": "sonnet",
+    "owner": "sonnet",
     "test-designer": "sonnet",
-    "code-writer": "sonnet",
+    "evaluator": "sonnet",
     "knowledge-scanner": "sonnet",
     "memory-curator": "sonnet",
 }
@@ -97,20 +96,11 @@ SECTIONS = {
     "Agents": """| Role | Agent | Model | Notes |
 |---|---|---|---|
 | Tracker | `tracker` | `haiku` | tracker tools |
-| Planning | `task-planner` | `sonnet` | read-only |
-| Task ownership | `ticket-owner` | `sonnet` | one per task |
-| Tests | `test-designer` | `sonnet` | red commit |
-| Code | `code-writer` | `sonnet` | green commit |
+| Ownership | `owner` | `sonnet` | one per ticket |
+| Tests | `test-designer` | `sonnet` | red commit, protected tickets |
+| Visual judge | `evaluator` | `sonnet` | fresh context |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | read-only |
 | Memory curation | `memory-curator` | `sonnet` | end of epic |
-
-### Tiers
-
-| Tier | Flow | Test-designer | Code-writer | Retry |
-|---|---|---|---|---|
-| `small` | one `code-writer` in solo mode | — | `sonnet` | `opus`, standard flow |
-| `standard` | `test-designer` and `code-writer` | `sonnet` | `sonnet` | `opus` code-writer |
-| `complex` | as standard, wider reading brief | `opus` | `opus` | `opus` code-writer |
 """,
     "Tracker updates during a run": """| When | Task | Comment |
 |---|---|---|
@@ -123,7 +113,7 @@ SECTIONS = {
     "Paths": """| What | Where | Committed |
 |---|---|---|
 | Working specs | `.work/specs/<yyyy-mm-dd>-<slug>.md` | no |
-| Run logs for `/batch-implement` | `.work/runs/<run-id>/progress.md` | no |
+| Run logs for `/pad-run` | `.work/runs/<run-id>/progress.md` | no |
 | Development record | `docs/decisions/NNNN-<slug>.md` | yes |
 """,
     "Project knowledge": """Mode: off
@@ -145,14 +135,13 @@ SECTIONS = {
     + "".join(f"| `{cap}` | `{cmd}` |\n" for cap, cmd in MOVES.items()),
     "Serial resources": """None are configured.
 """,
-    "Surfaces": """| Surface | Entry point | Test drives it by | Person looks by | Automated check | Preview start | Ready when | Restart when changed | Cannot show |
-|---|---|---|---|---|---|---|---|---|
-| `web` | `{entry}` | a browser test | a browser | `true` | `{preview}` | `ready in` | `src/` | nothing |
+    "Surfaces": """| Surface | Entry point | Test drives it by | Person looks by | Automated check | Preview start | Ready when | Restart when changed | Cannot show | Reference dir | Render command | Viewport |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `web` | `{entry}` | a browser test | a browser | `true` | `{preview}` | `ready in` | `src/` | nothing | {refdir} | {render} | {viewport} |
 """,
-    "Review": """- **Cadence:** `none`.
+    "Review": """- **Cadence:** `per-wave`.
 """,
-    "Execution": """- **Mode:** `owner`.
-- **Parallelism:** at most `3` tasks at once.
+    "Execution": """- **Parallelism:** at most `3` tasks at once.
 """,
 }
 
@@ -169,6 +158,9 @@ def config_md(
     entry: str = "http://localhost:5173",
     preview: str = "npm run dev",
     plugins: str = "",
+    refdir: str = "`<where the mock crops live>`",
+    render: str = "`<command writing {out} for {route} at {width}x{height}>`",
+    viewport: str = "`<WxH>`",
 ) -> str:
     out = ["# Workflow config", ""]
     if version is not None:
@@ -179,7 +171,9 @@ def config_md(
         if heading == "Commands":
             body = body.format(dep=dep, lock=lock)
         elif heading == "Surfaces":
-            body = body.format(entry=entry, preview=preview)
+            body = body.format(entry=entry, preview=preview, refdir=refdir,
+                               render=render,
+                               viewport=viewport)
         elif heading == "Plugins":
             body = body.format(plugins=plugins)
         out += [f"## {heading}", "", body]
@@ -353,8 +347,8 @@ def test_o39_a_named_dependency_directory_and_lockfile_that_exist_pass(repo, pre
     assert last(result) == "PREFLIGHT OK"
 
 
-@pytest.mark.parametrize("agent,model", [("code-writer", "opus"), ("test-designer", "haiku")])
-def test_o39_an_agent_model_that_differs_from_the_tiers_table_fails_the_models_check(
+@pytest.mark.parametrize("agent,model", [("owner", "opus"), ("test-designer", "haiku")])
+def test_o39_an_agent_model_that_differs_from_the_agents_table_fails_the_models_check(
     repo, preflight, agent, model
 ):
     install(repo, models={agent: model})
@@ -389,6 +383,67 @@ def test_plugins_a_plugin_extending_no_agent_or_skill_fails_naming_both(repo, pr
     assert_failed(result, "plugins", PLUGIN, "ledger-keeper")
 
 
+def test_plugins_a_plugin_may_extend_the_owner_agent(repo, preflight):
+    result = preflight(_with_plugin(repo, "owner"))
+    assert result.returncode == 0, result.stdout
+    assert last(result) == "PREFLIGHT OK"
+
+
+def test_plugins_a_plugin_may_extend_the_pad_run_skill(repo, preflight):
+    install(repo, config=config_md(plugins=f"| `{PLUGIN}` | `pad-run` | a review step |"))
+    (repo / PLUGIN).parent.mkdir(parents=True)
+    (repo / PLUGIN).write_text("# Plugin: review step\n\nExtends: `pad-run`\n", encoding="utf-8")
+    skill = repo / ".claude" / "skills" / "pad-run" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: pad-run\n---\n", encoding="utf-8")
+    result = preflight(repo)
+    assert result.returncode == 0, result.stdout
+    assert last(result) == "PREFLIGHT OK"
+
+
+# --- render: a surface with a Render command renders once ------------------------------------
+
+# Writes a non-empty file at {out} and records the arguments it was given.
+RENDER_OK = "`printf '%s %s' {route} {viewport} > render-args.txt && printf png > {out}`"
+
+
+def test_render_no_render_command_skips_the_render_check(repo, preflight):
+    install(repo)
+    result = preflight(repo)
+    assert not any(c == "render" for c, _ in failures(result)), result.stdout
+    assert last(result) == "PREFLIGHT OK", result.stdout
+
+
+def test_render_a_render_command_that_writes_its_file_passes(repo, preflight):
+    install(repo, config=config_md(render=RENDER_OK, viewport="`390x844`",
+                                   refdir="`docs/mocks/`"))
+    result = preflight(repo)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert last(result) == "PREFLIGHT OK"
+    assert (repo / "render-args.txt").read_text(encoding="utf-8") == "/ 390x844"
+
+
+def test_render_writes_its_image_outside_the_worktree(repo, preflight):
+    install(repo, config=config_md(render=RENDER_OK, viewport="`390x844`"))
+    preflight(repo)
+    assert not list(repo.rglob("*.png"))
+
+
+def test_render_a_failing_render_command_fails_the_render_check(repo, preflight):
+    install(repo, config=config_md(render="`exit 3`", viewport="`390x844`"))
+    assert_failed(preflight(repo), "render", "web", "exited 3")
+
+
+def test_render_a_render_command_that_writes_nothing_fails(repo, preflight):
+    install(repo, config=config_md(render="`true`", viewport="`390x844`"))
+    assert_failed(preflight(repo), "render", "web", "no file")
+
+
+def test_render_a_render_command_without_a_viewport_fails_naming_viewport(repo, preflight):
+    install(repo, config=config_md(render=RENDER_OK))
+    assert_failed(preflight(repo), "render", "web", "Viewport")
+
+
 def test_o39_a_script_not_executable_in_git_fails_the_executable_check(repo, preflight):
     install(repo, not_executable=("merge-task.sh",))
     assert_failed(preflight(repo), "executable", "merge-task.sh")
@@ -403,7 +458,7 @@ def test_o39_a_gitignore_not_covering_a_run_path_fails_the_gitignore_check(
 
 
 def test_o39_every_failure_is_listed_and_counted_not_just_the_first(repo, preflight):
-    install(repo, models={"code-writer": "opus"},
+    install(repo, models={"owner": "opus"},
             gitignore=[g for g in GITIGNORE if g != ".work/"])
     result = preflight(repo)
     assert result.returncode == 1, (result.stdout, result.stderr)
@@ -427,7 +482,7 @@ def test_o39_a_missing_config_fails_with_a_count_and_exit_1(repo, preflight):
     assert re.fullmatch(r"PREFLIGHT FAILED [1-9][0-9]*", last(result)), result.stdout
 
 
-# --- O39: /batch-implement runs it at the baseline ----------------------------------------
+# --- O39: /pad-run runs it at the baseline ----------------------------------------
 
 
 def baseline_step(skill: str) -> str:
@@ -440,7 +495,7 @@ def baseline_step(skill: str) -> str:
     return step.group(1)
 
 
-def test_o39_batch_implement_baseline_runs_preflight_before_the_preview_start(payload_text):
+def test_o39_pad_run_baseline_runs_preflight_before_the_preview_start(payload_text):
     step = baseline_step(payload_text(SKILL))
     run = step.find("bash .claude/workflow/bin/preflight.sh")
     preview = step.find("preview.sh start --surface")
@@ -451,7 +506,7 @@ def test_o39_batch_implement_baseline_runs_preflight_before_the_preview_start(pa
     assert "preview.sh stop --surface <name> --worktree <epic worktree>" in finish
 
 
-def test_o39_batch_implement_stops_before_any_wave_when_preflight_fails(payload_text):
+def test_o39_pad_run_stops_before_any_wave_when_preflight_fails(payload_text):
     skill = payload_text(SKILL)
     step = baseline_step(skill)
     assert "PREFLIGHT FAILED" in step, step

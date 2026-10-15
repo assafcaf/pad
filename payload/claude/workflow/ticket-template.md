@@ -1,7 +1,7 @@
 # Ticket body
 
 A ticket is an ownership unit: one owner takes it from start to merged. `/tickets` writes every
-ticket in this shape, and `/batch-implement`, `plan-check.sh` and `task-submit.sh --ticket`
+ticket in this shape, and `/pad-run`, `plan-check.sh` and `task-submit.sh --ticket`
 parse it. Keep the headings exactly.
 
 ```markdown

@@ -27,6 +27,11 @@
 #   gitignore             .gitignore covers .work/ and .claude/worktrees/
 #   line-endings          core.autocrlf and .gitattributes agree: not autocrlf=true with
 #                         `eol=lf`, nor autocrlf false/input with `eol=crlf`
+#   render                every Surfaces row with a Render command renders once: render-check.sh
+#                         --surface <name> --route / --viewport <the row's Viewport> to a temp
+#                         file must print RENDER OK. render-check.sh reads the worktree's own
+#                         .claude/workflow/config.md, so with --config naming another file this
+#                         check renders from the worktree's config, not the named one
 #
 # Output: one `PREFLIGHT FAIL <check>: <detail>` line per failure, then `PREFLIGHT OK` or
 # `PREFLIGHT FAILED <n>`. Exit 0 when every check passes, 1 otherwise (a missing config or bad
@@ -311,6 +316,28 @@ check_rules() {
   done <<<"$(PAD_RULES_DIR=.claude/workflow/rules PAD_AGENTS_DIR=.claude/agents bash "$here/rules.sh" validate 2>&1)"
 }
 
+check_render() {
+  local n r v name cmd vp out last
+  while IFS="$US" read -r n r v; do
+    [ -n "$n" ] || continue
+    name="$(value "$n")"; cmd="$(value "$r")"
+    [ -n "$name" ] && [ -n "$cmd" ] || continue
+    vp="$(value "$v")"
+    if ! [[ "$vp" =~ ^[0-9]+x[0-9]+$ ]]; then
+      fail render "$name has a Render command but no Viewport (WxH, e.g. 1280x800) in its Surfaces row"
+      continue
+    fi
+    out="$(bash "$here/render-check.sh" --surface "$name" --route / --viewport "$vp" \
+      --out "$tmp/render-${name//[^A-Za-z0-9._-]/_}.png" 2>"$tmp/render.err")"
+    last="$(printf '%s\n' "$out" | tail -n 1)"
+    case "$last" in
+      "RENDER OK "*) ;;
+      "RENDER FAIL "*) fail render "${last#RENDER FAIL }" ;;
+      *) fail render "$name: render-check.sh printed '${last:-nothing}': $(head -n 1 "$tmp/render.err")" ;;
+    esac
+  done <<<"$(table "## Surfaces" "Surface,Render command,Viewport")"
+}
+
 check_line_endings() {
   local auto eol=""
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -340,6 +367,7 @@ if [ -f "$config" ]; then
   check_lockfile
   check_models
   check_plugins
+  check_render
 fi
 check_rules
 check_executable

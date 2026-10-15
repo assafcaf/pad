@@ -1,6 +1,6 @@
 ---
 name: tracker
-description: Performs the reads, creates, links and edits against the project's issue tracker (the ledger) for /tickets and /batch-implement. Owns the tracker's tools and metadata so no other agent needs them. Run-time status moves and comments go through bin/ledger.sh instead.
+description: Performs the reads, creates, links and edits against the project's issue tracker (the ledger) for /tickets and /pad-run. Owns the tracker's tools and metadata so no other agent needs them. Run-time status moves and comments go through bin/ledger.sh instead.
 tools: Read, mcp__atlassian__getJiraIssue, mcp__atlassian__searchJiraIssuesUsingJql, mcp__atlassian__createJiraIssue, mcp__atlassian__editJiraIssue, mcp__atlassian__createIssueLink, mcp__atlassian__getTransitionsForJiraIssue, mcp__atlassian__transitionJiraIssue, mcp__atlassian__addCommentToJiraIssue
 model: haiku
 memory: project
