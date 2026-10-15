@@ -1,7 +1,7 @@
 ---
 name: same-name-readded
 kind: test-removal
-applies-to: ticket-owner, orchestrator
+applies-to: owner, orchestrator
 check: same-name-readded.sh
 claim: optional
 ---

@@ -4,7 +4,7 @@ Read before writing a file whose content is prose. This is about which tool does
 not about what goes in the file.
 
 The skills here write documents: `/spec` writes the spec, `/tickets` writes the plan,
-`/knowledge-layer` writes `CONTEXT.md` and `project.md`, `/batch-implement` writes the
+`/knowledge-layer` writes `CONTEXT.md` and `project.md`, `/pad-run` writes the
 development record. Each is English with apostrophes, backticks and tables in it, at a size
 where a shell heredoc stops being reliable.
 

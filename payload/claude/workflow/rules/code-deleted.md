@@ -1,7 +1,7 @@
 ---
 name: code-deleted
 kind: test-removal
-applies-to: ticket-owner, orchestrator
+applies-to: owner, orchestrator
 check: code-deleted.sh
 ---
 

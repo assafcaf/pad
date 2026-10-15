@@ -16,6 +16,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
+
 from conftest import BASH, BIN, git
 
 SCRIPT = "suite-slot.sh"
@@ -120,14 +122,12 @@ def test_suite_slot_exits_with_the_commands_exit_code_and_passes_its_output(repo
     r = run_script(SCRIPT, "--", "bash", "-c", "echo out-7c1; exit 3", cwd=repo)
     assert r.returncode == 3, r.stdout + r.stderr
     assert "out-7c1" in r.stdout
-
-
-def test_suite_slot_exits_zero_when_the_command_succeeds(repo, run_script):
     r = run_script(SCRIPT, "--", "bash", "-c", "echo ok-5d2", cwd=repo)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "ok-5d2" in r.stdout
 
 
+@pytest.mark.slow
 def test_at_most_pad_suite_slots_runs_are_inside_at_once(repo, tmp_path):
     s = Slots(tmp_path, repo, _env("2"))
     try:
@@ -140,6 +140,7 @@ def test_at_most_pad_suite_slots_runs_are_inside_at_once(repo, tmp_path):
         s.finish()
 
 
+@pytest.mark.slow
 def test_suite_slots_line_in_config_sets_the_slot_count(repo, tmp_path):
     cfg = repo / ".claude" / "workflow" / "config.md"
     cfg.parent.mkdir(parents=True)
@@ -155,6 +156,7 @@ def test_suite_slots_line_in_config_sets_the_slot_count(repo, tmp_path):
         s.finish()
 
 
+@pytest.mark.slow
 def test_slot_count_defaults_to_two_without_env_or_config(repo, tmp_path):
     s = Slots(tmp_path, repo, _env(None))
     try:
@@ -166,6 +168,7 @@ def test_slot_count_defaults_to_two_without_env_or_config(repo, tmp_path):
         s.finish()
 
 
+@pytest.mark.slow
 def test_a_waiting_merge_run_takes_the_next_slot_before_a_waiting_task_run(repo, tmp_path):
     s = Slots(tmp_path, repo, _env("1"))
     try:
@@ -203,6 +206,7 @@ def _commit(wt: Path, files: dict[str, str], msg: str) -> str:
     return git("rev-parse", "HEAD", cwd=wt)
 
 
+@pytest.mark.slow
 def test_merge_task_gate_waits_for_a_suite_slot(repo, worktree, tmp_path):
     epic = worktree(repo, "epic")
     epic_head = _commit(epic, {"src/base.py": "BASE = 1\n"}, "epic: base")

@@ -1,7 +1,7 @@
 ---
 name: gone-means-untracked
 kind: test-authoring
-applies-to: test-designer, code-writer
+applies-to: test-designer, owner
 check: gone-means-untracked.sh
 ---
 

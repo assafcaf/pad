@@ -42,11 +42,11 @@ A test here exists to prove one outcome from the ticket, and to fail when that o
   The test-designer writes them in the red commit; red and green are proven on them, and they
   merge and stay.
 - **Development tests** are scaffolding while the code goes green: an internal step, an
-  intermediate shape, a helper. The code-writer writes them freely under the config's dev path
+  intermediate shape, a helper. The owner writes them freely under the config's dev path
   (Commands `Dev tests`, default `tests/_dev/`) and never commits them.
-- **At the end of the task** the ticket-owner triages each dev test: **promote** it (the
-  test-designer rewrites it as an outcome test in a follow-up red commit) or **discard** it.
-  Each decision is listed in the `READY` block and the evidence, so the PR shows it. The
+- **At the end of the task** the owner triages each dev test: **promote** it (rewritten as an
+  outcome test in a follow-up red commit; by the test-designer under the strict discipline) or
+  **discard** it. The
   `dev-tests-stay-out` rule rejects a branch that commits a dev test, so none reaches the epic
   branch and no removal rule is ever needed for one.
 

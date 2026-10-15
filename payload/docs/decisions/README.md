@@ -4,7 +4,7 @@ Why the code is the way it is, one decision at a time. Working specs are not com
 outlives them is here: the decisions a future reader of the code would otherwise have to
 reverse-engineer, and what each epic actually delivered.
 
-`/spec` writes an entry when a spec settles a durable decision, and `/batch-implement` appends the Outcome
+`/spec` writes an entry when a spec settles a durable decision, and `/pad-run` appends the Outcome
 when the epic lands. Add one by hand whenever you make such a decision outside that flow.
 
 ## Format

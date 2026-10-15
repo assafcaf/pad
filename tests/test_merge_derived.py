@@ -10,7 +10,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from conftest import git
+
+pytestmark = pytest.mark.slow
 
 SCRIPT = "merge-task.sh"
 KEY = "T-1"
@@ -75,13 +79,14 @@ def test_without_derived_files_the_count_line_conflicts(repo, worktree, run_scri
     _untouched(epic, epic_head, r)
 
 
-def test_a_derived_only_conflict_is_rebuilt_and_merged(repo, worktree, run_script):
+def test_a_derived_only_conflict_is_rebuilt_and_merged_with_rerere_on(repo, worktree, run_script):
     epic, _, red, head = _setup(repo, worktree)
     r = _merge(run_script, repo, epic, red, head, REBUILD)
     assert r.returncode == 0, r.stdout + r.stderr
     assert _last(r).startswith("MERGED ")
     assert git("show", f"HEAD:{COUNT}", cwd=epic) == "modules: 3"
     assert git("status", "--porcelain", cwd=epic) == ""
+    assert git("config", "--get", "rerere.enabled", cwd=epic) == "true"
 
 
 def test_a_conflict_outside_the_derived_files_is_still_conflict(repo, worktree, run_script):
@@ -100,9 +105,3 @@ def test_a_failing_rebuild_is_conflict_and_leaves_the_epic_untouched(repo, workt
     assert r.returncode == 1
     assert _last(r) == f"CONFLICT {KEY}: {COUNT} (rebuild failed: exit 7)"
     _untouched(epic, epic_head, r)
-
-
-def test_a_merge_turns_on_rerere_for_the_epic_repo(repo, worktree, run_script):
-    epic, _, red, head = _setup(repo, worktree)
-    _merge(run_script, repo, epic, red, head, REBUILD)
-    assert git("config", "--get", "rerere.enabled", cwd=epic) == "true"

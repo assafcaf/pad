@@ -10,7 +10,7 @@
 # A rule file starts with frontmatter between two `---` lines:
 #   name:        the file's name without .md
 #   kind:        test-removal | test-authoring | practice
-#   applies-to:  comma-separated agents (`orchestrator` is /batch-implement itself)
+#   applies-to:  comma-separated agents (`orchestrator` is /pad-run itself)
 #   check:       optional; a script in the rules folder. Required for test-removal, not
 #                allowed for practice
 #   claim:       optional, test-removal only: required (default) or optional. An optional

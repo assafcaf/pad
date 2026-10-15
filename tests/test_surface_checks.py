@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 HEADER = (
     "| Surface | Entry point | Test drives it by | Person looks by | Automated check "
     "| Preview start | Ready when | Restart when changed | Cannot show |"
@@ -57,6 +59,7 @@ def test_o35_red_check_fails_the_gate_naming_the_surface(run_script, tmp_path):
     assert "SURFACES OK" not in r.stdout
 
 
+@pytest.mark.slow
 def test_o35_every_failing_surface_is_named_and_later_checks_still_run(run_script, tmp_path):
     cfg = _config(tmp_path, [_row("web", "exit 1"), _row("api", "exit 2"),
                              _row("docs", "touch docs.marker")])
@@ -95,8 +98,8 @@ def test_o35_default_config_is_the_installed_workflow_config(run_script, tmp_pat
     assert _last(r.stdout) == "SURFACES FAIL web"
 
 
-def test_o35_epic_gate_step_in_batch_implement_runs_surface_checks(payload_text):
-    text = payload_text("claude/skills/batch-implement/SKILL.md")
+def test_o35_epic_gate_step_in_pad_run_runs_surface_checks(payload_text):
+    text = payload_text("claude/skills/pad-run/SKILL.md")
     start = text.index("## 4. Finish the epic")
     step1 = text[start:text.index("2. **Final review.**", start)]
     assert "surface-checks.sh" in step1

@@ -57,32 +57,51 @@ def out_lines(result):
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def test_o43_n_suites_run_at_once(probe):
+@pytest.mark.slow
+def test_o43_three_suites_under_load_report_each_run_the_load_only_failure_and_a_suggestion(probe):
+    """One probe of 3 copies whose test_flaky fails only beside another copy."""
     result, state = probe(3)
+    out = out_lines(result)
+
+    # N suites run at once
     assert (state / "peaks").is_file(), (result.stdout, result.stderr)
     peaks = [int(x) for x in (state / "peaks").read_text().split()]
     assert max(peaks) == 3, (peaks, result.stdout, result.stderr)
 
-
-def test_o43_each_run_is_reported_with_its_exit_code_and_seconds(probe):
-    result, _ = probe(3)
-    runs = [m for m in (RUN_LINE.match(line) for line in out_lines(result)) if m]
+    # each run is reported with its exit code and seconds
+    runs = [m for m in (RUN_LINE.match(line) for line in out) if m]
     assert sorted(int(m.group("i")) for m in runs) == [1, 2, 3], result.stdout
     assert all(m.group("code") == "1" for m in runs), result.stdout
     assert all(float(m.group("secs")) >= 3 for m in runs), result.stdout
 
+    # a test failing only under load is named as load-only
+    assert "LOAD-ONLY FAILURES: tests/test_x.py::test_flaky" in out, result.stdout
 
-def test_o43_a_test_failing_only_under_load_is_named_as_load_only(probe):
-    result, _ = probe(3)
-    assert "LOAD-ONLY FAILURES: tests/test_x.py::test_flaky" in out_lines(result), result.stdout
+    # setup is told fewer slots than N
+    m = SUGGEST.match(out[-1]) if out else None
+    assert m, result.stdout
+    assert 1 <= int(m.group("slots")) < 3, result.stdout
+    assert int(m.group("par")) >= 1, result.stdout
+
+    # SUGGEST is the last line, after the load-only failures, after every RUN line
+    names = [
+        next((k for k in ("RUN", "LOAD-ONLY", "SUGGEST") if x.startswith(k)), "?")
+        for x in out
+    ]
+    assert names and names[-1] == "SUGGEST", result.stdout
+    assert names[-2:-1] == ["LOAD-ONLY"], result.stdout
+    assert "RUN" in names, result.stdout
+    assert names.index("LOAD-ONLY") > max(i for i, n in enumerate(names) if n == "RUN"), result.stdout
 
 
+@pytest.mark.slow
 def test_o43_a_test_failing_alone_too_is_not_a_load_only_failure(probe):
     result, _ = probe(3, "broken")
     load_only = [x for x in out_lines(result) if x.startswith("LOAD-ONLY FAILURES:")]
     assert load_only == ["LOAD-ONLY FAILURES: tests/test_x.py::test_flaky"], result.stdout
 
 
+@pytest.mark.slow
 def test_o43_a_suite_that_passes_under_load_reports_none_and_suggests_all_n_slots(probe):
     result, _ = probe(1)
     out = out_lines(result)
@@ -90,27 +109,6 @@ def test_o43_a_suite_that_passes_under_load_reports_none_and_suggests_all_n_slot
     m = SUGGEST.match(out[-1]) if out else None
     assert m and int(m.group("slots")) == 1, result.stdout
     assert result.returncode == 0, (result.stdout, result.stderr)
-
-
-def test_o43_setup_is_told_fewer_slots_than_n_when_load_breaks_tests(probe):
-    result, _ = probe(3)
-    out = out_lines(result)
-    m = SUGGEST.match(out[-1]) if out else None
-    assert m, result.stdout
-    assert 1 <= int(m.group("slots")) < 3, result.stdout
-    assert int(m.group("par")) >= 1, result.stdout
-
-
-def test_o43_suggest_is_the_last_line_after_load_only_failures(probe):
-    result, _ = probe(2)
-    names = [
-        next((k for k in ("RUN", "LOAD-ONLY", "SUGGEST") if x.startswith(k)), "?")
-        for x in out_lines(result)
-    ]
-    assert names and names[-1] == "SUGGEST", result.stdout
-    assert names[-2:-1] == ["LOAD-ONLY"], result.stdout
-    assert "RUN" in names, result.stdout
-    assert names.index("LOAD-ONLY") > max(i for i, n in enumerate(names) if n == "RUN"), result.stdout
 
 
 @pytest.mark.parametrize("args", [(), ("0",), ("abc",)])
@@ -138,6 +136,7 @@ exit $rc
 """
 
 
+@pytest.mark.slow
 def test_o43_vitest_fail_lines_are_read_as_load_only_failures(run_script, tmp_path):
     """vitest prints ` FAIL  <file> > <suite> > <test>` (in colour) rather than pytest's FAILED."""
     suite = tmp_path / "vitest-suite.sh"

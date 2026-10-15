@@ -82,7 +82,6 @@ more areas than that means the areas are too small.
 Each returns one block. **Read only the blocks.** Do not open the files yourself: the point of
 the fan-out is that the survey's cost stays in the scanners, and a coordinator that reads
 source alongside them has paid for the scan twice and still has a full context window of code.
-`/batch-implement` keeps `task-planner` at the same arm's length, for the same reason.
 
 In a multi-package repo, dispatch one `knowledge-scanner` per package, with that package as
 its area, plus one for the paths outside the packages. A package's block becomes its
@@ -134,20 +133,19 @@ from a scanner and which are theirs.
    |---|---|
    | `/spec` | `CONTEXT.md`, so outcomes are written in this project's terms |
    | `/tickets` | `project.md` Module map, for each task's Files and Interfaces |
-   | `task-planner` | `project.md` Module map and Standing overlaps, before computing waves |
    | `test-designer` | `CONTEXT.md`, so test names use the project's words |
-   | `code-writer` | `CONTEXT.md`, plus `project.md` Invariants and Pitfalls |
+   | `owner` | `CONTEXT.md`, plus `project.md` Invariants and Pitfalls |
 
    In a multi-package repo, add the `Packages:` line under `Mode: on` and this line under the
    table: each reader reads the repo-level files
-   plus the package files of every package its task's Files touch; `task-planner` reads every package's `PROJECT.md` Standing overlaps.
+   plus the package files of every package its task's Files touch.
 
    Nothing else reads them. A reader not in this table is a reader paying for context it was
    not given a use for.
 3. `bash .claude/workflow/bin/knowledge-paths.sh`. It must pass before you report done. It
    checks every file of both levels: each exists, each is under its ceiling (120 lines for a
    `PROJECT.md` or `project.md`, 100 for a `CONTEXT.md`), and every path in it resolves.
-4. Tell the operator that `/spec`, `/tickets`, `/batch-implement` and the implementer agents
+4. Tell the operator that `/spec`, `/tickets`, `/pad-run` and the implementer agents
    now read these, and that `/knowledge-layer refresh` re-scans.
 
 ## Refresh
@@ -183,7 +181,7 @@ silently regenerate: a file deleted on purpose is a decision.
 
 ## This skill never writes decisions
 
-`docs/decisions/` is the committed development record, owned by `/spec` and `/batch-implement`
+`docs/decisions/` is the committed development record, owned by `/spec` and `/pad-run`
 (`docs/decisions/README.md`). Read it, link to it from a term, and leave it alone. A decision
 inferred from a scan is a record of a decision nobody made.
 

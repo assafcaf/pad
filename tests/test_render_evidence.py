@@ -28,38 +28,25 @@ def progress(main: Path, run=RUN) -> Path:
     return main / ".work" / "runs" / run / "progress.md"
 
 
-def test_o7_writes_evidence_file_with_shas_outcomes_and_gate_results(repo, run_script):
+def test_o7_writes_evidence_logs_the_run_line_and_prints_the_pr_row(repo, run_script):
     result = run_script("render-evidence.sh", *args(), cwd=repo)
 
     assert result.returncode == 0, result.stderr
+    # the evidence file: shas, outcomes and gate results
     text = evidence(repo).read_text(encoding="utf-8")
     assert "E1-T9" in text
     assert RED in text and MERGE in text
     assert "O3 O4" in text
     assert "pytest -q t -> 2 failed (exit 1)" in text
     assert "pytest -q tests -> 40 passed (exit 0)" in text
-
-
-def test_o7_appends_run_log_line_with_seven_char_shas(repo, run_script):
-    result = run_script("render-evidence.sh", *args(), cwd=repo)
-
-    assert result.returncode == 0, result.stderr
+    # the run-log line, with seven-char shas
     assert progress(repo).read_text(encoding="utf-8") == "E1-T9: done (red 1111111, merge 2222222)\n"
-
-
-def test_o7_prints_pr_row_as_last_line(repo, run_script):
-    result = run_script("render-evidence.sh", *args(), cwd=repo)
-
-    assert result.returncode == 0, result.stderr
+    # stdout: the run-log line, then the PR row as the last line
     lines = result.stdout.rstrip("\n").split("\n")
     assert lines[-1] == "| E1-T9 | O3 O4 | 2222222 |"
-
-
-def test_o7_prints_run_log_line_before_the_pr_row(repo, run_script):
-    result = run_script("render-evidence.sh", *args(), cwd=repo)
-
-    lines = result.stdout.rstrip("\n").split("\n")
     assert "E1-T9: done (red 1111111, merge 2222222)" in lines[:-1]
+    # optional flags omitted leave no trace of themselves
+    assert "None" not in result.stdout
 
 
 def test_o7_from_linked_worktree_writes_into_main_checkout(repo, worktree, run_script):
@@ -86,14 +73,6 @@ def test_o7_files_outside_and_rulings_appear_when_given(repo, run_script):
     assert "kept wording as is" in text
 
 
-def test_o7_optional_flags_omitted_still_succeeds_without_their_text(repo, run_script):
-    result = run_script("render-evidence.sh", *args(), cwd=repo)
-
-    assert result.returncode == 0, result.stderr
-    assert "None" not in result.stdout
-    assert evidence(repo).is_file()
-
-
 def test_o7_values_are_written_literally_without_expansion(repo, run_script):
     weird = "echo $HOME `whoami` 50% \\t -> ok"
 
@@ -117,29 +96,20 @@ def test_o7_second_task_adds_its_own_file_and_log_line(repo, run_script):
     assert result.stdout.rstrip("\n").split("\n")[-1] == "| E1-T10 | O9 | 3333333 |"
 
 
-def test_o7_no_arguments_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("render-evidence.sh", cwd=repo)
-
-    assert result.returncode == 64
-    assert not (repo / ".work").exists()
-
-
-def test_o7_missing_required_flag_is_usage_error_and_writes_nothing(repo, run_script):
+def test_o7_bad_arguments_are_a_usage_error_and_write_nothing(repo, run_script):
+    calls = {"no-arguments": [], "unknown-flag": [*args(), "--bogus", "x"]}
     for missing in ["run", "key", "red", "merge", "outcomes", "red-result", "green-result"]:
-        result = run_script("render-evidence.sh", *args(**{missing: None}), cwd=repo)
+        calls[f"missing --{missing}"] = args(**{missing: None})
+    for name, argv in calls.items():
+        result = run_script("render-evidence.sh", *argv, cwd=repo)
 
-        assert result.returncode == 64, missing
-        assert not (repo / ".work").exists(), missing
-
-
-def test_o7_unknown_flag_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("render-evidence.sh", *args(), "--bogus", "x", cwd=repo)
-
-    assert result.returncode == 64
-    assert not (repo / ".work").exists()
+        assert result.returncode == 64, name
+        assert not (repo / ".work").exists(), name
 
 
-def test_o7_batch_implement_records_finished_tasks_with_the_script(payload_text):
-    text = payload_text("claude/skills/batch-implement/SKILL.md")
-
-    assert "render-evidence.sh" in text
+def test_o7_merge_task_records_finished_tasks_with_the_script(payload_text):
+    # The merge writes its own evidence; the orchestrator writes none of it again.
+    assert "render-evidence.sh" in payload_text("claude/workflow/bin/merge-task.sh")
+    text = payload_text("claude/skills/pad-run/SKILL.md")
+    assert "merge-task.sh --run" in text
+    assert "Write none of those again" in " ".join(text.split())

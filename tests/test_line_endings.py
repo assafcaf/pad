@@ -22,11 +22,14 @@ def configure(repo, autocrlf, attributes):
         git("commit", "-q", "-m", "attributes", cwd=repo)
 
 
+SLOW = pytest.mark.slow
+
+
 @pytest.mark.parametrize("autocrlf,attributes", [
     ("true", "* text=auto eol=lf"),
-    ("true", "*.sh text eol=lf"),
-    ("false", "* text eol=crlf"),
-    ("input", "* text=auto eol=crlf"),
+    pytest.param("true", "*.sh text eol=lf", marks=SLOW),
+    pytest.param("false", "* text eol=crlf", marks=SLOW),
+    pytest.param("input", "* text=auto eol=crlf", marks=SLOW),
 ])
 def test_o44_autocrlf_and_gitattributes_that_disagree_fail_the_line_endings_check(
     repo, preflight, autocrlf, attributes  # noqa: F811
@@ -35,6 +38,7 @@ def test_o44_autocrlf_and_gitattributes_that_disagree_fail_the_line_endings_chec
     assert_failed(preflight(repo), "line-endings", "autocrlf", ".gitattributes")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("autocrlf,attributes", [
     ("true", "* text=auto eol=crlf"),
     ("input", "* text=auto eol=lf"),

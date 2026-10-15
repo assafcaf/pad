@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 CURATOR = "claude/agents/memory-curator.md"
-BATCH = "claude/skills/batch-implement/SKILL.md"
+BATCH = "claude/skills/pad-run/SKILL.md"
 
 
 def report_block(text: str) -> str:
@@ -36,6 +36,34 @@ def test_o17_repeated_rulings_become_a_question_for_tickets(payload_text):
 
 
 def test_o17_pr_body_lists_groups_separately(payload_text):
-    step = payload_text(BATCH).split("**Push and open a draft PR**", 1)[1].split("7. **Report", 1)[0]
+    step = payload_text(BATCH).split("**Push and open a draft PR**", 1)[1].split("**Report:**", 1)[0]
     for field in ("PROJECT_MD_CANDIDATES", "UPSTREAM_FIXES", "LOCAL_CANDIDATES", "REPEATED_RULINGS"):
         assert field in step, field
+
+
+# --- 0.4.0: the curator reads the run's channel and knows the current agents ---
+
+def test_curator_dispatch_carries_the_channel(payload_text):
+    body = payload_text(CURATOR)
+    dispatch = [p for p in body.split("\n\n") if p.startswith("Your dispatch carries")][0]
+    assert "channel.md" in dispatch
+
+
+def test_curator_routes_channel_posts_to_upstream_fixes(payload_text):
+    section = payload_text(CURATOR).split("## Read the channel", 1)[1].split("\n## ", 1)[0]
+    assert "UPSTREAM_FIXES" in section
+    assert "PROJECT_MD_CANDIDATES" in section
+
+
+def test_curator_names_the_current_memory_agents(payload_text):
+    body = payload_text(CURATOR)
+    for agent in ("`owner`", "`test-designer`", "`tracker`"):
+        assert agent in body, agent
+
+
+def test_curator_names_retired_agents_only_as_leftovers(payload_text):
+    paras = payload_text(CURATOR).split("\n\n")
+    for old in ("ticket-owner", "code-writer", "task-planner"):
+        for p in paras:
+            if old in p:
+                assert "leftover" in p, p

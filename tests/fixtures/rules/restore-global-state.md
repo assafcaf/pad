@@ -1,7 +1,7 @@
 ---
 name: restore-global-state
 kind: practice
-applies-to: code-writer
+applies-to: owner
 ---
 
 A repo-defined rule, the example from Rollout-Collection's KAN-107: code that changes

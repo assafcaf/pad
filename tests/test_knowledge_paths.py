@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 SCRIPT = "knowledge-paths.sh"
 
 SURFACE_HEADER = (
@@ -40,90 +42,45 @@ def run(run_script, root: Path):
     return run_script(SCRIPT, "--root", root.as_posix(), cwd=root)
 
 
-def test_o38_surface_entry_point_that_does_not_resolve_fails(repo, run_script):
-    write_config(repo, surfaces=[("web", "`web/index.html`")])
-    r = run(run_script, repo)
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert "web/index.html" in r.stdout
-
-
-def test_o38_surface_entry_point_that_resolves_passes(repo, run_script):
-    touch(repo, "web/index.html")
-    write_config(repo, surfaces=[("web", "`web/index.html`")])
-    r = run(run_script, repo)
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_o38_surface_command_entry_point_naming_a_missing_script_fails(repo, run_script):
-    write_config(repo, surfaces=[("cli", "`bash bin/tool.sh --help`")])
-    r = run(run_script, repo)
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert "bin/tool.sh" in r.stdout
-
-
-def test_o38_surface_command_entry_point_naming_an_existing_script_passes(repo, run_script):
-    touch(repo, "bin/tool.sh")
-    write_config(repo, surfaces=[("cli", "`bash bin/tool.sh --help`")])
-    r = run(run_script, repo)
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_o38_surface_url_entry_point_is_not_a_path(repo, run_script):
-    write_config(repo, surfaces=[("web", "`http://localhost:3000/app`")])
-    r = run(run_script, repo)
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_o38_surface_placeholder_row_of_the_example_config_is_not_a_path(repo, run_script):
-    write_config(repo, surfaces=[("<name>", "`<url, command or file>`")])
-    r = run(run_script, repo)
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_o38_only_the_unresolved_surface_is_named(repo, run_script):
-    touch(repo, "web/index.html")
-    write_config(repo, surfaces=[("web", "`web/index.html`"), ("api", "`api/server.py`")])
-    r = run(run_script, repo)
-    assert r.returncode == 1
-    assert "api/server.py" in r.stdout
-    assert "web/index.html" not in r.stdout
-
-
-def test_o38_git_moves_script_that_does_not_resolve_fails(repo, run_script):
-    write_config(repo, moves=[("take-red", "bash .claude/workflow/bin/take-red.sh <sha>")])
-    r = run(run_script, repo)
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert ".claude/workflow/bin/take-red.sh" in r.stdout
-
-
-def test_o38_git_moves_script_that_resolves_passes(repo, run_script):
-    touch(repo, ".claude/workflow/bin/take-red.sh")
-    write_config(repo, moves=[("take-red", "bash .claude/workflow/bin/take-red.sh <sha>")])
-    r = run(run_script, repo)
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_o38_plain_git_commands_in_git_moves_are_not_paths(repo, run_script):
-    write_config(repo, moves=[
+@pytest.mark.parametrize("files, surfaces, moves, mode, ok, named, unnamed", [
+    pytest.param([], [("web", "`web/index.html`")], [], "off", False, "web/index.html", None,
+                 id="unresolved-surface-fails-with-knowledge-mode-off"),
+    pytest.param(["CONTEXT.md", ".claude/workflow/project.md"], [("web", "`web/index.html`")],
+                 [], "on", False, "web/index.html", None,
+                 id="unresolved-surface-fails-with-knowledge-mode-on"),
+    pytest.param(["web/index.html"], [("web", "`web/index.html`")], [], "off", True, None, None,
+                 id="resolved-surface-passes"),
+    pytest.param([], [("cli", "`bash bin/tool.sh --help`")], [], "off", False, "bin/tool.sh",
+                 None, id="command-entry-naming-missing-script-fails"),
+    pytest.param(["bin/tool.sh"], [("cli", "`bash bin/tool.sh --help`")], [], "off", True, None,
+                 None, id="command-entry-naming-existing-script-passes"),
+    pytest.param([], [("web", "`http://localhost:3000/app`")], [], "off", True, None, None,
+                 id="url-entry-is-not-a-path"),
+    pytest.param([], [("<name>", "`<url, command or file>`")], [], "off", True, None, None,
+                 id="example-placeholder-row-is-not-a-path"),
+    pytest.param(["web/index.html"], [("web", "`web/index.html`"), ("api", "`api/server.py`")],
+                 [], "off", False, "api/server.py", "web/index.html",
+                 id="only-the-unresolved-surface-is-named"),
+    pytest.param([], [], [("take-red", "bash .claude/workflow/bin/take-red.sh <sha>")], "off",
+                 False, ".claude/workflow/bin/take-red.sh", None,
+                 id="unresolved-git-moves-script-fails"),
+    pytest.param([".claude/workflow/bin/take-red.sh"], [],
+                 [("take-red", "bash .claude/workflow/bin/take-red.sh <sha>")], "off", True, None,
+                 None, id="resolved-git-moves-script-passes"),
+    pytest.param([], [], [
         ("move-onto-sha", "git reset --hard <sha>"),
         ("discard-changes", "git checkout -- <path>"),
         ("push-epic", "git push origin <branch>"),
-    ])
+    ], "off", True, None, None, id="plain-git-commands-are-not-paths"),
+])
+def test_o38_entry_points_and_move_scripts_must_resolve(repo, run_script, files, surfaces, moves,
+                                                        mode, ok, named, unnamed):
+    for rel in files:
+        touch(repo, rel)
+    write_config(repo, surfaces=surfaces, moves=moves, mode=mode)
     r = run(run_script, repo)
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_o38_unresolved_surface_fails_even_when_knowledge_mode_is_off(repo, run_script):
-    write_config(repo, surfaces=[("web", "`web/index.html`")], mode="off")
-    r = run(run_script, repo)
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert "web/index.html" in r.stdout
-
-
-def test_o38_unresolved_surface_fails_when_knowledge_mode_is_on(repo, run_script):
-    touch(repo, "CONTEXT.md")
-    touch(repo, ".claude/workflow/project.md")
-    write_config(repo, surfaces=[("web", "`web/index.html`")], mode="on")
-    r = run(run_script, repo)
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert "web/index.html" in r.stdout
+    assert r.returncode == (0 if ok else 1), r.stdout + r.stderr
+    if named:
+        assert named in r.stdout
+    if unnamed:
+        assert unnamed not in r.stdout

@@ -11,11 +11,18 @@
 #   verify-red           verify-red.sh proves it red (exit 1)
 #   green                a trivial change that makes it pass, committed on top
 #   task-submit          task-submit.sh accepts the task branch
+#   ownership            with a throwaway ticket owning only the green file, task-submit.sh
+#                        --ticket accepts the branch, and refuses one more commit writing another
+#                        path with `SUBMIT FAIL ownership: <path>`
 #   merge-task           merge-task.sh merges it into a throwaway epic branch and pushes that
+#   merge-bookkeeping    that merge, run with --run, moved a temporary ticket to done and wrote
+#                        its evidence file and board.md row, with no agent involved
 #   preview-restart      the first configured surface with a `Preview start` is started, restarted
 #                        and stopped (skipped with PASS when none is configured)
 #   ledger-write         ledger.sh, run from the task worktree, updates a temporary ticket in the
 #                        main checkout's ledger
+#   channel-post         channel.sh posts a line from the task worktree to this rehearsal's own
+#                        run channel, and reads it back from the main checkout
 #
 # Prints `STEP <name> PASS|FAIL <detail>` per step, then `REHEARSAL OK` (exit 0) or
 # `REHEARSAL FAILED <n>` (exit 1), n = the FAIL lines. Whatever happens it stops the preview it
@@ -67,6 +74,8 @@ key="PADREHEARSAL$$-T1"
 ticket_dir="$main/.work/tickets/${key%%-T*}"
 ticket="$ticket_dir/$key.md"
 made=()
+runs_existed=""
+[ -d "$main/.work/runs" ] && runs_existed=1
 surface=""
 previewing=""
 t() { git -C "$task_wt" -c commit.gpgsign=false "$@"; }
@@ -91,6 +100,8 @@ cleanup() {
   g rev-parse -q --verify "refs/heads/$epic_branch" >/dev/null 2>&1 &&
     g branch -q -D "$epic_branch" >/dev/null 2>&1
   rm -f "$ticket" "$ticket.tmp."* 2>/dev/null
+  rm -rf "$main/.work/runs/$id"
+  [ -n "$runs_existed" ] || rmdir "$main/.work/runs" 2>/dev/null
   for ((i = ${#made[@]} - 1; i >= 0; i--)); do
     d="${made[$i]}"
     rmdir "$d" 2>/dev/null
@@ -165,15 +176,79 @@ else
   else fail task-submit "$(last "$out")"; fi
 fi
 
+# --- ownership ---------------------------------------------------------------------------------
+# A throwaway ticket owns only the green file: the green branch passes with it, and one more
+# commit writing outside it is refused. The stray commit is dropped again afterwards.
+if [ -z "$submitted" ]; then
+  fail ownership "skipped: task not submitted"
+else
+  own_ticket="$tmp/ownership-ticket.md"
+  printf '## Outcome\nPAD rehearsal ticket.\n\n## Owns\n- pad-rehearsal-green.txt\n\n## Touches\n\n## Protected\nno\n' \
+    >"$own_ticket"
+  out="$(cd "$task_wt" && bash "$bin/task-submit.sh" "$epic_head" "$red" "$green" \
+    --test-paths "$paths" --ticket "$own_ticket" 2>&1)"
+  if [ "$(last "$out")" != "SUBMIT OK" ]; then
+    fail ownership "the ticket's own files were refused: $(last "$out")"
+  else
+    echo "stray" >"$task_wt/pad-rehearsal-stray.txt"
+    if ! out="$(t add -- pad-rehearsal-stray.txt 2>&1 && t commit -q -m "feat(REHEARSAL): write outside the ticket" 2>&1)"; then
+      fail ownership "cannot commit the stray write: $(last "$out")"
+    else
+      stray="$(t rev-parse HEAD)"
+      out="$(cd "$task_wt" && bash "$bin/task-submit.sh" "$epic_head" "$red" "$stray" \
+        --test-paths "$paths" --ticket "$own_ticket" 2>&1)"
+      got="$(last "$out")"
+      if [ "$got" = "SUBMIT FAIL ownership: pad-rehearsal-stray.txt" ]; then
+        pass ownership "a write outside Owns is refused: $got"
+      else
+        fail ownership "a write outside Owns was not refused: ${got:-no output}"
+      fi
+    fi
+    t reset -q --hard "$green" >/dev/null 2>&1
+  fi
+fi
+
+# The temporary ticket that the merge's bookkeeping and ledger-write update.
+ticket_ok=1
+for d in "$main/.work" "$main/.work/tickets" "$ticket_dir"; do
+  [ -d "$d" ] && continue
+  if mkdir "$d" 2>/dev/null; then made+=("$d"); else ticket_ok=""; break; fi
+done
+if [ -z "$ticket_ok" ] || [ -e "$ticket" ] ||
+  ! printf -- '---\nkey: %s\nstatus: doing\n---\n\n## Outcome\nPAD rehearsal ticket.\n' "$key" >"$ticket" 2>/dev/null; then
+  ticket_ok=""
+fi
+
 # --- merge-task --------------------------------------------------------------------------------
+merged=""
 if [ -z "$submitted" ]; then
   fail merge-task "skipped: task not submitted"
 else
   out="$(cd "$main" && bash "$bin/merge-task.sh" --worktree "$epic_wt" --branch "$epic_branch" \
-    --gate "bash $test_file" --lint "true" --test-paths "$paths" \
-    REHEARSAL "$red" "$green" "rehearsal" 2>&1)"
-  if [ $? -eq 0 ]; then pass merge-task "$(last "$out") on $epic_branch"
+    --gate "bash $test_file" --lint "true" --test-paths "$paths" --run "$id" \
+    "$key" "$red" "$green" "rehearsal" 2>&1)"
+  if [ $? -eq 0 ]; then merged="$(last "$out")"; pass merge-task "$merged on $epic_branch"
   else fail merge-task "$(last "$out")"; fi
+fi
+
+# --- merge-bookkeeping -------------------------------------------------------------------------
+if [ -z "$merged" ]; then
+  fail merge-bookkeeping "skipped: nothing merged"
+elif [ -z "$ticket_ok" ]; then
+  fail merge-bookkeeping "cannot create a temporary ticket under $main/.work/tickets"
+else
+  sha7="$(printf '%s' "${merged#MERGED }" | cut -c1-7)"
+  if printf '%s\n' "$out" | grep -q '^BOOKKEEPING FAIL'; then
+    fail merge-bookkeeping "$(printf '%s\n' "$out" | grep '^BOOKKEEPING FAIL' | head -n 1)"
+  elif ! grep -q '^status: done' "$ticket"; then
+    fail merge-bookkeeping "the ticket was not moved to done"
+  elif [ ! -f "$main/.work/runs/$id/$key.md" ]; then
+    fail merge-bookkeeping "no evidence file at .work/runs/$id/$key.md"
+  elif ! grep -q "^| $key | .* | done | .* | $sha7 |" "$main/.work/runs/$id/board.md" 2>/dev/null; then
+    fail merge-bookkeeping "no done row for $key in .work/runs/$id/board.md"
+  else
+    pass merge-bookkeeping "ticket done; evidence and board row written by merge-task.sh"
+  fi
 fi
 
 # --- preview-restart ---------------------------------------------------------------------------
@@ -214,13 +289,7 @@ fi
 if [ ! -d "$task_wt" ]; then
   fail ledger-write "skipped: no task worktree"
 else
-  ok=1
-  for d in "$main/.work" "$main/.work/tickets" "$ticket_dir"; do
-    [ -d "$d" ] && continue
-    if mkdir "$d" 2>/dev/null; then made+=("$d"); else ok=""; break; fi
-  done
-  if [ -z "$ok" ] || [ -e "$ticket" ] ||
-    ! printf -- '---\nkey: %s\nstatus: todo\n---\n\n## Goal\nPAD rehearsal ticket.\n' "$key" >"$ticket" 2>/dev/null; then
+  if [ -z "$ticket_ok" ]; then
     fail ledger-write "cannot create a temporary ticket under $main/.work/tickets"
   else
     out="$(cd "$task_wt" && bash "$bin/ledger.sh" "$key" status doing "rehearsal" 2>&1)"
@@ -228,6 +297,26 @@ else
       pass ledger-write "$(last "$out") from a worktree"
     else
       fail ledger-write "$(last "$out")"
+    fi
+  fi
+fi
+
+# --- channel-post ------------------------------------------------------------------------------
+# Posted from the task worktree, read back from the main checkout: one channel per run, found
+# from anywhere. The run directory is this rehearsal's own and goes with the cleanup.
+if [ ! -d "$task_wt" ]; then
+  fail channel-post "skipped: no task worktree"
+else
+  note="rehearsal post $id"
+  out="$(cd "$task_wt" && bash "$bin/channel.sh" post "$id" "$key" "$note" 2>&1)"
+  if [ $? -ne 0 ]; then
+    fail channel-post "post: $(last "$out")"
+  else
+    out="$(cd "$main" && bash "$bin/channel.sh" read "$id" 2>&1)"
+    if printf '%s\n' "$out" | grep -qF -- " $key: $note"; then
+      pass channel-post "posted and read back in .work/runs/$id/channel.md"
+    else
+      fail channel-post "the post did not read back: $(last "$out")"
     fi
   fi
 fi

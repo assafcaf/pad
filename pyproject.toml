@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dispatch-skills"
-version = "0.3.0"
+version = "0.4.0"
 description = "Spec, tickets and parallel test-first implementation for Claude Code, with the issue tracker kept current as agents work"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 keywords = ["claude-code", "skills", "dispatch", "agents", "tdd"]
 
 [project.optional-dependencies]
-test = ["pytest>=7"]
+test = ["pytest>=7", "pytest-xdist"]
 
 [project.urls]
 Homepage = "https://github.com/assafcaf/dispatch-skills"
@@ -22,6 +22,11 @@ dispatch-skills = "dispatch_skills.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The default run skips `slow` (see tests/conftest.py). Everything: `python -m pytest -m ""`.
+addopts = "-m 'not slow'"
+markers = [
+    "slow: a script's long-tail end-to-end test (seconds each on Windows); skipped by default",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["dispatch_skills"]

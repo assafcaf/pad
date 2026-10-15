@@ -118,37 +118,20 @@ def test_o16_cause_and_resolution_are_written_literally(repo, run_script):
     )
 
 
-def test_o16_unknown_class_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("halt-log.sh", RUN, "E1-T2", "network", "cause", "pending", cwd=repo)
-
-    assert result.returncode == 64
-    assert not halts(repo).exists()
-
-
-def test_o16_missing_resolution_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("halt-log.sh", RUN, "E1-T2", "pad", "cause", cwd=repo)
-
-    assert result.returncode == 64
-    assert not halts(repo).exists()
-
-
-def test_o16_no_arguments_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("halt-log.sh", cwd=repo)
-
-    assert result.returncode == 64
-    assert not halts(repo).exists()
-
-
 @pytest.mark.parametrize(
     "args",
     [
+        (RUN, "E1-T2", "network", "cause", "pending"),
+        (RUN, "E1-T2", "pad", "cause"),
+        (),
         ("", "E1-T2", "pad", "cause", "pending"),
         (RUN, "", "pad", "cause", "pending"),
         (RUN, "E1-T2", "pad", "", "pending"),
     ],
-    ids=["empty-run-id", "empty-key", "empty-cause"],
+    ids=["unknown-class", "missing-resolution", "no-arguments", "empty-run-id", "empty-key",
+         "empty-cause"],
 )
-def test_o16_empty_run_id_key_or_cause_is_usage_error_and_writes_nothing(repo, run_script, args):
+def test_o16_bad_arguments_are_a_usage_error_and_write_nothing(repo, run_script, args):
     result = run_script("halt-log.sh", *args, cwd=repo)
 
     assert result.returncode == 64

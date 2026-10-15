@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 PROBE = (
@@ -54,6 +56,7 @@ def verify(run_script, repo, sha, *extra):
     )
 
 
+@pytest.mark.slow
 def test_o26_unchanged_lockfile_links_deps_and_skips_setup(repo, run_script):
     prepare(repo)
     sha = red_commit_on_branch(repo, None)
@@ -72,6 +75,7 @@ def test_o26_changed_lockfile_runs_setup_and_does_not_link_deps(repo, run_script
     assert "MARKER=\n" in r.stdout or r.stdout.rstrip().endswith("MARKER=") or "MARKER=installed" not in r.stdout
 
 
+@pytest.mark.slow
 def test_o26_base_option_overrides_merge_base_when_comparing_lockfiles(repo, run_script):
     prepare(repo)
     git("checkout", "-q", "-b", "task", cwd=repo)
@@ -89,6 +93,7 @@ def test_o26_base_option_overrides_merge_base_when_comparing_lockfiles(repo, run
     assert "MARKER=installed" in same.stdout
 
 
+@pytest.mark.slow
 def test_o26_linked_deps_survive_the_throwaway_worktree_cleanup(repo, run_script):
     deps = prepare(repo)
     sha = red_commit_on_branch(repo, None)

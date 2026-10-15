@@ -1,7 +1,7 @@
 ---
 name: ported-from
 kind: test-removal
-applies-to: test-designer, code-writer, ticket-owner, orchestrator
+applies-to: test-designer, owner, orchestrator
 check: ported-from.sh
 ---
 

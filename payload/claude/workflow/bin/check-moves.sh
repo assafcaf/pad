@@ -28,7 +28,8 @@
 set -uo pipefail
 
 REQUIRED=(
-  branch-from-epic-head move-onto-sha take-red rebase-red discard-changes set-aside-work
+  branch-from-epic-head move-onto-sha take-red rebase-red rebase-onto-epic-head discard-changes
+  set-aside-work
   try-merge abort-merge commit-merge revert-merge push-epic remove-worktree delete-merged-branch
 )
 

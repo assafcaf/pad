@@ -18,8 +18,7 @@
 #                         config.example.md
 #   dependency-directory  the Commands `Dependency directory`, when named, exists
 #   lockfile              the Commands `Lockfile`, when named, exists
-#   models                each agent file's `model:` matches the Agents table, with the Tiers
-#                         table's `standard` row for test-designer and code-writer
+#   models                each agent file's `model:` matches the Agents table
 #   plugins               every file the Plugins table lists exists, and its Extends names an
 #                         agent in .claude/agents/ or a skill in .claude/skills/
 #   rules                 rules.sh validate passes: every file in .claude/workflow/rules/ is well
@@ -28,6 +27,11 @@
 #   gitignore             .gitignore covers .work/ and .claude/worktrees/
 #   line-endings          core.autocrlf and .gitattributes agree: not autocrlf=true with
 #                         `eol=lf`, nor autocrlf false/input with `eol=crlf`
+#   render                every Surfaces row with a Render command renders once: render-check.sh
+#                         --surface <name> --route / --viewport <the row's Viewport> to a temp
+#                         file must print RENDER OK. render-check.sh reads the worktree's own
+#                         .claude/workflow/config.md, so with --config naming another file this
+#                         check renders from the worktree's config, not the named one
 #
 # Output: one `PREFLIGHT FAIL <check>: <detail>` line per failure, then `PREFLIGHT OK` or
 # `PREFLIGHT FAILED <n>`. Exit 0 when every check passes, 1 otherwise (a missing config or bad
@@ -236,7 +240,7 @@ check_lockfile() {
 }
 
 check_models() {
-  local agents=() models=() a m t td cw i file got
+  local agents=() models=() a m i file got
   set_model() { # set_model <agent> <model>
     local j
     [[ "$2" =~ ^[A-Za-z0-9._-]+$ ]] || return 0
@@ -248,11 +252,6 @@ check_models() {
   while IFS="$US" read -r a m; do
     a="$(value "$a")"; [ -n "$a" ] && set_model "$a" "$(value "$m")"
   done <<<"$(table "## Agents" "Agent,Model")"
-  while IFS="$US" read -r t td cw; do
-    [ "$(value "$t")" = standard ] || continue
-    set_model test-designer "$(value "$td")"
-    set_model code-writer "$(value "$cw")"
-  done <<<"$(table "### Tiers" "Tier,Test-designer,Code-writer")"
 
   for i in "${!agents[@]}"; do
     a="${agents[$i]}"; m="${models[$i]}"
@@ -317,6 +316,28 @@ check_rules() {
   done <<<"$(PAD_RULES_DIR=.claude/workflow/rules PAD_AGENTS_DIR=.claude/agents bash "$here/rules.sh" validate 2>&1)"
 }
 
+check_render() {
+  local n r v name cmd vp out last
+  while IFS="$US" read -r n r v; do
+    [ -n "$n" ] || continue
+    name="$(value "$n")"; cmd="$(value "$r")"
+    [ -n "$name" ] && [ -n "$cmd" ] || continue
+    vp="$(value "$v")"
+    if ! [[ "$vp" =~ ^[0-9]+x[0-9]+$ ]]; then
+      fail render "$name has a Render command but no Viewport (WxH, e.g. 1280x800) in its Surfaces row"
+      continue
+    fi
+    out="$(bash "$here/render-check.sh" --surface "$name" --route / --viewport "$vp" \
+      --out "$tmp/render-${name//[^A-Za-z0-9._-]/_}.png" 2>"$tmp/render.err")"
+    last="$(printf '%s\n' "$out" | tail -n 1)"
+    case "$last" in
+      "RENDER OK "*) ;;
+      "RENDER FAIL "*) fail render "${last#RENDER FAIL }" ;;
+      *) fail render "$name: render-check.sh printed '${last:-nothing}': $(head -n 1 "$tmp/render.err")" ;;
+    esac
+  done <<<"$(table "## Surfaces" "Surface,Render command,Viewport")"
+}
+
 check_line_endings() {
   local auto eol=""
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -346,6 +367,7 @@ if [ -f "$config" ]; then
   check_lockfile
   check_models
   check_plugins
+  check_render
 fi
 check_rules
 check_executable

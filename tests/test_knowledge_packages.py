@@ -13,10 +13,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 SCRIPT = "knowledge-paths.sh"
 SKILL = "claude/skills/knowledge-layer/SKILL.md"
 FORMAT = "claude/skills/knowledge-layer/PROJECT-FORMAT.md"
-PLANNER = "claude/agents/task-planner.md"
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -43,7 +44,9 @@ def _run(run_script, root: Path, env=None):
 
 
 def test_a_multi_package_layer_whose_paths_resolve_passes(repo, run_script):
+    """Also: a package's CONTEXT.md is optional (lab/ has none)."""
     _layer(repo)
+    assert not (repo / "lab" / "CONTEXT.md").exists()
     r = _run(run_script, repo)
     assert r.returncode == 0, r.stdout
 
@@ -54,12 +57,6 @@ def test_a_package_without_its_project_md_fails(repo, run_script):
     r = _run(run_script, repo)
     assert r.returncode == 1
     assert "lab/PROJECT.md is missing" in r.stdout
-
-
-def test_a_package_context_md_is_optional(repo, run_script):
-    _layer(repo)
-    assert not (repo / "lab" / "CONTEXT.md").exists()
-    assert _run(run_script, repo).returncode == 0
 
 
 def test_a_dead_path_in_a_package_file_fails_naming_the_file(repo, run_script):
@@ -78,6 +75,7 @@ def test_the_ceiling_applies_to_each_package_file(repo, run_script):
     assert "lab/PROJECT.md is 131 lines, ceiling is 120" in r.stdout
 
 
+@pytest.mark.slow
 def test_a_glob_lists_the_packages(repo, run_script):
     _layer(repo, packages="`packages/*/`")
     for pkg in ("a", "b"):
@@ -95,45 +93,32 @@ def test_without_a_packages_line_package_files_are_not_required(repo, run_script
     assert _run(run_script, repo).returncode == 0
 
 
+def test_a_brace_pattern_is_not_a_path(repo, run_script):
+    _layer(repo)
+    _write(repo, "lab/PROJECT.md", "# lab/\n| `lab/core.py` | core |\n| `lab/grid/{a,b}.yaml` | grids |\n")
+    assert _run(run_script, repo).returncode == 0
+
+
 # --- prose --------------------------------------------------------------------------------------
 
 
-def test_skill_scans_and_grills_per_package(payload_text):
+def test_skill_works_per_package(payload_text):
     text = payload_text(SKILL)
+    # scans and grills per package
     assert "one `knowledge-scanner` per package" in text
     assert "The grill runs once per package" in text
-
-
-def test_skill_refreshes_one_package(payload_text):
-    text = payload_text(SKILL)
+    # refreshes one package
     assert "/knowledge-layer refresh <package>" in text
     assert 'argument-hint: "[refresh [<package>]]"' in text
-
-
-def test_skill_repairs_per_file(payload_text):
-    assert "Repair works per file" in payload_text(SKILL)
-
-
-def test_skill_adopts_a_hand_written_package_layout(payload_text):
-    text = payload_text(SKILL)
+    # repairs per file
+    assert "Repair works per file" in text
+    # adopts a hand-written package layout
     assert "adopts" in text and "`Packages:` line" in text
-
-
-def test_readers_load_the_repo_level_plus_the_packages_their_files_touch(payload_text):
-    assert "plus the package files of every package its task's Files touch" in payload_text(SKILL)
-
-
-def test_planner_reads_every_packages_overlaps(payload_text):
-    assert "every package's `PROJECT.md` Standing overlaps" in payload_text(PLANNER)
+    # readers load the repo level plus the packages their files touch
+    assert "plus the package files of every package its task's Files touch" in text
 
 
 def test_format_describes_the_package_level(payload_text):
     text = payload_text(FORMAT)
     assert "## Packages" in text
     assert "`<package>/PROJECT.md`" in text
-
-
-def test_a_brace_pattern_is_not_a_path(repo, run_script):
-    _layer(repo)
-    _write(repo, "lab/PROJECT.md", "# lab/\n| `lab/core.py` | core |\n| `lab/grid/{a,b}.yaml` | grids |\n")
-    assert _run(run_script, repo).returncode == 0

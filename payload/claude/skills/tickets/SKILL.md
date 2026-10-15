@@ -1,22 +1,22 @@
 ---
 name: tickets
-description: Turn an approved spec into a work plan of outcome-based tasks with blocking edges, and publish it as an epic and tasks in the configured tracker. Run as /tickets <spec path | epic key>.
+description: Turn an approved scope into ownership units - tickets one owner each can take from start to merged, each with a reference to be judged against - lint them with plan-check.sh, and publish them as an epic and tickets in the configured tracker. Run as /tickets <spec path | epic key>.
 argument-hint: "<spec path | epic key>"
 disable-model-invocation: true
 ---
 
-# Spec → tickets
+# Scope → tickets
 
 Input: `$ARGUMENTS`. Read, in order:
-1. `.claude/workflow/config.md`
+1. `.claude/workflow/config.md` (its `## Protected paths` above all)
 2. `.claude/workflow/ticket-template.md`
 3. `.claude/workflow/definition-of-done.md`
-4. the spec
+4. the spec: its References, Protected paths and Domains
 
 When `.claude/workflow/config.md` has a `## Project knowledge` section set to `Mode: on`, read
-`.claude/workflow/project.md`'s Module map as well: it is what each task's Files field is
-otherwise guessing at. In a multi-package repo (a `Packages:` line in that section), read
-the Packages table there and the `<package>/PROJECT.md` module map of each package the spec
+`.claude/workflow/project.md`'s Module map as well: it is what each ticket's `Owns` is
+otherwise guessing at. In a multi-package repo (a `Packages:` line in that section), read the
+Packages table there and the `<package>/PROJECT.md` module map of each package the spec
 touches.
 
 Every tracker read and write goes through the `tracker` agent, which owns the tracker's tools
@@ -25,70 +25,66 @@ and its adapter. You never call the tracker directly.
 An epic key means: ask `tracker` to `read-epic` and `read-task` its children, read the linked
 spec, and plan only what's missing.
 
-Nothing is published before the operator approves the plan.
+Nothing is published before the operator approves the list.
 
-## 1. Decompose along outcomes
+## 1. Partition into ownership units
 
-- **Slice vertically.** Each task delivers one to three of the spec's outcomes end to end and
-  is testable on its own. Never split by layer ("models", then "API", then "tests").
-- **Cover every outcome.** Each spec outcome lands in exactly one task. A surface outcome (`level: surface <name>`) lands in exactly one task too; one no task owns is a GAP that blocks the plan. Setup, config and
-  docs work goes inside the task whose outcome needs it.
-- **Declare files.** List the files each task will likely touch, and mark an edit that
-  rewrites existing code rather than adding to it. Sharing a file is **not** a blocking edge:
-  git merges separate additions to one file (a route, a prop, an import) on its own, and a
-  real conflict is caught at merge and rebased. An edge for a shared file serialises the
-  epic — a hub file like an app root or router is in almost every task, so every task ends
-  up in its own wave.
-- **Block only on use.** `Blocked by` means this task uses a name, a behaviour or data that
-  the other one builds. If two tasks would rewrite the same code, give that code to one
-  task and let the other consume it. If every task wires into one hub file, put the wiring
-  in a final task.
-- **Pin interfaces.** When a later task uses what an earlier one builds, write the exact
-  names and signatures into both tasks' `Interfaces`, and the edge. Implementers see only
-  their own ticket. A task that passes new props or arguments to something another task is
-  changing is using it, even when the ticket only says "wire".
-- **Keep outcomes consistent.** Two tasks must not assert different behaviour for the same
-  screen, function or record. Where they meet, one owns the behaviour and the other's outcome
-  names it.
-- **Tag resources.** Mark outcomes that need a serial resource from the config, by its tag.
-- **Assign a tier.** Every task gets `small`, `standard` or `complex`, judged from observable
-  signal, not feel: files touched, interfaces changed, outcome count, and standing overlap
-  with other tasks (`ticket-template.md`, "Tiers"). Write the Tier section as one line,
-  `<tier> — <signal>: <why>`, for example `small — 2 files touched, no interfaces changed: extends an existing rule`.
-  The tier decides how many agents run the task and on which model, so be honest in both
-  directions. A one-field change marked `standard` pays for two agents and a hand-off it
-  didn't need. A cross-module change marked `small` loses the independent test author.
+Each ticket must pass the four tests in `ticket-template.md`: ownable, checkable, finishable by
+one owner, one owner start to merged. Plan the outcomes up front; the decomposition is for the
+first waves only, and `/pad-run` writes later tickets once the first ones have landed.
 
-  Work that has no red test is not a task. A docs-only change, or one with nothing a test
-  could assert, goes to the epic's finish step instead of a task: it is not a task of its own.
+- **Split by surface or module, never by concern.** A screen, an endpoint, a module, a
+  migration. Never "all colours", "all fonts", "every button": a transverse sweep touches
+  every file and every ticket collides with it.
+- **Own files, disjointly.** Give each ticket the files it may write as `Owns`. Two tickets
+  whose `Owns` overlap is a planning error: give the file to one, and let the other depend on
+  it or request a change from its owner.
+- **Shared files are `Touches`.** A registry, a router, an index every ticket adds one line to:
+  list it under each ticket's `Touches`. Additions only; the `register-by-file` and
+  `append-only-sorted` rules say how. A shared file that needs real rewriting belongs to one
+  ticket.
+- **Foundations land first.** A shared token set, a schema, a harness several tickets build on
+  is one foundation ticket, and the others name it under `Depends on`. A cross-cutting concern
+  that needs no code of its own is a line in the run's brief instead.
+- **Name the reference.** Every build ticket points at what it is judged against, as the spec's
+  References name it: a mock crop and viewport, spec outcome ids, a repro test, a baseline file.
+  Link it; never paraphrase it. Where the spec marks an area `spike`, write a spike ticket that
+  produces the reference and no product code, and make the area's build tickets depend on it.
+- **Outcomes only where tests are the reference.** Then the ticket carries `## Outcomes`, each
+  spec outcome in exactly one ticket. A surface outcome (`level: surface <name>`) lands in
+  exactly one ticket too; one no ticket owns is a GAP that blocks the plan.
+- **Mark protected tickets.** `Protected: yes` when the ticket's `Owns` or `Touches` matches a
+  glob under the config's `## Protected paths` (storage, sync, auth, migrations, the data
+  model). That ticket's tests come from a test-designer, and nothing else decides ceremony.
+- **Depend only on use.** `Depends on` means this ticket builds on what the other produces: a
+  name, a behaviour, data. Sharing a file is never a reason.
+- **Tag resources.** Mark outcomes that need a serial resource from the config, by its tag. A
+  device-only check is not a ticket: attach it to the ticket it verifies as a resource probe.
+- **Size to one owner:** about 45 minutes of one agent's work. Larger splits by surface or
+  module. There is no outcome or file cap: the ownership tests decide.
 
-  A device-only check (something only a real device or session can show) is not a task
-  either. Attach it to the feature task it verifies as a resource probe, tagged with the
-  serial resource, so the operator runs it with that feature.
+## 2. Lint, then show the list
 
-  A tiny task may fold into a sibling, and only when both touch the same files and neither
-  would block the other. Folding tasks that touch different files, or where one blocks the
-  other, only hides the edge.
+Write the tickets to the plan file (section 3) as drafts, then run
+`bash .claude/workflow/bin/plan-check.sh .work/plans/<slug>.md`. Fix every `OVERLAPS`,
+`PROTECTED` and `DEPENDS` line before you show anything: each is a planning error, and the
+script ends `PLAN FAIL` until they are gone. Read `HOTSPOTS` and `SWEEPS` as questions: a hot
+`Touches` file shared by many tickets may want a foundation ticket; a sweep wants splitting.
 
-- **Size to one session:** as a rule of thumb, at most 3 outcomes and about 5 files.
+Then present one table and stop for approval:
 
-## 2. Compute waves and show the plan
+| Wave | Ticket | Reference | Owns | Touches | Protected | Depends on | Tags |
+|---|---|---|---|---|---|---|---|
 
-A task is in wave *n* when all its blockers are in earlier waves. Present one table and stop
-for approval:
-
-| Wave | Task | Tier | Outcomes | Blocked by | Files | Tags |
-|---|---|---|---|---|---|---|
-
-Below it, list any spec outcome with no task (there should be none), any decision you made
-that the spec didn't state, and the longest chain of blocking edges. If that chain holds more
-than about half the tasks, look again at each edge on it: an edge that exists only because
-two tasks share a file is not a real one.
+Below it: the script's `CRITICAL-PATH`, its `HOTSPOTS` and `SWEEPS` with what you did about
+each, any spec outcome or area with no ticket (there should be none), the spikes, and any
+decision you made that the spec didn't state.
 
 ## 3. Write the plan file
 
-After approval, write `.work/plans/<slug>.md`: the table, then every task's full body in the
-ticket template. The plan file is how a re-run avoids duplicating tickets.
+Write `.work/plans/<slug>.md`: the table, then every ticket's full body in the template, each
+under `### <key or placeholder> — <title>`. The plan file is how a re-run avoids duplicating
+tickets, and what `plan-check.sh` reads.
 
 Write it with `Write`, not a heredoc — this is the longest prose file any skill here produces
 and the one `.claude/workflow/writing-files.md` was written about.
@@ -96,21 +92,31 @@ and the one `.claude/workflow/writing-files.md` was written about.
 ## 4. Publish through the adapter
 
 Send `tracker` one request per step, and record every key it returns in the plan file before
-the next step. `tracker` refuses to duplicate an existing epic or task, so a re-run continues
+the next step. `tracker` refuses to duplicate an existing epic or ticket, so a re-run continues
 where the last one stopped.
 
 1. **Create the epic** (`create-epic`), or reuse the key you were given. Its description holds
-   the problem, the outcomes and the spec path: the working spec is not committed, so the
-   outcomes have to live in the tracker too.
-2. **Create each task** (`create-task` with the epic as `KEY`) in wave order, body from the
+   the intent, the non-goals, the references and the spec path: the working spec is not
+   committed, so they have to live in the tracker too.
+2. **Create each ticket** (`create-task` with the epic as `KEY`) in wave order, body from the
    template.
-3. **Replace placeholders.** Now that keys exist, rewrite each `Blocked by` and `Interfaces`
-   section to name real keys, and send the corrected bodies back as `update` operations.
-4. **Create every blocking edge** (`link`, with the blocker as `BLOCKER`).
-5. **Record the epic key** in the spec's header (`Tracker: <key>`).
+3. **Replace placeholders.** Now that keys exist, rewrite each `Depends on` section to name real
+   keys, and send the corrected bodies back as `update` operations.
+4. **Create every dependency edge** (`link`, with the ticket depended on as `BLOCKER`).
+5. **Record the epic key** in the spec's header (`Tracker: <key>`), and copy the approved spec
+   to `.work/runs/<epic key>/scope.md` in the main checkout (the parent of
+   `git rev-parse --git-common-dir`). It is frozen from here: a change of scope is a new
+   `/spec`.
 
 If `tracker` reports `FAIL`, stop and report what exists, with the keys from the plan file.
 
+## Mid-run: replan tickets
+
+`/pad-run` writes new tickets during a run: a split after a ticket fails twice, the
+next wave's decomposition, a finding from a wave review. Those go through sections 1 and 2 of
+this skill, lint included, and the operator's approval at the next review gate, before they are
+published as in section 4.
+
 ## 5. Hand off
 
-Print the epic key, the wave table with keys, and: `/batch-implement <epic key>`.
+Print the epic key, the wave table with keys, and: `/pad-run <epic key>`.

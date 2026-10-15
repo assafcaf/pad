@@ -12,7 +12,11 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
+
 from conftest import BASH, BIN, git
+
+pytestmark = pytest.mark.slow
 
 SCRIPT = "merge-task.sh"
 KEY = "T-1"

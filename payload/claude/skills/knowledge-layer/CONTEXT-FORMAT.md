@@ -45,7 +45,7 @@ test name uses the same word.
 ## What this file never contains
 
 Decisions. `docs/decisions/` is the committed development record, written by `/spec` when a
-spec settles something durable and appended by `/batch-implement` when an epic lands
+spec settles something durable and appended by `/pad-run` when an epic lands
 (`docs/decisions/README.md`). `/knowledge-layer` reads it and links into it. It writes nothing
 there, ever: a decision inferred from a scan is a record of a decision nobody made.
 
