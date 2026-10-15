@@ -49,7 +49,11 @@ the commands and gates, the rules in force, the team and the protocol, and links
 the references. Read the ticket, the brief, the scope, the ticket's reference itself (the mock
 crop, the outcome ids, the repro, the baseline: the source, never a restatement of it), the
 channel (`bash .claude/workflow/bin/channel.sh read <run id>`),
-`.claude/workflow/definition-of-done.md` and `.claude/workflow/testing.md`. When the
+`.claude/workflow/definition-of-done.md` and `.claude/workflow/testing.md`.
+
+**Plugins.** Then read every plugin the config's `## Plugins` table lists with `Extends`
+`owner` (`.claude/workflow/plugins.md`), and carry out the steps it adds as it says; run only
+the scripts a listed plugin names. When the
 config's `## Project knowledge` is `Mode: on`, read `CONTEXT.md` and `project.md`'s Invariants
 and Pitfalls too (in a multi-package repo, the files of every package the ticket touches):
 those are what a green suite doesn't catch. Read the code the ticket's files call and are

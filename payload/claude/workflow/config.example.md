@@ -198,7 +198,9 @@ The places where the product is seen or used. Optional; none are configured.
 A surface with a **Render command** has a visual reference class: tickets on it are judged
 against a mock crop from its **Reference dir**, at its **Viewport**, by the `evaluator`
 (`definition-of-done.md`). `bin/render-check.sh` runs the command with `{route}`, `{viewport}`,
-`{width}`, `{height}`, `{state}` and `{out}` filled in, and `preflight.sh` runs it once. A
+`{width}`, `{height}`, `{state}` and `{out}` filled in, and `preflight.sh` runs it once,
+before any preview is started: the command brings up what it renders itself (a test
+runner's own web server, a build it serves, a CLI it runs), never a running preview. A
 surface without one — a CLI, a backend — has no visual class; nothing in PAD assumes a web app.
 
 ## Review

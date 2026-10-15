@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dispatch-skills"
-version = "0.3.0"
+version = "0.4.0"
 description = "Spec, tickets and parallel test-first implementation for Claude Code, with the issue tracker kept current as agents work"
 readme = "README.md"
 requires-python = ">=3.9"

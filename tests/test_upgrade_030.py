@@ -20,8 +20,9 @@ def test_the_installed_version_is_0_3_0_or_later():
 
 
 def test_the_packages_carry_the_same_version():
-    assert '"version": "0.3.0"' in (ROOT / "package.json").read_text(encoding="utf-8")
-    assert 'version = "0.3.0"' in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    version = (ROOT / "payload" / "claude" / "workflow" / "VERSION").read_text(encoding="utf-8").strip()
+    assert f'"version": "{version}"' in (ROOT / "package.json").read_text(encoding="utf-8")
+    assert f'version = "{version}"' in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def test_a_0_2_0_config_fails_preflight_naming_the_upgrade_step(repo, run_script, tmp_path):

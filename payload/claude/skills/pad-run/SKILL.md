@@ -158,6 +158,9 @@ memory.
    decision record; the system already in the code that owners must reuse; the rule names
    `rules.sh for owner` prints; the gates; the ownership map from the tickets' `Owns`,
    `Touches` and `Protected`; the protocol. Link, never paraphrase: about 60 lines at most.
+   Read every plugin the config's `## Plugins` table lists with `Extends` `pad-run`
+   (`.claude/workflow/plugins.md`) and carry out the steps it adds where it says, and link in
+   the brief each plugin that extends `owner`.
 
 ## 3. Run waves until no ticket is left
 
