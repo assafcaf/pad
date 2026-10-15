@@ -9,8 +9,9 @@ epic that changed the payload has merged, so a run never edits the harness it is
 
 ## Delivering work
 
-New work flows through `/spec` (idea → outcomes), `/tickets` (outcomes → tracker tasks) and
-`/batch-implement` (tasks → red-then-green, merged code, tracker updated as it goes). The
+New work flows through `/spec` (idea → scope: references, protected paths, domains),
+`/tickets` (scope → ownership units in the tracker, linted by `plan-check.sh`) and `/pad-run`
+(tickets → one owner each, merged by `merge-task.sh`, tracker updated by the scripts). The
 definition of done is `.claude/workflow/definition-of-done.md`; per-repo settings are in
 `.claude/workflow/config.md`. Durable decisions go in `docs/decisions/`.
 

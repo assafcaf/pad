@@ -1,6 +1,6 @@
 # 0005. Tickets are ownership units with one owner each, and scripts keep the ledger
 
-Date: 2026-10-15 · Status: accepted (landing in steps) · Tracker: PAD redesign
+Date: 2026-10-15 · Status: accepted · Tracker: PAD 0.4.0 redesign
 
 Supersedes the ticket-owner / test-designer / code-writer layering of 0001 and "the orchestrator
 is the only ledger writer" of 0002.
@@ -17,7 +17,7 @@ other than the writer; and the orchestrator pays per hand-off, so bookkeeping ro
 is its main cost.
 
 ## Decision
-The redesign lands in seven steps. Recorded so far:
+The redesign landed in seven steps, all in PAD 0.4.0:
 
 1. **Scripts write the bookkeeping.** `merge-task.sh --run <id>` writes, once the merge is
    pushed, the evidence file and run-log line (`render-evidence.sh`), the ticket's `done` status
@@ -55,6 +55,23 @@ The redesign lands in seven steps. Recorded so far:
    the reference; `/tickets` copies it to the run's `scope.md`. `definition-of-done.md` judges
    each reference class — visual, contract tests, behaviour tests, reproduction, golden or
    metric, human — by someone other than the writer.
+
+5. **`/pad-run` governs from files.** The run's state is four files in `.work/runs/<epic>/` —
+   `scope.md` (frozen), `brief.md` (links, the system already in the code, gates, the
+   ownership map and roster, the protocol, appended rulings), `board.md` (scripts only) and
+   `channel.md` (owners' posts) — plus git, so a killed run resumes from them. An owner is
+   dispatched with two paths, the ticket and the brief. Every wave ends with a `review.sh`
+   packet; the operator's feedback, a twice-failed ticket's split and the next wave all become
+   new tickets through `/tickets`' lint. After the PR merges, `cleanup-run.sh` removes the
+   run's worktrees, branches, locks and run directory, so nothing piles up locally.
+6. **Visual references get an independent judge.** A Surfaces row with a Render command gives
+   a visual class: the owner renders with `render-check.sh`, compares, and an `evaluator` with
+   a fresh context returns the verdict; `merge-task.sh --capture` renders the merged tree into
+   the evidence. A repo with no render command has no visual class: nothing assumes a web app.
+7. **Measured, not estimated.** `merge-task.sh` logs each result and the orchestrator each
+   dispatch as timestamped events; `run-stats.sh` turns them into tickets, wall time,
+   conflicts, rejections, rework rounds and replans for the PR body. The shape should become
+   the default only after one data-heavy, non-UI epic has run on it and been measured.
 
 Open questions from the brief, as settled:
 - (a) The owner's rebase uses `git rebase <sha>`, the form `rebase-red` already needed, under

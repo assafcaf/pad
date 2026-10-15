@@ -1,138 +1,122 @@
 # dispatch-skills
 
-A Claude Code workflow that takes an idea to merged, tested code: a spec of testable outcomes,
-tickets in your tracker, then parallel implementation where every task's tests are written
-first, proven to fail, and made to pass by a different agent that cannot edit them. The tracker
-is updated as agents work, so progress is visible there.
+A Claude Code workflow (PAD) that takes an idea to merged, tested code: a scope that names what
+each part is judged against, tickets that are ownership units in your tracker, then a run where
+one owner per ticket builds it end to end, in parallel, and scripts land the code and keep the
+ledger. The tracker is updated as tickets merge, so progress is visible there.
 
 ```
 /setup-workflow          →  config + tracker agent     once per machine: connection, metadata, status line
 /knowledge-layer         →  CONTEXT.md + project.md    optional: a glossary, and what an agent cannot infer
-/spec [grill] <idea>     →  .work/specs/…md            outcomes: Given/When/Then, each testable
-/tickets <spec>          →  epic + tasks in tracker    outcome-sliced, blocking edges, waves
-/batch-implement <epic>  →  epic branch + draft PR     tests designed, then code, in parallel
+/spec [grill] <idea>     →  .work/specs/…md            the scope: intent, references, protected paths, domains
+/tickets <spec>          →  epic + tickets in tracker  ownership units, linted by plan-check.sh
+/pad-run <epic>          →  epic branch + draft PR     one owner per ticket; scripts merge and record
 ```
 
 Every skill is user-invoked only (`disable-model-invocation`), so nothing starts on its own.
+`/batch-implement` is the 0.3 name of `/pad-run`, kept as an alias for one version.
 
-> **Status: new, and not yet run end to end.** Each gate script is behavior-tested and the
-> installer is tested per tracker, but no epic has yet gone all the way through
-> `/batch-implement`. Try it on a small epic first. What is unverified is listed
-> [below](#not-yet-verified).
+> **Status: 0.4.0, a redesign not yet run end to end.** Each gate script is behaviour-tested
+> and the installer is tested per tracker, but no epic has yet gone all the way through
+> `/pad-run`. Try it on a small epic first. What is unverified is listed
+> [below](#not-yet-verified). Why it changed is in
+> [`docs/decisions/0005`](docs/decisions/0005-ownership-units-one-owner-scripts-keep-the-ledger.md).
 
 ## How you use it
 
-Three commands, three approval points, and one long unattended stretch at the end.
+Three commands and four approval points; between them, the run goes on unattended.
 
 | Step | You run | You approve | Then it runs unattended |
 |---|---|---|---|
-| 1 | `/spec [grill] <idea>` | the outcomes, then the spec file | — |
-| 2 | `/tickets <spec>` | the wave table | publishing the epic and its tasks |
-| 3 | `/batch-implement <epic>` | the waves and the epic branch, once | every wave, through to the draft PR |
+| 1 | `/spec [grill] <idea>` | the scope | — |
+| 2 | `/tickets <spec>` (same session) | the ticket list | publishing the epic and its tickets |
+| 3 | `/pad-run <epic>` | the waves and the epic branch, once; then a review packet per wave | every ticket, through to the draft PR |
+| 4 | — | the PR: you merge it | cleanup, when you say it has merged |
 
 `/setup-workflow` comes before all of it, once per machine. `/knowledge-layer` is optional and
 can be run at any point; see [below](#the-knowledge-layer).
 
-**1. Idea → outcomes.** `/spec <idea>` brainstorms: purpose and constraints, then two or three
+**1. Idea → scope.** `/spec <idea>` brainstorms: purpose and constraints, then two or three
 approaches with trade-offs, then the design in short sections you confirm one at a time.
 `/spec grill <idea>` is the adversarial version. It maps the idea as a tree of decisions and
 walks it depth-first, asking the hardest question each one raises, pushing back on "fast",
-"robust" and "handle errors" until each is a number, a behavior or a non-goal, and probing the
-failure paths — empty input, a dependency down, the run killed halfway. It stops when every
-leaf is decided or explicitly deferred. Grill when you know roughly what you want and need the
-holes found; brainstorm when you don't know yet.
+"robust" and "handle errors" until each is a number, a behaviour or a non-goal. Grill when you
+know roughly what you want and need the holes found; brainstorm when you don't know yet.
 
-It sizes the work first and tells you which size it picked. A small change skips the spec file
-and goes straight to `/batch-implement` with the agreed outcomes; something spanning several
-independent subsystems is split before anything is specced.
+The scope names, for every area, the **reference** the result is judged against: a mock crop
+at a viewport, outcomes a test can check, a failing repro, a baseline file. An area with no
+reference gets a spike first. It lists the **protected paths** (storage, sync, auth,
+migrations, the data model: where tests are the only oracle) and the domains, as bullets, not
+tasks. Outcomes in "Given …, when …, then …" form are written only where tests are the
+reference. Decisions a future reader would otherwise reverse-engineer go to
+`docs/decisions/NNNN-<slug>.md`, committed.
 
-A feature-sized spec lands in `.work/specs/<date>-<slug>.md`: problem, outcomes, non-goals,
-design, decisions, risks. Every outcome reads "Given …, when …, then …" and names its test
-level (`unit`, `integration`, or a serial-resource tag). You review the file, and it is marked
-approved only when you say so. Working specs are not committed, so anything a future reader of
-the code would otherwise reverse-engineer — an interface, a data format, a rejected approach —
-is written to `docs/decisions/NNNN-<slug>.md` and committed instead.
+**2. Scope → ownership units.** `/tickets <spec>` cuts the work into tickets one owner can take
+from start to merged. Each ticket **owns** a set of files no other ticket writes, may only
+**add** to shared files (a registry, a router), names its **reference**, and fits one agent's
+session. It splits by surface or module, never by concern: "all colours" or "every button"
+touches every file and collides with everything. A cross-cutting concern is a line in the run's
+brief, or a foundation ticket that lands first. `plan-check.sh` lints the list before you see
+it: overlapping files, a protected path not marked protected, a dependency cycle, hot shared
+files, sweeps. **Nothing is published before you approve it.** Then it publishes through
+`tracker`, which refuses to create a duplicate, so a half-finished run can be re-run.
 
-**2. Outcomes → the ledger.** `/tickets <spec path>` slices the spec vertically: each task
-delivers one to three outcomes end to end and is testable on its own, never split by layer. It
-declares the files each task will touch, but adds a blocking edge only where one task uses what
-another builds, never merely because two share a file, so tasks run in parallel. It pins exact
-interface names into both sides of every dependency, because an implementer only ever sees its
-own ticket. And it gives every task a tier — `small`, `standard` or `complex` — that sets how
-much process the task gets. A small one is a single agent writing a red commit then a green
-one. A complex one gets separate test and code authors on the stronger model. For standard and
-complex tasks the code-writer starts alongside the test-designer and reads the code while the
-tests are written. It implements only once red is proven, and may ask the test-designer what a
-test means, or object that one contradicts the ticket. The ticket settles any dispute, never
-how hard a test is to pass.
+**3. Tickets → merged code.** `/pad-run <epic key>` creates the epic branch, writes a short
+brief every owner reads (links to the scope, the references, the code's existing system, the
+gates, who owns what), and dispatches one `owner` per ready ticket. Each owner reads the
+reference itself, builds, proves its tests fail before the code and pass after, gates, rebases
+onto the epic head and reports one line. The orchestrator lands each `READY` with
+`merge-task.sh` in the background, and that script writes the evidence, the run log, the ticket
+status and the board. After each wave you get a review packet (`review.sh`): what merged, the
+render pairs side by side, what nobody verified. Your feedback becomes new tickets. The run
+stops only for an irreversible or security-sensitive action, a change to shared state outside
+the epic branch, a red baseline, or a change of scope.
 
-You get one wave table, and it stops there. **Nothing is published before you approve it.**
-
-Then it publishes through `tracker`, the ledger keeper: the only agent holding the tracker's
-tools, so every skill and every other agent goes through it and the ledger has a single writer.
-It refuses to create a duplicate epic or task, which is what lets a half-finished run be
-re-run rather than unpicked.
-
-**3. Tickets → tested, merged code.** `/batch-implement <epic key>` creates the epic branch and
-works the waves. `task-planner` goes first, and its gaps can send you back to `/tickets`. Then
-you confirm once — the waves, the epic branch, and that it will push that branch and move
-tickets as tasks land — and after that it does not pause between tasks or waves. It stops only
-for an irreversible or security-sensitive action, a change to shared state outside the epic
-branch, a baseline that is already red, every remaining task being blocked, or the ledger
-failing. Anything the tickets left unsettled it decides and logs as
-`Ruling: <decision> — <why> — <cost if wrong>`. The agents it runs and the gates every task
-must pass are [below](#how-a-run-works).
-
-**4. What you get back.** The epic branch pushed, and a draft PR whose body carries the task
-table, every ruling, anything failed or blocked, and what was not verified. The ledger updated
-task by task as the run went, with the PR URL commented on the epic. An Outcome section
-appended to the epic's `docs/decisions/` entry: what was built, where it departed from the
-spec, and why.
+**4. What you get back.** The epic branch pushed, and a draft PR whose body carries the ticket
+table, every ruling, failed tickets, test removals with the rule that explains each, the run's
+measured stats, and what was not verified. You merge it; then `/pad-run` runs
+`cleanup-run.sh`, which removes the run's worktrees, branches, locks and run files, so nothing
+piles up.
 
 ## How a run works
 
-`/batch-implement` orchestrates three layers of agents and writes no product code itself:
-
 ```
-orchestrator (/batch-implement)
-├── task-planner                 once, before wave 1
-├── E3-merger     (epic-merger)  once per run: the epic branch's only writer
-├── E3-T4-owner   (ticket-owner) one per task
-│   ├── E3-T4-tests  (test-designer)
-│   ├── E3-T4-code   (code-writer)
-│   └── E3-T4-tracker (tracker)
-└── E3-T7-owner   …
+orchestrator (/pad-run)            partition · sequence · land · replan · escalate
+├── E3-T4-owner   (owner)          one per ticket, its own worktree, start to merged
+│   ├── E3-T4-tests  (test-designer)   only for a protected ticket, as a blocking child
+│   └── E3-T4-eval   (evaluator)       only for a visual ticket: fresh-context verdict
+├── E3-T7-owner   (owner)          talks to E3-T4-owner directly, or through channel.md
+└── scripts: plan-check · merge-task · ledger · review · run-stats · cleanup-run
 ```
 
-| Agent | Tools | Does |
-|---|---|---|
-| `task-planner` | read-only | Before wave 1: waves, file conflicts, interface mismatches, gaps |
-| `ticket-owner` | dispatches, red proof, run log | One task from In Progress to Done: runs its test-designer and code-writer (or one solo code-writer for a small task), proves red, retries once, hands it to the merger, moves its ticket |
-| `test-designer` | its own worktree | Writes the task's failing tests and stubs, commits them red. Answers the code-writer's questions, and fixes a test only if it contradicts the ticket |
-| `code-writer` | its own worktree | Starts alongside the test-designer and reads the code, then cherry-picks the red commit once it is proven and makes the tests pass. Cannot change the tests, but may ask about them or object against the ticket |
-| `epic-merger` | the epic worktree | Takes ready tasks one at a time: re-checks the tests, merges, runs the suite and lint, pushes, reverts a merge that turns the branch red |
-| `tracker` | the tracker's only | Every ticket read and write, for whoever needs one, with an evidence comment at each step |
-| `memory-curator` | the agents' memory | Once, at the end of the epic: keeps the agents' lessons accurate and short, never adds one |
+| Agent | Does |
+|---|---|
+| `owner` | One ticket from start to merged: reads the reference, writes the code (and the tests unless protected), proves red, gates, rebases, reports one line. Talks to other owners directly |
+| `test-designer` | A protected ticket's failing tests and stubs, committed red; the owner may not change them |
+| `evaluator` | Judges a visual ticket's render against its mock crop with a fresh context. The owner's own eye never closes a visual ticket |
+| `tracker` | Tracker reads, creates and links. Status writes go through `ledger.sh` |
+| `memory-curator` | Once, at the end of the epic: keeps the agents' lessons accurate and short, never adds one |
 
-The orchestrator acts on one report per task, when it is finished or needs a ruling. The
-detail of a task — forty-odd git, gate and ledger steps — happens in its owner's short
-context instead of the orchestrator's long one, which every orchestrator turn re-reads. Agents
-are named after what they work on (`E3-T4-owner`), so the logs read as a tree; messages route
-by the agent id each dispatch returns.
+**One writer per ticket, parallelism only across tickets.** Two writers inside one task, and
+tickets cut by concern, are what produced conflicts and drift in 0.3. **Ceremony follows what
+the diff touches**: a diff on a protected path needs a red commit a test-designer wrote, and
+`merge-task.sh` rejects it otherwise; everywhere else the owner chooses its tests. **The
+orchestrator pays per hand-off**, so a ticket costs it one dispatch and one background merge,
+and every piece of bookkeeping is a script.
 
-Each wave of unblocked tasks runs in parallel. A task merges into the epic branch only when:
+A ticket merges into the epic branch only when:
 
-- `verify-red.sh` shows its tests failing at the test-only commit, on an assertion rather than
-  an import error;
-- the code-writer's commits changed no test file, and `weakened-tests.sh` finds no added skip,
-  xfail or TODO and no deleted test;
-- the full suite and lint pass on the epic branch after the merge, which the merger checks after
-  every single merge, so a red is always one task's.
+- its reference holds, judged by someone other than its writer: tests proven red at a
+  test-only commit (`verify-red.sh`) and green after, or an `evaluator` verdict on a render;
+- `task-submit.sh` finds no change outside the ticket's files, and `weakened-tests.sh` finds no
+  added skip, xfail or TODO and no removed test a rule doesn't explain;
+- the full suite, typecheck and lint pass on the epic branch after the merge, one merge at a
+  time, so a red is always one ticket's.
 
-There is no per-task code review. The tests are the contract, which is why they are written by
-a different agent from the one satisfying them, and proven to fail before any code exists.
-Outcomes that need a shared resource (a GPU machine, a device) run one task at a time, after
-merge.
+The run's state is in files (`.work/runs/<epic>/`: `scope.md`, `brief.md`, `board.md`,
+`channel.md`) and git, so a killed run resumes: a new orchestrator reads them and continues, and
+a new owner picks up an open ticket from its branch. Outcomes that need a shared resource (a GPU
+machine, a device) run one ticket at a time, after merge.
 
 ## Install
 
@@ -194,18 +178,19 @@ When a push to PAD needs more than file copies in the projects that use it, add 
 ## What lands where
 
 ```
-.claude/skills/{spec,tickets,batch-implement,setup-workflow,knowledge-layer,pad-update}/
+.claude/skills/{spec,tickets,pad-run,batch-implement,setup-workflow,knowledge-layer,pad-update}/
 .claude/workflow/pad.lock               the PAD commit the harness came from; committed
-.claude/agents/{tracker,task-planner,ticket-owner,test-designer,code-writer,epic-merger,memory-curator,knowledge-scanner}.md
+.claude/agents/{owner,test-designer,evaluator,tracker,memory-curator,knowledge-scanner}.md
 .claude/agent-memory/<agent>/MEMORY.md  each agent's lessons, committed; created as agents learn
 .claude/workflow/config.md              ← yours: tracker, commands, paths, models, resources
 .claude/workflow/definition-of-done.md
 .claude/workflow/ticket-template.md
+.claude/workflow/brief-template.md      the run brief every owner reads
 .claude/workflow/testing.md             how outcome tests are written
 .claude/workflow/writing-files.md       which tool writes a prose file, and why not a heredoc
 .claude/workflow/agent-memory.md        what an agent may write to its memory, and how
 .claude/workflow/trackers/{jira,github,local}.md
-.claude/workflow/bin/{verify-red,weakened-tests,vitest-gate,knowledge-paths,rules}.sh
+.claude/workflow/bin/*.sh               the gates and the bookkeeping: merge-task, ledger, plan-check, review, ...
 .claude/workflow/rules/                 rules agents load at start; add your own beside them
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
 .claude/statusline.py                   model, branch, context, cost, run and epic progress
@@ -228,8 +213,7 @@ gitignored `CLAUDE.local.md`, which `/setup-workflow` writes.
 
 ## Agent memory
 
-The agents a run uses — `test-designer`, `code-writer`, `ticket-owner`, `epic-merger` and
-`tracker` — each keep a memory (`memory: project`), which Claude Code loads every time the agent
+The agents a run uses — `owner`, `test-designer` and `tracker` — each keep a memory (`memory: project`), which Claude Code loads every time the agent
 starts. An agent writes a line only after something failed or blocked it, it found what works,
 and its next run would hit the same wall: one line, with the task key and date
 (`.claude/workflow/agent-memory.md`). A denied command, a tool limit, a gate that fails for a
@@ -266,7 +250,7 @@ on AGENTbench, and over 20% added inference cost per task); one written by the r
 developers measured **+4%**. Agents obey a wrong context file rather than ignoring it.
 
 `bash .claude/workflow/bin/knowledge-paths.sh` fails when a path either file names has gone, or
-when either grows past its ceiling. `/batch-implement` ends an epic by naming what the layer was
+when either grows past its ceiling. `/pad-run` ends an epic by naming what the layer was
 missing, which is the half with evidence behind it: guidance tuned against observed agent
 failures beats one-shot generation ([arXiv 2606.20512][pr]).
 
@@ -280,7 +264,7 @@ exactly as it did before the layer existed.
 ## Settings it needs
 
 `worktree.baseRef: head` is required. Without it, implementer worktrees branch from your
-default branch instead of the epic branch and miss every earlier task. The shipped
+default branch instead of the epic branch and miss every earlier merge. The shipped
 `settings.json` also allows the git commands a run uses unattended, and denies branch
 switching, stash, `reset --hard`, force-push and pushes to `main`/`master`. If you already have
 a settings file, the installer leaves it alone and `/setup-workflow` merges these in with your
@@ -288,7 +272,12 @@ approval.
 
 ## Not yet verified
 
-- An epic run end to end through `/batch-implement`.
+- An epic run end to end through `/pad-run`, and the measured comparison with 0.3 that
+  decision 0005 calls for: turns per ticket, conflicts, rework rounds, operator interventions.
+- That the permission classifier lets an owner rebase and resubmit unattended.
+- The `evaluator`'s verdicts against real mocks, and `render-check.sh` with a real renderer.
+- The Jira and GitHub status writes in `ledger.sh` against a live tracker (both are tested
+  against stubs).
 - That an isolated subagent's worktree branches from the orchestrating session's worktree HEAD
   (the Claude Code docs say it does; untested here).
 - That the `tracker` subagent can use the parent session's MCP tools (the docs say `tools:`
