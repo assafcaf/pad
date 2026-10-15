@@ -112,7 +112,8 @@ main checkout (the parent of `git rev-parse --git-common-dir`), the same from ev
 the body as text.
 
 **Resuming in a new session.** The earlier session's agents are gone; the files and git are
-not. Read the four files above and `git log` on the epic branch, and continue. A ticket whose
+not. Read `scope.md`, `brief.md`, `board.md` and `channel.md`, the run log's events and
+`git log` on the epic branch, and continue. A ticket whose
 `Merge <KEY>` commit is on the epic branch is merged: if `board.md` doesn't say `done`, record
 it with `ledger.sh <KEY> status done "<comment>" --run <run id> --sha <sha7>`. A ticket doing
 with no merge starts over with a new owner, who picks it up from the ticket, the brief, the
