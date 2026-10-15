@@ -37,6 +37,7 @@ MOVES = {
     "move-onto-sha": "git reset --hard <sha>",
     "take-red": "git merge --ff-only <sha>",
     "rebase-red": "git rebase <sha>",
+    "rebase-onto-epic-head": "git rebase <sha>",
     "discard-changes": "git checkout -- <path>",
     "set-aside-work": "git stash push -u",
     "try-merge": "git merge --no-ff --no-commit <branch>",
