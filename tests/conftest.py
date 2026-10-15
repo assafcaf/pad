@@ -3,6 +3,11 @@
 Everything here builds its own repos under pytest's tmp_path and reads only `payload/` from this
 checkout, never the installed `.claude/`. It must behave the same under Git Bash on Windows and
 bash on Linux, with git as old as 2.23 (no `git init -b`, no `--path-format`).
+
+Tiers. On Windows every payload-script run costs seconds, so a script's long-tail tests are
+marked `@pytest.mark.slow` and the default run (`addopts` in pyproject.toml) skips them: it is
+the content tests plus at least one quick test per script. `pytest -m slow` runs only the rest;
+`pytest -m ""` runs everything. `_TIER_HERE` below tiers the modules not yet marked by hand.
 """
 from __future__ import annotations
 
@@ -38,6 +43,29 @@ def _find_bash() -> str:
 
 BASH = _find_bash()
 
+# Modules not yet tiered by hand: every test in them that builds a repo or runs a script is
+# `slow`, except the named smoke tests. Move a module's marks into the file and drop it here.
+_TIER_HERE = {
+    "test_preflight.py": {"test_o39_a_missing_config_fails_with_a_count_and_exit_1"},
+    "test_rehearse.py": {"test_o46_outside_a_git_repo_the_rehearsal_fails"},
+    "test_pad_update.py": {
+        "test_an_untouched_file_is_replaced_with_the_new_one",
+        "test_a_directory_that_is_not_a_pad_clone_is_refused",
+    },
+    "test_upgrade_030.py": set(),
+    "test_setup_content.py": set(),
+}
+_HEAVY_FIXTURES = {"run_script", "repo", "worktree", "pad"}
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        smoke = _TIER_HERE.get(Path(str(item.fspath)).name)
+        if smoke is None or item.get_closest_marker("slow"):
+            continue
+        if item.originalname not in smoke and _HEAVY_FIXTURES & set(item.fixturenames):
+            item.add_marker(pytest.mark.slow)
+
 
 def git(*args: str, cwd: Path) -> str:
     """Run git in cwd, fail loudly, and return stdout stripped."""
@@ -49,9 +77,8 @@ def git(*args: str, cwd: Path) -> str:
     return result.stdout.strip()
 
 
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    """A fresh git repo on branch `main` with one commit, pushed to a bare `origin`."""
+def _build_repo(tmp_path: Path) -> Path:
+    """Build tmp_path/main (branch `main`, one commit) pushed to a bare tmp_path/origin.git."""
     origin = tmp_path / "origin.git"
     main = tmp_path / "main"
     origin.mkdir()
@@ -69,6 +96,36 @@ def repo(tmp_path: Path) -> Path:
     git("commit", "-q", "-m", "initial", cwd=main)
     git("remote", "add", "origin", origin.as_posix(), cwd=main)
     git("push", "-q", "-u", "origin", "main", cwd=main)
+    # Sample hooks are inert; dropping them makes every per-test copy cheaper.
+    for hooks in (main / ".git" / "hooks", origin / "hooks"):
+        for sample in hooks.glob("*.sample"):
+            sample.unlink()
+    return main
+
+
+@pytest.fixture(scope="session")
+def _repo_template(tmp_path_factory) -> Path:
+    """One repo + origin per session (per xdist worker); each test gets a copy of it."""
+    base = tmp_path_factory.mktemp("repo-template")
+    _build_repo(base)
+    return base
+
+
+@pytest.fixture
+def repo(tmp_path: Path, _repo_template: Path) -> Path:
+    """A fresh git repo on branch `main` with one commit, pushed to a bare `origin`.
+
+    It is a copy of a session template, laid out as before (tmp_path/main, tmp_path/origin.git),
+    with `origin` repointed at this test's own bare copy. Nothing in it is shared between tests.
+    """
+    shutil.copytree(_repo_template / "origin.git", tmp_path / "origin.git")
+    main = tmp_path / "main"
+    shutil.copytree(_repo_template / "main", main)
+    config = main / ".git" / "config"
+    old = (_repo_template / "origin.git").as_posix().encode()
+    data = config.read_bytes()
+    assert old in data, "template origin url not found in .git/config"
+    config.write_bytes(data.replace(old, (tmp_path / "origin.git").as_posix().encode()))
     return main
 
 
