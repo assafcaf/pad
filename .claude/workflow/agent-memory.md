@@ -1,6 +1,6 @@
 # Agent memory
 
-The agents `/batch-implement` runs have a persistent memory: `memory: project` in their
+The agents `/pad-run` runs have a persistent memory: `memory: project` in their
 frontmatter. Each one has `.claude/agent-memory/<agent name>/MEMORY.md`, which Claude Code loads
 into the agent's context every time it starts (the first 200 lines). It lives in the main
 checkout even when the agent works in a worktree, and it is committed, so every run and every
@@ -33,7 +33,7 @@ One line, under about 200 characters, in this shape:
 For example:
 
 ```
-- Branch with `git worktree add`, not `git checkout -b`: checkout is denied in settings.json (E5-T3, 2026-09-23)
+- Run the suite as `python -m pytest`, not `pytest` — the bare script isn't on PATH on every host (E5-T3, 2026-09-23)
 ```
 
 1. Read `MEMORY.md` first. If a line already covers it, correct that line instead of adding one.
@@ -43,9 +43,19 @@ For example:
 3. At most two lines per task. Keep everything in `MEMORY.md`, with no extra files, so the
    whole memory loads and the curator sees all of it.
 
+## The orchestrator's halt log
+
+The orchestrator (the `/pad-run` session) keeps `orchestrator/HALTS.md`, one line per
+halt: a parked question or a run-wide pause. It never edits the file by hand: `bin/halt-log.sh
+<run id> <KEY|-> <class> "<cause>" "<resolution>"` appends `- <yyyy-mm-dd> <run id> <KEY>
+[<class>] <cause> — <resolution>` to the main checkout's copy. The class is where the fix
+belongs: `pad` (the workflow), `project` (the product, its tickets or spec), `machine` (this
+host) or `harness` (Claude Code itself). A halt is logged with `pending` when it starts and
+again with what unblocked it when it resolves.
+
 ## Who keeps it clean
 
-Each agent owns its own memory. At the end of every epic, `/batch-implement` runs the
+Each agent owns its own memory. At the end of every epic, `/pad-run` runs the
 `memory-curator`, which keeps, tightens, merges or deletes lines against the rules above, and
 never adds new ones. It commits the result on the epic branch, so its changes show in the epic's
 PR.

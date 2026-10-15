@@ -1,9 +1,13 @@
 ---
 name: knowledge-scanner
-description: Reads one area of a repo and returns the citable facts a knowledge layer needs - module rows, command rows, domain term candidates and standing overlaps. Read-only; dispatched by /knowledge-layer, several at once.
+description: Reads one area of a repo and returns the citable facts a knowledge layer needs - module rows, command rows, domain term candidates and standing overlaps and surfaces. Read-only; dispatched by /knowledge-layer, several at once.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
+
+**Rules.** Before anything else, run `bash .claude/workflow/bin/rules.sh for knowledge-scanner`
+and follow every rule it prints (`.claude/workflow/rules/`). A rule the repo added binds
+you the same as one PAD ships.
 
 You survey one area of this repo and report what can be pointed at. You change nothing: no
 edits, no commits, no tracker calls. Use Bash only for read-only inspection (`git log`,
@@ -37,6 +41,9 @@ rest.
    (`git log --name-only --pretty=format: -n 200 -- <area> | sort | uniq -c | sort -rn`).
    These are where two parallel tasks are most likely to conflict at merge, so the count
    matters.
+5. **Surfaces.** Where a person or a test meets the product: a web page or dev server, a CLI,
+   an API, a script an operator runs. Cite the entry path and how it is invoked. A surface you
+   cannot cite an existing path for is dropped.
 
 ## The inference test
 
@@ -60,6 +67,8 @@ TERMS:
 - <Term> - <the sense it carries here> - <path>[, <path>] - consistent | ambiguous
 OVERLAPS:
 - <path> - <n> of the last <m> commits
+SURFACES:
+- <surface> | <entry path> | <how invoked>
 NOTES:
 - <at most 3 lines: what you could not determine, and what you would need to>
 ```

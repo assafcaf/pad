@@ -284,6 +284,6 @@ say "  1. Restart Claude Code in this project, then run /setup-workflow. It chec
 say "     connection, discovers statuses and transition ids, runs the config's commands, and"
 say "     installs the status line."
 say "  2. Read .claude/workflow/config.md, especially Commands, and make it true of this repo."
-say "  3. /spec <idea>  ->  /tickets <spec>  ->  /batch-implement <epic>."
+say "  3. /spec <idea>  ->  /tickets <spec>  ->  /pad-run <epic>."
 say ""
 say "Every skill is user-invoked only (disable-model-invocation), so nothing runs on its own."

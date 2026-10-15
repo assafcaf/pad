@@ -3,7 +3,7 @@
 ## Delivering work
 
 New work flows through `/spec` (idea → outcomes), `/tickets` (outcomes → tracker tasks) and
-`/batch-implement` (tasks → red-then-green, merged code, tracker updated as it goes). The
+`/pad-run` (tasks → red-then-green, merged code, tracker updated as it goes). The
 definition of done is `.claude/workflow/definition-of-done.md`; per-repo settings are in
 `.claude/workflow/config.md`. Durable decisions go in `docs/decisions/`.
 

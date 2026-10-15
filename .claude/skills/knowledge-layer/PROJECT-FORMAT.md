@@ -30,7 +30,7 @@ The gates live in `config.md`'s Commands table. Only what that table cannot say 
 - Every write to the ledger goes through `append()`. Direct writes bypass the checksum.
 
 ## Standing overlaps
-Files that most tasks touch, so `/tickets` and `task-planner` watch them for real conflicts and
+Files that most tasks touch, so `/tickets` and `plan-check.sh` watch them for real conflicts and
 put shared wiring in them into one task. Touching one is not by itself a blocking edge.
 | Path | Recent commits touching it |
 |---|---|
@@ -39,6 +39,26 @@ put shared wiring in them into one task. Touching one is not by itself a blockin
 ## Pitfalls
 - The dev server caches the schema at boot. A migration needs a restart, not a reload.
 ```
+
+## Packages
+
+A multi-package repo keeps one level per package (SKILL.md, "A multi-package repo"). The repo's
+`project.md` then has a Packages table in place of most of its Module map, and keeps the rows
+outside every package:
+
+```markdown
+## Packages
+| Package | Owns | Files |
+|---|---|---|
+| `service/` | Control API, run lifecycle | `service/PROJECT.md`, `service/CONTEXT.md` |
+| `lab/` | Shared experiment blocks | `lab/PROJECT.md` |
+```
+
+Each package's `<package>/PROJECT.md` has this file's shape, scoped to the package: a line on
+what the package is (operator), its Module map, its Commands, its Invariants and Pitfalls
+(operator), and its Standing overlaps. Paths stay repo-relative, so the gate resolves them the
+same way. A section with nothing package-specific is left out; what holds across packages stays
+at the repo level, once. The ceiling applies per file.
 
 ## Sections, and who writes each
 
@@ -81,7 +101,7 @@ task (arXiv 2602.11988), charged on every task whether the file earned it or not
 ## Growing it
 
 Add a line when an agent got something wrong that this file would have prevented. Delete a line
-when the convention changes. `/batch-implement` runs `/knowledge-layer refresh` at the end of an
+when the convention changes. `/pad-run` runs `/knowledge-layer refresh` at the end of an
 epic for exactly this: it adds a term two tasks used that the glossary lacks and a file every
 task touched that is not a standing overlap, and puts a blocker whose answer was already an
 invariant in the PR body for you.
