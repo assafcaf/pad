@@ -28,15 +28,12 @@ def section(text: str, heading: str) -> str:
 # The evaluator
 
 
-def test_evaluator_is_a_read_only_agent_with_bash(payload_text):
+def test_evaluator_is_read_only_and_uses_bash_only_for_render_check(payload_text):
     front = frontmatter(payload_text(EVALUATOR))
     assert front["name"] == "evaluator"
     tools = {t.strip() for t in front["tools"].split(",")}
     assert tools == {"Read", "Grep", "Glob", "Bash"}
     assert "Agent" not in tools and "Edit" not in tools and "SendMessage" not in tools
-
-
-def test_evaluator_uses_bash_only_for_render_check(payload_text):
     text = flat(payload_text(EVALUATOR))
     assert "Use `Bash` only to run `bash .claude/workflow/bin/render-check.sh`" in text
     assert "Nothing else." in text
@@ -66,13 +63,9 @@ def test_evaluator_checklist_is_in_order(payload_text):
     assert items == ["Elements", "Order and grouping", "Spacing", "Colour", "Type", "Content"]
 
 
-def test_evaluator_stops_on_a_missing_image(payload_text):
+def test_evaluator_stops_on_a_missing_image_else_writes_verdict_md(payload_text):
     body = flat(section(payload_text(EVALUATOR), "Procedure"))
     assert "If either is missing or empty, stop with `VERDICT error <what>`" in body
-
-
-def test_evaluator_writes_verdict_md_in_the_evidence_dir(payload_text):
-    body = flat(section(payload_text(EVALUATOR), "Procedure"))
     assert "Write `verdict.md` in the evidence directory with `Write`" in body
     assert "each naming the element, the checklist item" in body
 
@@ -97,15 +90,12 @@ def visual_step(payload_text) -> str:
     return m.group(1)
 
 
-def test_owner_renders_with_render_check_into_the_evidence_dir(payload_text):
+def test_owner_renders_with_render_check_into_the_evidence_dir_at_most_three_rounds(payload_text):
     body = visual_step(payload_text)
     assert "bash .claude/workflow/bin/render-check.sh --surface <surface> --route <route>" in body
     assert "--out <run dir>/evidence/<KEY>/app.png" in body
     assert "`reference.png`" in body
-
-
-def test_owner_renders_at_most_three_rounds(payload_text):
-    assert "at most three rounds" in visual_step(payload_text)
+    assert "at most three rounds" in body
 
 
 def test_owner_dispatches_the_evaluator_with_only_images_evidence_and_outcome(payload_text):

@@ -32,8 +32,9 @@ def test_o32_config_has_surfaces_table_with_every_column(payload_text):
     assert header_cells(body) == SURFACE_COLUMNS
 
 
-def test_o32_config_no_longer_has_local_app_section(payload_text):
+def test_o32_config_and_pad_run_no_longer_have_a_local_app(payload_text):
     assert not re.search(r"^## Local app", payload_text(CONFIG), re.M)
+    assert "Local app" not in payload_text(SKILL)
 
 
 def test_o32_review_cadence_defaults_to_per_wave_and_lists_the_options(payload_text):
@@ -43,17 +44,9 @@ def test_o32_review_cadence_defaults_to_per_wave_and_lists_the_options(payload_t
         assert option in body
 
 
-def test_o32_pad_run_skill_no_longer_refers_to_local_app(payload_text):
-    assert "Local app" not in payload_text(SKILL)
-
-
-def test_o45_serial_resources_table_has_class_column(payload_text):
+def test_o45_serial_resources_table_has_a_class_column_and_explains_both_classes(payload_text):
     body = section(payload_text(CONFIG), "Serial resources")
     assert "Class" in header_cells(body)
-
-
-def test_o45_serial_resources_explains_both_classes_and_review_packets(payload_text):
-    body = section(payload_text(CONFIG), "Serial resources")
     assert "automated" in body
     assert "operator-run" in body
     assert "review packet" in body.lower()

@@ -26,14 +26,11 @@ def template(text: str) -> str:
 # --- /spec -------------------------------------------------------------------------------
 
 
-def test_spec_template_has_references_protected_paths_and_domains(payload_text):
+def test_spec_template_sections_and_what_references_name(payload_text):
     t = template(payload_text(SPEC))
     for heading in ("## References", "## Protected paths", "## Domains", "## Non-goals"):
         assert heading in t, heading
-
-
-def test_spec_references_name_what_exists_or_a_spike(payload_text):
-    t = template(payload_text(SPEC)).lower()
+    t = t.lower()
     refs = t.split("## references", 1)[1].split("\n## ", 1)[0]
     for kind in ("mock crop", "viewport", "outcome id", "repro", "baseline", "spike"):
         assert kind in refs, kind
@@ -100,26 +97,20 @@ def class_table(text: str) -> list[str]:
     return rows
 
 
-def test_dod_table_has_every_reference_class(payload_text):
+def test_dod_table_has_every_reference_class_and_column(payload_text):
     rows = class_table(payload_text(DOD))
     for cls in REFERENCE_CLASSES:
         assert any(r.startswith(f"| **{cls}") for r in rows), cls
-
-
-def test_dod_table_columns_are_reference_author_red_evidence_judge(payload_text):
     header = next(l for l in payload_text(DOD).splitlines() if l.startswith("| Class"))
     for col in ("Who writes the reference", "Red proof", "Evidence at merge", "Judge"):
         assert col in header, col
 
 
-def test_dod_contract_class_is_strict_with_a_test_designer(payload_text):
+def test_dod_contract_class_is_strict_and_behaviour_class_owner_writes_tests_first(payload_text):
     row = next(r for r in class_table(payload_text(DOD)) if r.startswith("| **Contract"))
     assert "strict" in row.lower()
     assert "test-designer" in row
     assert "protected" in row.lower()
-
-
-def test_dod_behaviour_class_owner_writes_tests_first(payload_text):
     row = next(r for r in class_table(payload_text(DOD)) if r.startswith("| **Behaviour"))
     assert "owner" in row.lower()
     assert "first" in row.lower()

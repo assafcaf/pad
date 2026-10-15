@@ -9,31 +9,21 @@ SKILL = "claude/skills/pad-run/SKILL.md"
 TESTING = "claude/workflow/testing.md"
 
 
-def test_config_has_a_gate_option_defaulting_to_full(payload_text):
+def test_config_has_a_gate_option_a_worker_budget_and_a_per_test_timeout(payload_text):
     text = payload_text(CONFIG)
     assert "- **Gate:** `full`" in text
     assert "`affected`" in text
-
-
-def test_config_has_a_test_worker_budget(payload_text):
-    text = payload_text(CONFIG)
     assert "- **Test workers:**" in text
     assert "{workers}" in text
+    assert "pytest-timeout" in text
 
 
-def test_config_recommends_a_per_test_timeout(payload_text):
-    assert "pytest-timeout" in payload_text(CONFIG)
-
-
-def test_skill_takes_a_gate_option_and_passes_affected_and_workers(payload_text):
+def test_skill_passes_gate_affected_and_workers_and_runs_the_full_suite_at_the_end(payload_text):
     text = payload_text(SKILL)
     assert "--gate full|affected" in text
     assert '--affected "<named tests>"' in text
     assert "--workers <n>" in text
-
-
-def test_skill_runs_the_full_suite_at_the_epic_end_even_with_gate_affected(payload_text):
-    assert "even under `gate=affected`" in payload_text(SKILL)
+    assert "even under `gate=affected`" in text
 
 
 def test_testing_guide_asks_for_order_independent_bounded_tests(payload_text):

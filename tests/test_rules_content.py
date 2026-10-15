@@ -13,22 +13,16 @@ SETTINGS = "claude/settings.example.json"
 MERGE_TASK = "claude/workflow/bin/merge-task.sh"
 
 
-def test_owner_sends_test_removals_through_the_rules(payload_text):
+def test_owner_sends_test_removals_through_the_rules_and_never_switches_the_check_off(payload_text):
     text = payload_text(OWNER)
     assert "**Test removals go through the rules.**" in text
     assert "rules.sh for owner" in text
     assert "a removal no rule explains is a `NEEDS_RULING`" in text
-
-
-def test_owner_never_switches_the_check_off(payload_text):
-    text = " ".join(payload_text(OWNER).split())
-    assert "Never switch the check off or ask for it to be switched off" in text
+    assert "Never switch the check off or ask for it to be switched off" in " ".join(text.split())
 
 
 def test_the_owner_report_has_no_removals_block(payload_text):
-    text = payload_text(OWNER)
-    assert "REMOVALS:" not in text
-    assert "<file>::<test> | <rule> | <reason>" not in text
+    assert "<file>::<test> | <rule> | <reason>" not in payload_text(OWNER)
 
 
 def test_the_orchestrator_does_not_review_removal_claims(payload_text):

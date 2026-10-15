@@ -21,14 +21,10 @@ def numbered_step(text: str, number: int) -> str:
     return m.group(0)
 
 
-def test_o24_designer_step_runs_typecheck_with_the_named_tests(payload_text):
+def test_o24_designer_runs_typecheck_and_named_tests_and_leaves_the_full_suite_to_the_gate(payload_text):
     step = numbered_step(payload_text(DESIGNER), 5).lower()
     assert "typecheck" in step
     assert "named tests" in step
-
-
-def test_o24_designer_leaves_the_full_suite_to_the_merge_gate_in_every_tier(payload_text):
-    step = numbered_step(payload_text(DESIGNER), 5).lower()
     assert "never run the full suite" in step
     assert "merge gate" in step
     assert "complex" not in step
@@ -44,13 +40,9 @@ def owner_build_step(text: str) -> str:
     return " ".join(step.split()).lower()
 
 
-def test_o24_owner_build_step_names_named_tests_typecheck_and_lint(payload_text):
+def test_o24_owner_build_step_runs_named_tests_typecheck_lint_and_never_the_full_suite(payload_text):
     step = owner_build_step(payload_text(OWNER))
     assert "run the named tests, then the typecheck, then lint" in step
-
-
-def test_o24_owner_never_runs_the_full_suite_in_any_tier(payload_text):
-    step = owner_build_step(payload_text(OWNER))
     assert "never run the full suite" in step
     assert "merge gate runs it once" in step
     assert "complex" not in step
@@ -68,11 +60,8 @@ def test_o24_testing_guide_red_green_does_not_run_the_full_suite(payload_text):
     assert "merge gate runs the full suite" in text
 
 
-def test_o24_config_commands_table_has_a_typecheck_row(payload_text):
-    assert re.search(r"^\| Typecheck \|", payload_text(CONFIG), re.M)
-
-
-def test_o24_config_commands_table_has_dependency_directory_and_lockfile_rows(payload_text):
+def test_o24_config_commands_table_has_typecheck_dependency_directory_and_lockfile_rows(payload_text):
     text = payload_text(CONFIG)
+    assert re.search(r"^\| Typecheck \|", text, re.M)
     assert re.search(r"^\| Dependency directory \|", text, re.M)
     assert re.search(r"^\| Lockfile \|", text, re.M)

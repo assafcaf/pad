@@ -17,13 +17,10 @@ def _headings(text: str) -> list[str]:
     return re.findall(r"^## (.+)$", block, re.M)
 
 
-def test_template_has_the_ownership_headings_in_order(payload_text):
+def test_template_has_the_ownership_headings_in_order_and_no_tier_files_or_interfaces(payload_text):
     assert _headings(payload_text(TEMPLATE)) == [
         "Outcome", "Reference", "Owns", "Touches", "Protected", "Depends on", "Out of scope", "Spec",
     ]
-
-
-def test_template_has_no_tier_files_or_interfaces(payload_text):
     text = payload_text(TEMPLATE)
     for gone in ("## Tier", "## Files", "## Interfaces", "Tiers", "at most 3 outcomes"):
         assert gone not in text, gone

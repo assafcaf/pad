@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 SKILL = "claude/skills/pad-run/SKILL.md"
 ALIAS = "claude/skills/batch-implement/SKILL.md"
 TEMPLATE = "claude/workflow/brief-template.md"
@@ -62,14 +64,10 @@ def test_skill_names_owner_and_evaluator_and_no_retired_agent(payload_text):
 # Dispatch carries only the ticket and the brief
 
 
-def test_dispatch_carries_only_the_ticket_and_brief_paths(payload_text):
+def test_dispatch_carries_only_the_paths_and_records_the_owner_by_script(payload_text):
     body = step(payload_text(SKILL), "b", "Dispatch one `owner` per ticket, in one message")
     assert "Each prompt carries only the ticket file's absolute path and the brief's" in body
     assert "Name each `<task key>-owner`" in body
-
-
-def test_dispatch_records_the_owner_in_the_brief_and_marks_it_doing_by_script(payload_text):
-    body = step(payload_text(SKILL), "b", "Dispatch one `owner` per ticket, in one message")
     assert "fill its agent id into the brief's ownership map" in body
     assert "dispatch <KEY> <agent id>" in body
     assert "ledger.sh <KEY> status doing" in body
@@ -121,16 +119,12 @@ def test_run_files_live_in_the_main_checkout(payload_text):
 # Landing a READY
 
 
-def test_ready_runs_one_background_merge_task_and_ends_the_turn(payload_text):
+def test_ready_runs_one_background_merge_task_with_protected_ticket_and_run(payload_text):
     row = report_row(payload_text(SKILL), "Owner `READY")
     assert row.count("merge-task.sh") == 1, row
     assert "bash .claude/workflow/bin/merge-task.sh" in row
     assert "in the background (`run_in_background`), and end your turn" in row
     assert "That is the whole hand-off: one turn" in row
-
-
-def test_ready_merge_carries_protected_ticket_and_run(payload_text):
-    row = report_row(payload_text(SKILL), "Owner `READY")
     assert "--protected \"<the config's Protected paths>\"" in row
     assert "--ticket <ticket file>" in row
     assert "--run <run id>" in row
@@ -159,16 +153,7 @@ def test_merged_needs_no_write_because_the_script_recorded_it(payload_text):
 # Review, channel and replan
 
 
-def test_every_wave_is_reviewed_with_review_sh(payload_text):
-    body = step(payload_text(SKILL), "f", "Review every wave")
-    assert "`bash .claude/workflow/bin/review.sh --run <run id>`" in body
-    assert "per-wave` (the default)" in body
-
-
-def test_review_reads_the_channel_and_turns_binding_decisions_into_rulings(payload_text):
-    body = step(payload_text(SKILL), "f", "Review every wave")
-    assert "`channel.sh read <run id> --since <ts>`" in body
-    assert "becomes a ruling in the brief" in body
+# Step 3f (Review every wave) is covered in test_review_content.py.
 
 
 def test_replan_writes_new_tickets_through_tickets_lint(payload_text):
@@ -217,14 +202,10 @@ def test_after_compaction_restarts_nothing_and_trusts_the_files(payload_text):
 # Finish and clean up
 
 
-def test_finish_measures_the_run_with_run_stats(payload_text):
+def test_finish_measures_the_run_with_run_stats_and_opens_a_draft_pr(payload_text):
     finish = flat(section(payload_text(SKILL), "4. Finish the epic"))
     assert "`bash .claude/workflow/bin/run-stats.sh --run <run id>`" in finish
     assert "the run's `STAT` lines" in finish
-
-
-def test_finish_opens_a_draft_pr(payload_text):
-    finish = flat(section(payload_text(SKILL), "4. Finish the epic"))
     assert "`gh pr create --draft`" in finish
 
 
@@ -235,27 +216,19 @@ def test_cleanup_runs_after_the_operator_merges_the_pr(payload_text):
     assert "run from the main checkout" in body
     assert "It refuses unless the epic is merged" in body
     assert "never removes a worktree with uncommitted changes" in body
-
-
-def test_skill_never_merges_the_pr_itself(payload_text):
-    text = payload_text(SKILL)
-    assert "gh pr merge" not in text
+    assert "gh pr merge" not in payload_text(SKILL)
 
 
 # Never block the session, never move it
 
 
-def test_never_ask_user_question(payload_text):
-    hits = [s for s in sentences(payload_text(SKILL)) if "AskUserQuestion" in s]
-    assert hits, "skill no longer forbids AskUserQuestion"
+@pytest.mark.parametrize("tool", ["AskUserQuestion", "EnterWorktree"])
+def test_never_calls_a_session_blocking_or_moving_tool(payload_text, tool):
+    hits = [s for s in sentences(payload_text(SKILL)) if tool in s]
+    assert hits, f"skill no longer forbids {tool}"
     assert all(re.search(r"\bNever\b", s) for s in hits), hits
-
-
-def test_never_enter_worktree(payload_text):
-    hits = [s for s in sentences(payload_text(SKILL)) if "EnterWorktree" in s]
-    assert hits, "skill no longer forbids EnterWorktree"
-    assert all(re.search(r"\bNever\b", s) for s in hits), hits
-    assert "git -C .claude/worktrees/<KEY>" in payload_text(SKILL)
+    if tool == "EnterWorktree":
+        assert "git -C .claude/worktrees/<KEY>" in payload_text(SKILL)
 
 
 # The old name

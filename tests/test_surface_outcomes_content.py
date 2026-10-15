@@ -16,12 +16,9 @@ def bullet(text: str, lead: str) -> str:
     return m.group(0)
 
 
-def test_o33_spec_outcome_level_can_be_a_named_surface(payload_text):
-    assert "level: surface <name>" in payload_text(SPEC)
-
-
-def test_o33_spec_template_outcome_line_lists_the_surface_level(payload_text):
+def test_o33_spec_outcome_level_can_be_a_named_surface_in_the_template_line(payload_text):
     text = payload_text(SPEC)
+    assert "level: surface <name>" in text
     line = next(l for l in text.splitlines() if l.startswith("- [O1]"))
     assert "surface <name>" in line
 
@@ -47,14 +44,10 @@ def test_o33_spec_checklist_fails_a_capability_without_a_surface_outcome(payload
     assert "surface" in m.group(1).lower()
 
 
-def test_o33_tickets_cover_every_outcome_gives_surface_outcome_one_owner(payload_text):
-    b = bullet(payload_text(TICKETS), "Outcomes only where tests are the reference").lower()
-    assert "surface outcome" in b
-    assert "exactly one ticket" in b
-
-
-def test_o33_tickets_unowned_surface_outcome_is_a_gap_that_blocks_the_plan(payload_text):
+def test_o33_tickets_give_a_surface_outcome_one_owner_and_an_unowned_one_is_a_gap(payload_text):
     b = bullet(payload_text(TICKETS), "Outcomes only where tests are the reference")
+    assert "surface outcome" in b.lower()
+    assert "exactly one ticket" in b.lower()
     assert "GAP" in b
     assert "blocks the plan" in b.lower() or "block the plan" in b.lower()
 

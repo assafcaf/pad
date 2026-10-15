@@ -8,14 +8,11 @@ CONFIG = "claude/workflow/config.example.md"
 SKILL = "claude/skills/pad-run/SKILL.md"
 
 
-def test_config_commands_table_has_a_derived_files_row(payload_text):
+def test_config_has_a_derived_files_row_and_checks_a_rebuilt_lockfile(payload_text):
     text = payload_text(CONFIG)
     assert "| Derived files |" in text
     assert "uv.lock: uv lock" in text
-
-
-def test_config_says_a_rebuilt_lockfile_is_checked(payload_text):
-    assert "uv lock --check" in payload_text(CONFIG)
+    assert "uv lock --check" in text
 
 
 def test_owner_mode_merge_passes_each_derived_file(payload_text):

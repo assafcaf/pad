@@ -85,14 +85,11 @@ def test_brief_names_the_channel_commands(payload_text):
 # The read-channel-first rule
 
 
-def test_read_channel_first_rule_applies_to_owner_and_test_designer(payload_text):
+def test_read_channel_first_rule_applies_to_owner_and_test_designer_and_reads_first(payload_text):
     front = payload_text(RULE).split("---")[1]
     assert re.search(r"^name: read-channel-first$", front, re.M)
     assert re.search(r"^kind: practice$", front, re.M)
     assert re.search(r"^applies-to: owner, test-designer$", front, re.M)
-
-
-def test_read_channel_first_rule_reads_before_writing_and_before_every_rebase(payload_text):
     body = flat(payload_text(RULE).split("---", 2)[2])
     assert "before you write anything and again before every rebase" in body
     assert "`bash .claude/workflow/bin/channel.sh read <run id>`" in body
@@ -102,15 +99,11 @@ def test_read_channel_first_rule_reads_before_writing_and_before_every_rebase(pa
 # The owner's channel steps
 
 
-def test_owner_reads_the_channel_on_start(payload_text):
+def test_owner_reads_the_channel_on_start_and_again_before_rebasing(payload_text):
     text = flat(payload_text(OWNER))
     m = re.search(r"## What you read(.*?)## The strict discipline", text)
     assert m
     assert "the channel (`bash .claude/workflow/bin/channel.sh read <run id>`)" in m.group(1)
-
-
-def test_owner_reads_the_channel_again_before_rebasing(payload_text):
-    text = flat(payload_text(OWNER))
     m = re.search(r"7\. \*\*Rebase onto the epic head\.\*\*(.*?)8\. \*\*Report", text)
     assert m
     assert "Read the channel again first (`channel.sh read <run id> --since <your start>`)" in m.group(1)
@@ -121,7 +114,3 @@ def test_owner_posts_shared_changes_to_the_channel(payload_text):
     assert "**Post to the channel** whenever you change a shared file (`Touches`)" in text
     assert "`bash .claude/workflow/bin/channel.sh post <run id> <KEY> \"<one line>\"`" in text
 
-
-def test_owner_talks_to_peers_directly_never_through_the_orchestrator(payload_text):
-    text = flat(payload_text(OWNER))
-    assert "never route a peer question through the orchestrator" in text

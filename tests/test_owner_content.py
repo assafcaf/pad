@@ -31,15 +31,11 @@ def fenced(text: str) -> list[str]:
 # --- one report line ---
 
 
-def test_owner_report_is_exactly_one_of_three_lines(payload_text):
+def test_owner_report_is_exactly_one_of_three_lines_ready_carrying_both_shas(payload_text):
     report = section(payload_text(OWNER), "Report")
     assert "Exactly one line, then nothing" in report
-    forms = [line.split()[0] for line in fenced(report)]
-    assert forms == ["READY", "FAILED", "NEEDS_RULING"]
-
-
-def test_owner_ready_line_carries_the_task_head_and_red_shas(payload_text):
-    lines = fenced(section(payload_text(OWNER), "Report"))
+    lines = fenced(report)
+    assert [line.split()[0] for line in lines] == ["READY", "FAILED", "NEEDS_RULING"]
     assert lines[0] == "READY <KEY> <TASK_HEAD sha> <RED sha>"
 
 
@@ -59,16 +55,12 @@ def test_skill_acts_on_the_owners_three_report_lines(payload_text):
 # --- strict discipline: test-designer as a blocking child ---
 
 
-def test_protected_tickets_get_a_test_designer_as_a_blocking_child(payload_text):
+def test_protected_tickets_get_a_blocking_test_designer_and_the_rest_write_tests_first(payload_text):
     strict = flat(section(payload_text(OWNER), "The strict discipline"))
     assert "Protected: yes" in strict
     assert "tier" not in strict
     assert "Dispatch a test-designer as <KEY>-tests, block on it, and take its red commit" in strict
     assert "the tests are read-only to you" in strict
-
-
-def test_unprotected_tickets_tests_are_the_owners_written_first(payload_text):
-    strict = flat(section(payload_text(OWNER), "The strict discipline"))
     assert "Everywhere else the tests are yours to write, first, before the code" in strict
     assert "Never write a PAD-Role: trailer yourself" in strict
 

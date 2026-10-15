@@ -25,31 +25,27 @@ def review(payload_text) -> str:
 def test_o34_review_uses_the_configured_review_cadence(payload_text):
     body = review(payload_text)
     assert "Cadence" in body
+    assert "per-wave` (the default)" in " ".join(body.split())
     for option in ("after-first-wave", "per-wave", "end-only", "none"):
         assert option in body
 
 
-def test_o34_packet_is_built_by_review_sh_into_review_n(payload_text):
-    body = review(payload_text)
-    assert "bash .claude/workflow/bin/review.sh --run <run id>" in body
-    assert "review-<n>.md" in body
-
-
-def test_o34_packet_shows_merges_render_pairs_and_what_is_unverified(payload_text):
-    body = review(payload_text).lower()
+def test_o34_packet_is_built_by_review_sh_and_announced_without_stopping(payload_text):
+    raw = review(payload_text)
+    assert "bash .claude/workflow/bin/review.sh --run <run id>" in raw
+    assert "review-<n>.md" in raw
+    body = raw.lower()
     for part in ("merged keys and shas", "render pairs", "unverified"):
         assert part in body, part
-
-
-def test_o34_operator_is_notified_by_push_notification(payload_text):
-    body = review(payload_text).lower()
     assert "push notification" in body
     assert "packet" in body
-
-
-def test_o34_review_does_not_stop_the_run(payload_text):
-    body = review(payload_text).lower()
     assert re.search(r"without stopping|does not stop|never stop|doesn't stop|not stop", body)
+
+
+def test_o34_review_reads_the_channel_and_turns_binding_decisions_into_rulings(payload_text):
+    body = " ".join(review(payload_text).split())
+    assert "`channel.sh read <run id> --since <ts>`" in body
+    assert "becomes a ruling in the brief" in body
 
 
 def test_o34_feedback_becomes_new_tickets_through_tickets(payload_text):

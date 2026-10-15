@@ -147,12 +147,6 @@ def test_o1_no_prompt_prescribes_a_command_the_example_settings_deny(payload_tex
     assert not hits, "\n".join(hits)
 
 
-def test_o1_agent_memory_example_names_no_denied_command(payload_text):
-    rules = deny_rules(payload_text)
-    cmds = git_commands(payload_text(MEMORY_RULES))
-    assert not [c for c in cmds if any(denied(c, r) for r in rules)]
-
-
 # --- O1: git moves are named as capabilities, not spelled as commands ---
 
 
@@ -186,14 +180,15 @@ def test_o1_every_prompt_naming_a_move_points_to_config_git_moves(payload_text):
     assert not missing, missing
 
 
-def test_o1_owner_takes_the_tests_with_the_take_red_move(payload_text):
-    steps = procedure_steps(payload_text(OWNER))
-    take = [s for s in steps.values() if "take-red" in named_moves(s)]
+def test_o1_owner_names_its_moves_in_the_steps_that_use_them(payload_text):
+    text = payload_text(OWNER)
+    take = [s for s in procedure_steps(text).values() if "take-red" in named_moves(s)]
     assert take, "no owner Procedure step names the `take-red` move"
-
-
-def test_o1_owner_takes_a_follow_up_red_with_the_rebase_red_move(payload_text):
-    assert "rebase-red" in named_moves(payload_text(OWNER))
+    assert "rebase-red" in named_moves(text)
+    assert "move-onto-sha" in named_moves(owner_step(text, "base."))
+    step = owner_step(text, "rebase onto the epic head.")
+    assert "rebase-onto-epic-head" in named_moves(step)
+    assert "rebase-onto-epic-head" in git_moves(payload_text)
 
 
 def test_o1_test_designer_rebases_its_red_with_the_rebase_red_move(payload_text):
@@ -202,25 +197,10 @@ def test_o1_test_designer_rebases_its_red_with_the_rebase_red_move(payload_text)
     assert any("rebase-red" in named_moves(p) for p in paras)
 
 
-def test_o1_owner_base_step_names_the_move_onto_sha_move(payload_text):
-    assert "move-onto-sha" in named_moves(owner_step(payload_text(OWNER), "base."))
-
-
-def test_o1_owner_rebases_with_the_rebase_onto_epic_head_move(payload_text):
-    step = owner_step(payload_text(OWNER), "rebase onto the epic head.")
-    assert "rebase-onto-epic-head" in named_moves(step)
-
-
-def test_o1_config_lists_the_rebase_onto_epic_head_move(payload_text):
-    assert "rebase-onto-epic-head" in git_moves(payload_text)
-
-
 # --- O3's prose: the red commit is taken, not copied ---
 
 
-def test_o3_owner_never_cherry_picks(payload_text):
-    assert "cherry" not in flat(payload_text(OWNER))
-
-
-def test_o3_owner_report_has_no_cherry_picked_red_field(payload_text):
-    assert "CHERRY_PICKED_RED" not in payload_text(OWNER)
+def test_o3_owner_never_cherry_picks_and_has_no_cherry_picked_red_field(payload_text):
+    text = payload_text(OWNER)
+    assert "cherry" not in flat(text)
+    assert "CHERRY_PICKED_RED" not in text

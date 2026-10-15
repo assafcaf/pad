@@ -33,23 +33,19 @@ def test_o27_owner_has_no_prepared_or_peer_relay_lines(payload_text):
     assert "code-writer" not in text
 
 
-def test_o27_owner_proves_red_before_it_builds(payload_text):
+def test_o27_owner_takes_and_proves_red_before_it_builds(payload_text):
     steps = procedure_steps(payload_text(OWNER))
     proof = min(n for n, s in steps.items() if "verify-red.sh" in s)
     build = min(n for n, s in steps.items() if flat(s).startswith("build"))
     assert proof < build
     assert "red ok" in flat(steps[proof])
-
-
-def test_o27_owner_takes_the_designers_red_commit_before_proving_it(payload_text):
-    steps = procedure_steps(payload_text(OWNER))
-    red = flat(steps[min(n for n, s in steps.items() if "verify-red.sh" in s)])
+    red = flat(steps[proof])
     assert "red_commit" in red and "take-red" in red
 
 
 # --- O27: objections go straight to the test-designer ---
 
-def test_o27_owner_sends_an_objection_to_the_test_designer_directly(payload_text):
+def test_o27_owner_sends_an_objection_to_the_designer_and_an_unresolved_one_to_a_ruling(payload_text):
     paras = [
         flat(p) for p in re.split(r"\n\s*\n", payload_text(OWNER)) if "looks wrong" in p
     ]
@@ -58,10 +54,6 @@ def test_o27_owner_sends_an_objection_to_the_test_designer_directly(payload_text
     assert "sendmessage <key>-tests" in para
     assert "the test id and the ticket line it contradicts" in para
     assert '"hard to pass" is not an objection' in para
-
-
-def test_o27_owner_takes_an_unresolved_objection_to_a_ruling(payload_text):
-    paras = [flat(p) for p in re.split(r"\n\s*\n", payload_text(OWNER)) if "looks wrong" in p]
     assert any("can't agree" in p and "needs_ruling" in p for p in paras), paras
 
 
@@ -74,21 +66,12 @@ def test_o27_designer_answers_its_owners_objection_with_a_new_red_commit(payload
 
 # --- O28: designer proves its own red ---
 
-def test_o28_designer_last_step_runs_verify_red_on_its_red_commit(payload_text):
+def test_o28_designer_proves_its_own_red_as_its_last_step_after_the_commit(payload_text):
     steps = procedure_steps(payload_text(DESIGNER))
     last = steps[max(steps)]
     assert "verify-red.sh" in last
     assert "red commit" in flat(last)
-
-
-def test_o28_designer_reports_only_after_red_ok(payload_text):
-    steps = procedure_steps(payload_text(DESIGNER))
-    last = flat(steps[max(steps)])
-    assert "red ok" in last
-    assert "only after" in last or "until" in last
-
-
-def test_o28_verify_red_comes_after_the_commit_step(payload_text):
-    steps = procedure_steps(payload_text(DESIGNER))
+    assert "red ok" in flat(last)
+    assert "only after" in flat(last) or "until" in flat(last)
     commit = [n for n, s in steps.items() if "commit once" in flat(s)]
     assert commit and max(commit) < max(steps)
