@@ -2,12 +2,12 @@
 # Merge a submitted task into the epic branch only after its merged tree passes the gate.
 #
 #   merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup "<cmd>"]
-#                 --gate "<cmd>" --lint "<cmd>" [--test-paths "<pathspecs>"]
+#                 --gate "<cmd>" --lint "<cmd>" [--typecheck "<cmd>"] [--test-paths "<pathspecs>"]
 #                 [--derived "<path>=<cmd>" ...] [--affected "<cmd with {tests}>"]
-#                 [--workers <n>] <KEY> <RED> <TASK_HEAD> "<GOAL>"
+#                 [--workers <n>] [--run <id> [--outcomes "<ids>"]] <KEY> <RED> <TASK_HEAD> "<GOAL>"
 #
 # Order: merge lock -> task-submit.sh -> git merge --no-ff --no-commit -> setup (only when a
-# dependency manifest or lockfile changed) -> gate -> lint -> commit "Merge <KEY>: <GOAL>" -> push
+# dependency manifest or lockfile changed) -> gate -> typecheck -> lint -> commit "Merge <KEY>: <GOAL>" -> push
 # -u origin <branch>. Setup, gate and lint run with the epic worktree as their working directory.
 # A failure before the commit aborts the merge, so the epic head and tree are exactly as they were.
 #
@@ -35,6 +35,13 @@
 # signal, a timeout), and a merge left in progress is aborted, so no orphaned workers keep
 # running and the epic worktree is left as it was.
 #
+# --run <id> writes the bookkeeping once the merge is pushed, so no agent does: the evidence file
+# and run-log line through render-evidence.sh (its PR-table row is printed), and the ticket to
+# done through ledger.sh with the run's board.md row (branch, merge sha, evidence path).
+# --outcomes "<ids>" fills the evidence's outcome column (default `-`). A bookkeeping write that
+# fails prints `BOOKKEEPING FAIL <KEY>: <what>` and is logged with run-log.sh to be made again
+# before the PR; it never turns the merge into a failure: the last line is still MERGED.
+#
 # Last line: MERGED <sha> | REJECTED <KEY>: <reason> | CONFLICT <KEY>: <paths> | ERROR <KEY>: ...
 # Exit 0 MERGED, 1 REJECTED or CONFLICT, 2 infrastructure failure (push, dirty tree), 64 usage.
 # A failed push keeps the gated merge commit locally: push it again, don't re-merge.
@@ -42,11 +49,12 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup \"<cmd>\"] --gate \"<cmd>\" --lint \"<cmd>\" [--test-paths \"<pathspecs>\"] [--derived \"<path>=<cmd>\" ...] [--affected \"<cmd>\"] [--workers <n>] <KEY> <RED> <TASK_HEAD> \"<GOAL>\"" >&2
+  echo "usage: merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup \"<cmd>\"] --gate \"<cmd>\" --lint \"<cmd>\" [--typecheck \"<cmd>\"] [--run <id> [--outcomes \"<ids>\"]] [--test-paths \"<pathspecs>\"] [--derived \"<path>=<cmd>\" ...] [--affected \"<cmd>\"] [--workers <n>] <KEY> <RED> <TASK_HEAD> \"<GOAL>\"" >&2
   exit 64
 }
 
-wt=""; branch=""; setup=""; gate=""; lint=""; paths="tests/"
+wt=""; branch=""; setup=""; gate=""; lint=""; typecheck=""; paths="tests/"
+run=""; outcomes=""
 derived=()
 affected=""
 workers=""
@@ -58,6 +66,9 @@ while [ $# -gt 0 ]; do
     --setup) setup="${2:-}"; shift 2 ;;
     --gate) gate="${2:-}"; shift 2 ;;
     --lint) lint="${2:-}"; shift 2 ;;
+    --typecheck) typecheck="${2:-}"; shift 2 ;;
+    --run) run="${2:-}"; shift 2 ;;
+    --outcomes) outcomes="${2:-}"; shift 2 ;;
     --test-paths) paths="${2:-}"; shift 2 ;;
     --derived) derived+=("${2:-}"); shift 2 ;;
     --affected) affected="${2:-}"; shift 2 ;;
@@ -287,6 +298,7 @@ if [ "$code" -ne 0 ] && outside_only; then
   run_gate; code=$?
 fi
 [ "$code" -eq 0 ] || reject_step gate "$code"
+[ -z "$typecheck" ] || step typecheck "$typecheck"
 step lint "$lint"
 
 g commit -q --no-edit -m "Merge $key: $goal" >"$log" 2>&1 || {
@@ -298,5 +310,19 @@ g push -q -u origin "$branch" >"$log" 2>&1 || {
   tail -n 40 "$log"
   infra "push failed; merge $sha is committed locally on $branch"
 }
+
+# Bookkeeping, now that the merge is on origin. Failures are reported, never fatal.
+if [ -n "$run" ]; then
+  bk_fail() {
+    echo "BOOKKEEPING FAIL $key: $1"
+    (cd "$wt" && bash "$bin/run-log.sh" "$run" "BOOKKEEPING FAIL $key: $1 (merge ${sha:0:7})") >/dev/null 2>&1
+  }
+  green="${gate_cmd} -> pass"
+  [ -z "$typecheck" ] || green="$green; $typecheck -> pass"
+  out="$(cd "$wt" && bash "$bin/render-evidence.sh" --run "$run" --key "$key" --red "$red"     --merge "$sha" --outcomes "${outcomes:--}" --red-result "red commit ${red:0:7} checked by task-submit.sh"     --green-result "$green" 2>&1)" && printf '%s
+' "$out" || bk_fail "evidence: $(printf '%s' "$out" | tail -n 1)"
+  out="$(cd "$wt" && bash "$bin/ledger.sh" "$key" status done "merged ${sha:0:7} into $branch (run $run)"     --run "$run" --branch "$branch" --sha "${sha:0:7}" --evidence ".work/runs/$run/$key.md" 2>&1)" ||
+    bk_fail "ledger: $(printf '%s' "$out" | tail -n 1)"
+fi
 
 echo "MERGED $sha"

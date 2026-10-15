@@ -19,5 +19,25 @@ added to a row here is added to the template too.
 | Move status | `getTransitionsForJiraIssue`, then `transitionJiraIssue` with the id whose `to.name` is the configured status |
 | Comment | `addCommentToJiraIssue` with `commentBody` and `contentFormat: markdown` |
 
+## Status writes from scripts
+
+`bin/ledger.sh` moves statuses and adds comments without an agent, through the Jira REST API, so
+a merge records itself (`merge-task.sh --run`). It reads the site and status names from
+`config.md` and its credentials from `.work/secrets/jira.env` in the main checkout (gitignored
+with `.work/`), which each person creates:
+
+```
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=<an Atlassian API token>
+```
+
+| Operation | Request |
+|---|---|
+| Move status | `GET /rest/api/3/issue/<KEY>/transitions`, then `POST` the same path with the id whose `to.name` is the configured status. Already in that status is OK |
+| Comment | `POST /rest/api/3/issue/<KEY>/comment`, the text as one ADF paragraph |
+
+The token goes to curl on stdin, never on its command line, and is never printed. A missing
+file, an HTTP error or no matching transition prints `LEDGER FAIL <KEY>: <why>`.
+
 The ticket body's `## Blocked by` section and the `Blocks` links must agree. If they don't, the
 links win; record the mismatch as a ruling.

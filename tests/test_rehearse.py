@@ -29,7 +29,7 @@ from conftest import BASH, BIN, PAYLOAD, git
 from test_preview import _app, _row
 
 STEPS = [
-    "move-onto-epic-head", "red", "verify-red", "green", "task-submit", "merge-task",
+    "move-onto-epic-head", "red", "verify-red", "green", "task-submit", "merge-task", "merge-bookkeeping",
     "preview-restart", "ledger-write",
 ]
 STEP_LINE = re.compile(r"^STEP (\S+) (PASS|FAIL)(?: .*)?$")

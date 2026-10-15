@@ -12,6 +12,8 @@
 #   green                a trivial change that makes it pass, committed on top
 #   task-submit          task-submit.sh accepts the task branch
 #   merge-task           merge-task.sh merges it into a throwaway epic branch and pushes that
+#   merge-bookkeeping    that merge, run with --run, moved a temporary ticket to done and wrote
+#                        its evidence file and board.md row, with no agent involved
 #   preview-restart      the first configured surface with a `Preview start` is started, restarted
 #                        and stopped (skipped with PASS when none is configured)
 #   ledger-write         ledger.sh, run from the task worktree, updates a temporary ticket in the
@@ -91,6 +93,7 @@ cleanup() {
   g rev-parse -q --verify "refs/heads/$epic_branch" >/dev/null 2>&1 &&
     g branch -q -D "$epic_branch" >/dev/null 2>&1
   rm -f "$ticket" "$ticket.tmp."* 2>/dev/null
+  rm -rf "$main/.work/runs/$id"
   for ((i = ${#made[@]} - 1; i >= 0; i--)); do
     d="${made[$i]}"
     rmdir "$d" 2>/dev/null
@@ -165,15 +168,47 @@ else
   else fail task-submit "$(last "$out")"; fi
 fi
 
+# The temporary ticket that the merge's bookkeeping and ledger-write update.
+ticket_ok=1
+for d in "$main/.work" "$main/.work/tickets" "$ticket_dir"; do
+  [ -d "$d" ] && continue
+  if mkdir "$d" 2>/dev/null; then made+=("$d"); else ticket_ok=""; break; fi
+done
+if [ -z "$ticket_ok" ] || [ -e "$ticket" ] ||
+  ! printf -- '---\nkey: %s\nstatus: doing\n---\n\n## Outcome\nPAD rehearsal ticket.\n' "$key" >"$ticket" 2>/dev/null; then
+  ticket_ok=""
+fi
+
 # --- merge-task --------------------------------------------------------------------------------
+merged=""
 if [ -z "$submitted" ]; then
   fail merge-task "skipped: task not submitted"
 else
   out="$(cd "$main" && bash "$bin/merge-task.sh" --worktree "$epic_wt" --branch "$epic_branch" \
-    --gate "bash $test_file" --lint "true" --test-paths "$paths" \
-    REHEARSAL "$red" "$green" "rehearsal" 2>&1)"
-  if [ $? -eq 0 ]; then pass merge-task "$(last "$out") on $epic_branch"
+    --gate "bash $test_file" --lint "true" --test-paths "$paths" --run "$id" \
+    "$key" "$red" "$green" "rehearsal" 2>&1)"
+  if [ $? -eq 0 ]; then merged="$(last "$out")"; pass merge-task "$merged on $epic_branch"
   else fail merge-task "$(last "$out")"; fi
+fi
+
+# --- merge-bookkeeping -------------------------------------------------------------------------
+if [ -z "$merged" ]; then
+  fail merge-bookkeeping "skipped: nothing merged"
+elif [ -z "$ticket_ok" ]; then
+  fail merge-bookkeeping "cannot create a temporary ticket under $main/.work/tickets"
+else
+  sha7="$(printf '%s' "${merged#MERGED }" | cut -c1-7)"
+  if printf '%s\n' "$out" | grep -q '^BOOKKEEPING FAIL'; then
+    fail merge-bookkeeping "$(printf '%s\n' "$out" | grep '^BOOKKEEPING FAIL' | head -n 1)"
+  elif ! grep -q '^status: done' "$ticket"; then
+    fail merge-bookkeeping "the ticket was not moved to done"
+  elif [ ! -f "$main/.work/runs/$id/$key.md" ]; then
+    fail merge-bookkeeping "no evidence file at .work/runs/$id/$key.md"
+  elif ! grep -q "^| $key | .* | done | .* | $sha7 |" "$main/.work/runs/$id/board.md" 2>/dev/null; then
+    fail merge-bookkeeping "no done row for $key in .work/runs/$id/board.md"
+  else
+    pass merge-bookkeeping "ticket done; evidence and board row written by merge-task.sh"
+  fi
 fi
 
 # --- preview-restart ---------------------------------------------------------------------------
@@ -214,13 +249,7 @@ fi
 if [ ! -d "$task_wt" ]; then
   fail ledger-write "skipped: no task worktree"
 else
-  ok=1
-  for d in "$main/.work" "$main/.work/tickets" "$ticket_dir"; do
-    [ -d "$d" ] && continue
-    if mkdir "$d" 2>/dev/null; then made+=("$d"); else ok=""; break; fi
-  done
-  if [ -z "$ok" ] || [ -e "$ticket" ] ||
-    ! printf -- '---\nkey: %s\nstatus: todo\n---\n\n## Goal\nPAD rehearsal ticket.\n' "$key" >"$ticket" 2>/dev/null; then
+  if [ -z "$ticket_ok" ]; then
     fail ledger-write "cannot create a temporary ticket under $main/.work/tickets"
   else
     out="$(cd "$task_wt" && bash "$bin/ledger.sh" "$key" status doing "rehearsal" 2>&1)"

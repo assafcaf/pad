@@ -34,7 +34,7 @@ You orchestrate and never write product code yourself. You run three layers of a
 | `ticket-owner` | One task from `doing` to `done`: its tests, its code, its gates, its ticket and run-log entry | You, one per task |
 | `test-designer` | The task's failing tests + stubs, committed red | Its ticket owner |
 | `code-writer` | Makes those tests pass, suite and lint green | Its ticket owner |
-| `tracker` | Every tracker read and write | You only: the ledger's one writer. Owners never dispatch it. Local ledger updates go through `ledger.sh` |
+| `tracker` | Tracker reads, ticket creation and links | You only. Owners never dispatch it. Status and comment writes go through `ledger.sh`, for every adapter |
 | `memory-curator` | Keeps the agents' persistent memory clean: keeps, tightens, merges or deletes lessons, never adds them | You, once, at the end of the epic |
 
 You pick the waves, answer what the owners can't settle, run the serial resources, and finish
@@ -122,7 +122,7 @@ with a `done`, `failed` or `blocked` line keeps it. A task in the doing status w
 those starts over — remove any worktree and branch from its earlier attempt
 (`git worktree list`) — and that doesn't use up its retry. A task whose `Merge <KEY>` commit is
 on the epic branch but has no `done` line isn't restarted: gate the epic head, push, and
-record it done (3f).
+record it done with `ledger.sh <KEY> status done "<comment>" --run <run id> --sha <sha7>`.
 
 **After compaction in the same session,** the agents are still running: restart nothing. The
 run log's `agents:` lines give you back each owner's id; trust the run log and
@@ -188,12 +188,12 @@ with one last line. Act only on:
 
 | Report | You |
 |---|---|
-| Owner `SUBMITTED` | First review its `REMOVALS`: write the lines to `.work/runs/<run id>/removals/<KEY>.txt` and run `bash .claude/workflow/bin/weakened-tests.sh --claims <that file> <merge-base of the epic head and TASK_HEAD> <TASK_HEAD>` in the epic worktree. Exit 0: every removal is explained by the rule its owner named; log `REMOVALS <KEY>: <lines>` with `run-log.sh` and go on. An unexplained removal or a `MISMATCH` is a question (below) for the operator: park the task, quoting the output. Then run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --lint "<lint>" --test-paths "<test paths>" [--derived "<path>=<cmd>" …] <KEY> <RED> <TASK_HEAD> "<GOAL>"` with the `READY` block's values and one `--derived` per row of the config's Derived files, in the background (`run_in_background`), and end your turn. When it exits, `SendMessage` the owner its last line unchanged (`MERGED …`, `REJECTED …` or `CONFLICT …`), except in the two cases below |
+| Owner `SUBMITTED` | First review its `REMOVALS`: write the lines to `.work/runs/<run id>/removals/<KEY>.txt` and run `bash .claude/workflow/bin/weakened-tests.sh --claims <that file> <merge-base of the epic head and TASK_HEAD> <TASK_HEAD>` in the epic worktree. Exit 0: every removal is explained by the rule its owner named; log `REMOVALS <KEY>: <lines>` with `run-log.sh` and go on. An unexplained removal or a `MISMATCH` is a question (below) for the operator: park the task, quoting the output. Then run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --typecheck "<typecheck>" --lint "<lint>" --test-paths "<test paths>" [--derived "<path>=<cmd>" …] --run <run id> --outcomes "<O ids>" <KEY> <RED> <TASK_HEAD> "<GOAL>"` with the `READY` block's values and one `--derived` per row of the config's Derived files, in the background (`run_in_background`), and end your turn. When it exits, `SendMessage` the owner its last line unchanged (`MERGED …`, `REJECTED …` or `CONFLICT …`), except in the two cases below |
 | `merge-task.sh` `REJECTED` whose failing tests all sit in files the task didn't touch and doesn't import | A false positive: the script already reran them once. Resubmit it once: rerun `merge-task.sh` in the background with the same `RED` and the same `TASK_HEAD`. This doesn't use the task's retry, and the owner hears only the rerun's last line |
 | `merge-task.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the task. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead, and the owner then gets `MERGED <sha>`. A second `ERROR` is a question (above): park that task. It never uses the task's retry |
 | Owner `NEEDS_RULING` | Decide it, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` the answer to the owner. If it needs the operator, it's a question (above): park the task |
 | Owner `MERGED_PENDING_RESOURCE` | Run its `RESOURCE_PROBES`, one at a time across the whole run, with the configured runner, at the merge sha — from a throwaway `git worktree add --detach`, because other merges keep landing in the epic worktree meanwhile. Keep the output in the run log. Pass: message the owner `RESOURCE PASSED` with the output tail. Fail: once no `merge-task.sh` is running, revert that merge in the epic worktree with the config's `revert-merge` move (`## Git moves`), run the full suite and lint there, push with `push-epic`, then message the owner `RESOURCE FAILED` with the output. A serial-resource failure after a merge is the only reason a merge is ever reverted |
-| Owner `DONE`, `FAILED`, `BLOCKED` | Record it (3f) from the owner's report, then fill the free slot (a). A failed or blocked task's dependents wait; everything else continues |
+| Owner `DONE`, `FAILED`, `BLOCKED` | Record it (3e) from the owner's report, then fill the free slot (a). A failed or blocked task's dependents wait; everything else continues |
 
 Every other last line goes to the owner as it is, and into the log; the owner handles its own
 retry. A flake that forces reruns is fixed at its cause (`.claude/workflow/testing.md`, "Pass
@@ -205,12 +205,11 @@ outcomes). Same gates, same run-log line, and the same tracker comments when the
 tracker.
 
 **e. Record each finished task** when its owner reports `DONE`, `FAILED` or `BLOCKED`.
-1. For a `DONE` task, run `.claude/workflow/bin/render-evidence.sh --run <id> --key <KEY>
-   --red <sha> --merge <sha> --outcomes "<O ids>" --red-result "<cmd -> result>"
-   --green-result "<cmd -> result>"`, adding `--files-outside "<paths>"` from the owner's
-   `FILES_OUTSIDE` and `--rulings "<text>"` for yours. It writes `<KEY>.md`, appends the run-log
-   line and prints the PR-table row; don't write those by hand. For `FAILED` or `BLOCKED`, one
-   `run-log.sh` line with the key, your rulings and the owner's `INTERFACES` is enough.
+1. A `DONE` task is already recorded: the `merge-task.sh --run` that merged it wrote its
+   evidence file, its run-log line, the ticket's `done` status and its `board.md` row, and
+   printed its PR-table row. Write none of those again. A `BOOKKEEPING FAIL` line in that
+   merge's output is a write to make again before the PR (step 4). For `FAILED` or `BLOCKED`,
+   one `run-log.sh` line with the key, your rulings and the owner's `INTERFACES` is enough.
 2. Refresh the progress snapshot, unless the adapter is `local` — there the status line reads
    the ticket files directly and a snapshot would only go stale. Overwrite
    `.work/progress.json` in the **main checkout**, not this worktree
@@ -221,14 +220,15 @@ tracker.
    snapshot older than six hours is shown as stale, so never carry an old `updated` forward.
    Nothing else reads this file — if the write fails, note it and carry on.
 
-**f. Write the ledger.** You are the only ledger writer; owners report and never dispatch
-`tracker`. At dispatch (b), record `doing` with a comment naming the run id, the epic branch
-and the tier. On an owner's report, record from its `LEDGER_COMMENT` line: `DONE` moves the
-task to `done`; `FAILED` and `BLOCKED` comment it and leave the status at `doing`. With the
-`local` adapter run `bash .claude/workflow/bin/ledger.sh <KEY> status <doing|done> "<comment>"`
-(or `ledger.sh <KEY> comment "<text>"`) from the epic worktree; with any other adapter,
-dispatch `tracker`. A `tracker` `FAIL` never stops the run: log the write it missed with
-`run-log.sh`, carry on, and make the missed writes again before you open the PR (step 4).
+**f. Ledger writes are scripts.** Owners report and never dispatch `tracker`, and no agent
+writes a status by hand. At dispatch (b), run `bash .claude/workflow/bin/ledger.sh <KEY> status
+doing "<run id>, <epic branch>, <tier>" --run <run id> --owner <owner's agent id>` from the epic
+worktree. `merge-task.sh --run` moves a merged task to `done`. On `FAILED` or `BLOCKED`, run
+`ledger.sh <KEY> comment "<the report's LEDGER_COMMENT line>" --run <run id>` and leave the
+status at `doing`. `ledger.sh` writes through the configured adapter: local files, `gh`, or the
+Jira REST API (`.claude/workflow/trackers/<adapter>.md`). A `LEDGER FAIL` never stops the run:
+log the write it missed with `run-log.sh`, carry on, and make the missed writes again before
+you open the PR (step 4).
 
 ## Workflow mode
 

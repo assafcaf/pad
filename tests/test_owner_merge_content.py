@@ -198,7 +198,7 @@ def test_o19_tracker_fail_is_never_a_question(payload_text):
 
 
 def test_o19_tracker_fail_lets_the_run_carry_on(payload_text):
-    hits = [x for x in sentences(payload_text(SKILL)) if re.search(r"tracker", x) and "FAIL" in x]
+    hits = [x for x in sentences(payload_text(SKILL)) if re.search(r"tracker|ledger", x, re.I) and "FAIL" in x]
     assert any(
         re.search(r"never stops?|keeps? going|carr(y|ies) on|continues?", b, re.I) for b in hits
     ), hits

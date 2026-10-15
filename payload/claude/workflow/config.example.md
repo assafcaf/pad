@@ -69,7 +69,10 @@ loaded on every start. The rules are in `.claude/workflow/agent-memory.md`, and
 
 ## Tracker updates during a run
 
-So progress is visible without reading the terminal:
+So progress is visible without reading the terminal. Scripts write all of these
+(`bin/ledger.sh`, called by the orchestrator at dispatch and by `merge-task.sh --run` at merge);
+with `jira` they need `.work/secrets/jira.env` (`trackers/jira.md`, "Status writes from
+scripts"):
 
 | When | Task | Comment |
 |---|---|---|

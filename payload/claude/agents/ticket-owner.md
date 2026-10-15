@@ -58,8 +58,9 @@ id the dispatch returns, not by the name. Keep each id you get, and reply to a m
 ## Procedure
 
 **You make no tracker calls.** You never dispatch a `tracker` agent and never touch the ledger.
-The orchestrator is the only ledger writer: it records `doing`, `done`, `failed` and `blocked`
-from your report. What it needs for the comment goes in the report's `LEDGER_COMMENT` line.
+Scripts write the ledger: the orchestrator's `ledger.sh` records `doing`, `merge-task.sh`
+records `done` with its evidence, and the orchestrator comments `failed` and `blocked` from
+your report. What that comment needs goes in the report's `LEDGER_COMMENT` line.
 
 **Base check.** When the orchestrator doesn't sit in the epic worktree, `worktree.baseRef: head`
 resolves to the default branch, so a new agent worktree can start from the wrong commit. Tell

@@ -69,7 +69,8 @@ cfg="$top/.claude/workflow/config.md"
 adapter="local"
 if [ -f "$cfg" ]; then
   a="$(sed -n 's/^- \*\*Adapter:\*\* *`\([^`]*\)`.*/\1/p' "$cfg" | head -n 1)"
-  [ -z "$a" ] || adapter="$a"
+  # An unfilled `<TRACKER>` placeholder counts as unset.
+  case "$a" in ''|'<'*) ;; *) adapter="$a" ;; esac
 fi
 
 # json_tool: the first of python / jq that runs here, for building and reading JSON.
@@ -84,7 +85,8 @@ json_tool() {
 
 # --- local -------------------------------------------------------------------------------------
 write_local() {
-  local epic file tmp line
+  # tmp is global: the EXIT trap that removes it runs after this function returns.
+  local epic file line
   epic="${key%%-T*}"
   if [ "$epic" = "$key" ]; then file="$main/.work/tickets/$epic/epic.md"
   else file="$main/.work/tickets/$epic/$key.md"; fi

@@ -14,3 +14,11 @@ Check each command on first use and fix this file if one has changed.
 | Update a ticket | `gh issue edit <n> --body-file <f>` (and `--title` when given) |
 | Move status | todo = open with no label; doing = label `in-progress`; review = label `in-review`; done = `gh issue close <n> --reason completed` |
 | Comment | `gh issue comment <n> --body-file <f>` |
+
+## Status writes from scripts
+
+`bin/ledger.sh <n> status <to> "<comment>"` makes the Move status row's change with
+`gh issue edit` (`doing` adds `in-progress`, `review` adds `in-review`, each removing the other;
+`todo` removes both) or `gh issue close <n> --reason completed` (`done`), then comments with
+`gh issue comment <n> --body <comment>`. `<n>` may be written `#12`. A `gh` failure prints
+`LEDGER FAIL <n>: <why>`.
