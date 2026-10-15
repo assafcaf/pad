@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 from test_merge_task import GOAL, PASS_GATE, PASS_LINT, _epic, _last, _task
 
@@ -36,6 +38,7 @@ def _runs(repo: Path) -> Path:
     return repo / ".work" / "runs" / RUN
 
 
+@pytest.mark.slow
 def test_merged_with_run_writes_evidence_log_ledger_and_board(repo, worktree, run_script):
     ticket = _ticket(repo)
     epic_wt, epic_head = _epic(repo, worktree)
@@ -62,6 +65,7 @@ def test_merged_with_run_writes_evidence_log_ledger_and_board(repo, worktree, ru
     assert not (epic_wt / ".work" / "runs").exists()
 
 
+@pytest.mark.slow
 def test_failed_ledger_write_is_reported_and_logged_but_merge_stands(repo, worktree, run_script):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
@@ -74,6 +78,7 @@ def test_failed_ledger_write_is_reported_and_logged_but_merge_stands(repo, workt
     assert f"BOOKKEEPING FAIL {KEY}: ledger:" in progress
 
 
+@pytest.mark.slow
 def test_without_run_no_bookkeeping_is_written(repo, worktree, run_script):
     _ticket(repo)
     epic_wt, epic_head = _epic(repo, worktree)
@@ -83,16 +88,7 @@ def test_without_run_no_bookkeeping_is_written(repo, worktree, run_script):
     assert not (repo / ".work" / "runs").exists()
 
 
-def test_failing_typecheck_rejects_and_leaves_epic_untouched(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    _, red, head = _task(repo, worktree, epic_head)
-    r = _merge(run_script, repo, epic_wt, red, head, extra=("--typecheck", "exit 3", "--run", RUN))
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r) == f"REJECTED {KEY}: typecheck failed (exit 3)"
-    assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head
-    assert not (repo / ".work" / "runs" / RUN / f"{KEY}.md").exists()
-
-
+@pytest.mark.slow
 def test_merged_with_run_logs_each_rule_explained_removal(repo, worktree, run_script):
     _ticket(repo)
     epic_wt = worktree(repo, "epic")
@@ -152,30 +148,28 @@ def _merge_any(run_script, repo, epic_wt, red, head, extra):
     )
 
 
-def test_protected_diff_without_a_test_designer_red_is_rejected_needs_strict(repo, worktree, run_script):
+@pytest.mark.slow
+@pytest.mark.parametrize("path, trailer, protected, verdict", [
+    ("src/db/store.py", "", "src/db/**",
+     "REJECTED E1-T1: needs-strict (src/db/store.py is a protected path"),
+    ("src/db/store.py", "PAD-Role: test-designer", "src/db/**", "MERGED "),
+    ("src/ui/page.py", "", "src/db/**, src/auth/**", "MERGED "),
+], ids=["protected-without-designer-red", "protected-with-designer-red", "unprotected"])
+def test_a_protected_diff_needs_a_test_designer_red(
+    repo, worktree, run_script, path, trailer, protected, verdict
+):
     epic_wt, epic_head = _epic(repo, worktree)
-    red, head = _task_on(repo, worktree, epic_head, "src/db/store.py")
-    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", "src/db/**"))
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r).startswith(f"REJECTED {KEY}: needs-strict (src/db/store.py is a protected path")
-    assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head
+    red, head = _task_on(repo, worktree, epic_head, path, trailer=trailer)
+    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", protected))
+    assert _last(r).startswith(verdict), r.stdout + r.stderr
+    if verdict.startswith("REJECTED"):
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head
+    else:
+        assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_protected_diff_with_a_test_designer_red_merges(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    red, head = _task_on(repo, worktree, epic_head, "src/db/store.py", trailer="PAD-Role: test-designer")
-    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", "src/db/**"))
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert _last(r).startswith("MERGED ")
-
-
-def test_unprotected_diff_needs_no_trailer(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    red, head = _task_on(repo, worktree, epic_head, "src/ui/page.py")
-    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", "src/db/**, src/auth/**"))
-    assert r.returncode == 0, r.stdout + r.stderr
-
-
+@pytest.mark.slow
 def test_ticket_is_passed_to_task_submit_ownership(repo, worktree, run_script, tmp_path):
     epic_wt, epic_head = _epic(repo, worktree)
     red, head = _task_on(repo, worktree, epic_head, "src/ui/page.py")
@@ -186,12 +180,16 @@ def test_ticket_is_passed_to_task_submit_ownership(repo, worktree, run_script, t
     assert _last(r) == f"REJECTED {KEY}: ownership: src/ui/page.py"
 
 
-def test_with_run_each_result_is_logged_as_a_timestamped_event(repo, worktree, run_script):
+@pytest.mark.slow
+def test_failing_typecheck_rejects_then_each_result_is_logged_as_a_timestamped_event(repo, worktree, run_script):
     _ticket(repo)
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
     r = _merge(run_script, repo, epic_wt, red, head, extra=("--typecheck", "exit 3", "--run", RUN))
-    assert r.returncode == 1
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert _last(r) == f"REJECTED {KEY}: typecheck failed (exit 3)"
+    assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head
+    assert not (_runs(repo) / f"{KEY}.md").exists()
     r = _merge(run_script, repo, epic_wt, red, head, extra=("--run", RUN))
     assert r.returncode == 0, r.stdout + r.stderr
     sha = git("rev-parse", "HEAD", cwd=epic_wt)
@@ -203,6 +201,7 @@ def test_with_run_each_result_is_logged_as_a_timestamped_event(repo, worktree, r
     ]
 
 
+@pytest.mark.slow
 def test_capture_renders_the_merged_tree_into_the_evidence_dir(repo, worktree, run_script):
     _ticket(repo)
     epic_wt, epic_head = _epic(repo, worktree)
@@ -215,6 +214,7 @@ def test_capture_renders_the_merged_tree_into_the_evidence_dir(repo, worktree, r
     assert f"EVIDENCE {KEY}: " in r.stdout
 
 
+@pytest.mark.slow
 def test_a_failed_capture_is_bookkeeping_not_a_rejection(repo, worktree, run_script):
     _ticket(repo)
     epic_wt, epic_head = _epic(repo, worktree)

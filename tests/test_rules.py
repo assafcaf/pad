@@ -13,6 +13,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
+
 from conftest import PAYLOAD, git
 
 RULES = PAYLOAD / "claude" / "workflow" / "rules"
@@ -52,13 +54,14 @@ def _rule(name: str, kind: str, applies: str, check: str | None = None, body: st
 # --- rules.sh ----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_every_payload_rule_file_validates(run_script, repo):
     r = run_script("rules.sh", "validate", cwd=repo)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout.strip().splitlines()[-1].startswith("RULES OK")
 
 
-def test_pad_ships_the_agreed_rules(run_script, repo):
+def test_pad_ships_the_agreed_rules():
     names = {p.stem for p in RULES.glob("*.md")}
     assert {
         "code-deleted", "same-name-readded", "ported-from",
@@ -78,6 +81,7 @@ def test_for_prints_only_the_rules_that_name_the_agent(run_script, repo, tmp_pat
     assert "Beta guidance." not in r.stdout
 
 
+@pytest.mark.slow
 def test_a_repo_rule_dropped_in_the_folder_is_live_for_its_agent(run_script, repo, tmp_path):
     example = (FIXTURES / "restore-global-state.md").read_text(encoding="utf-8")
     d = _rules_copy(tmp_path, {"restore-global-state.md": example})
@@ -87,39 +91,20 @@ def test_a_repo_rule_dropped_in_the_folder_is_live_for_its_agent(run_script, rep
     assert run_script("rules.sh", "validate", cwd=repo, env=env).returncode == 0
 
 
-def test_validate_rejects_a_rule_naming_an_unknown_agent(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": _rule("x", "practice", "owner, nobody")})
+@pytest.mark.slow
+@pytest.mark.parametrize("text, fail", [
+    (_rule("x", "practice", "owner, nobody"), "RULES FAIL x: applies-to names nobody"),
+    (_rule("x", "vibes", "owner"), "RULES FAIL x: kind vibes"),
+    (_rule("x", "test-removal", "orchestrator", check="x.sh"), "RULES FAIL x: check x.sh"),
+    (_rule("x", "test-removal", "orchestrator"), "RULES FAIL x: test-removal needs a check"),
+    ("---\nname: x\nkind: practice\n---\n\nBody.\n", "RULES FAIL x: missing applies-to"),
+], ids=["unknown-agent", "unknown-kind", "missing-check-script", "removal-without-check",
+        "missing-field"])
+def test_validate_rejects_a_malformed_rule(run_script, repo, tmp_path, text, fail):
+    d = _rules_copy(tmp_path, {"x.md": text})
     r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
     assert r.returncode == 1
-    assert "RULES FAIL x: applies-to names nobody" in r.stdout
-
-
-def test_validate_rejects_a_kind_with_no_enforcement_point(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": _rule("x", "vibes", "owner")})
-    r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
-    assert r.returncode == 1
-    assert "RULES FAIL x: kind vibes" in r.stdout
-
-
-def test_validate_rejects_a_missing_check_script(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": _rule("x", "test-removal", "orchestrator", check="x.sh")})
-    r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
-    assert r.returncode == 1
-    assert "RULES FAIL x: check x.sh" in r.stdout
-
-
-def test_validate_rejects_a_test_removal_rule_without_a_check(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": _rule("x", "test-removal", "orchestrator")})
-    r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
-    assert r.returncode == 1
-    assert "RULES FAIL x: test-removal needs a check" in r.stdout
-
-
-def test_validate_rejects_a_missing_field(run_script, repo, tmp_path):
-    d = _rules_copy(tmp_path, {"x.md": "---\nname: x\nkind: practice\n---\n\nBody.\n"})
-    r = run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
-    assert r.returncode == 1
-    assert "RULES FAIL x: missing applies-to" in r.stdout
+    assert fail in r.stdout
 
 
 def test_every_agent_a_rule_can_name_loads_its_rules_at_start():
@@ -145,34 +130,50 @@ def _module_and_test(repo: Path) -> str:
     }, "base: module and its test")
 
 
-def test_deleting_a_test_with_the_module_it_tests_is_explained_by_code_deleted(run_script, repo):
+def _claims(tmp_path: Path, text: str) -> str:
+    p = tmp_path / "claims.txt"
+    p.write_text(text, encoding="utf-8")
+    return str(p)
+
+
+@pytest.mark.slow
+def test_deleting_a_test_with_its_module_is_explained_and_claims_are_checked(
+    run_script, repo, tmp_path
+):
+    """One `delete safe` commit: code-deleted explains it; no rules, a wrong or missing claim fail."""
     base = _module_and_test(repo)
     head = _commit(repo, {"safe/cli.py": None, "tests/test_safe_cli.py": None}, "delete safe")
+
     r = _weak(run_script, repo, base, head)
     assert r.returncode == 0, r.stdout
     assert "tests/test_safe_cli.py::test_main  code-deleted" in r.stdout
 
+    empty = tmp_path / "none"
+    empty.mkdir()
+    assert _weak(run_script, repo, base, head, env={"PAD_RULES_DIR": str(empty)}).returncode == 1
 
-def test_a_moved_module_does_not_explain_its_deleted_test(run_script, repo):
-    base = _module_and_test(repo)
+    claims = _claims(tmp_path, "tests/test_safe_cli.py::test_main | code-deleted | safe/ is gone\n")
+    r = _weak(run_script, repo, base, head, "--claims", claims)
+    assert r.returncode == 0, r.stdout
+
+    for text in ("tests/test_safe_cli.py::test_main | ported-from | moved\n", ""):
+        r = _weak(run_script, repo, base, head, "--claims", _claims(tmp_path, text))
+        assert r.returncode == 3, (text, r.stdout)
+        assert "MISMATCH tests/test_safe_cli.py::test_main" in r.stdout
+
+
+def _moved_module(repo: Path) -> str:
     (repo / "lab").mkdir()
     git("mv", "safe/cli.py", "lab/cli.py", cwd=repo)
-    head = _commit(repo, {"tests/test_safe_cli.py": None}, "move safe, drop its test")
-    r = _weak(run_script, repo, base, head)
-    assert r.returncode == 1
-    assert "removed tests:" in r.stdout and "tests/test_safe_cli.py::test_main" in r.stdout
+    return _commit(repo, {"tests/test_safe_cli.py": None}, "move safe, drop its test")
 
 
-def test_a_deleted_test_whose_module_stays_is_not_explained(run_script, repo):
-    base = _module_and_test(repo)
-    head = _commit(repo, {"tests/test_safe_cli.py": None}, "drop the test only")
-    r = _weak(run_script, repo, base, head)
-    assert r.returncode == 1
+def _test_only_dropped(repo: Path) -> str:
+    return _commit(repo, {"tests/test_safe_cli.py": None}, "drop the test only")
 
 
-def test_a_ported_from_marker_explains_the_removed_test(run_script, repo):
-    base = _module_and_test(repo)
-    head = _commit(repo, {
+def _ported(repo: Path) -> str:
+    return _commit(repo, {
         "tests/test_safe_cli.py": None,
         "tests/lab/test_cli.py": (
             "from safe.cli import main\n\n\n"
@@ -180,58 +181,31 @@ def test_a_ported_from_marker_explains_the_removed_test(run_script, repo):
             "def test_lab_main():\n    assert main() == 0\n"
         ),
     }, "port the test")
-    r = _weak(run_script, repo, base, head)
-    assert r.returncode == 0, r.stdout
-    assert "tests/test_safe_cli.py::test_main  ported-from" in r.stdout
 
 
-def test_a_test_re_added_under_its_name_still_passes(run_script, repo):
-    base = _module_and_test(repo)
-    head = _commit(repo, {
+def _readded(repo: Path) -> str:
+    return _commit(repo, {
         "tests/test_safe_cli.py": None,
         "tests/test_cli_moved.py": "from safe.cli import main\n\n\ndef test_main():\n    assert main() == 0\n",
     }, "move the test")
-    assert _weak(run_script, repo, base, head).returncode == 0
 
 
-def test_with_no_removal_rules_every_removal_fails(run_script, repo, tmp_path):
+@pytest.mark.parametrize("change, code, needles", [
+    pytest.param(_moved_module, 1, ("removed tests:", "tests/test_safe_cli.py::test_main"),
+                 id="moved-module-does-not-explain", marks=pytest.mark.slow),
+    pytest.param(_test_only_dropped, 1, (), id="module-stays-not-explained",
+                 marks=pytest.mark.slow),
+    pytest.param(_ported, 0, ("tests/test_safe_cli.py::test_main  ported-from",),
+                 id="ported-from-explains", marks=pytest.mark.slow),
+    pytest.param(_readded, 0, (), id="re-added-under-its-name-passes"),
+])
+def test_a_removed_test_is_explained_only_by_a_rule(run_script, repo, change, code, needles):
     base = _module_and_test(repo)
-    head = _commit(repo, {"safe/cli.py": None, "tests/test_safe_cli.py": None}, "delete safe")
-    empty = tmp_path / "none"
-    empty.mkdir()
-    r = _weak(run_script, repo, base, head, env={"PAD_RULES_DIR": str(empty)})
-    assert r.returncode == 1
-
-
-def _claims(tmp_path: Path, text: str) -> str:
-    p = tmp_path / "claims.txt"
-    p.write_text(text, encoding="utf-8")
-    return str(p)
-
-
-def test_claims_that_match_the_rules_pass(run_script, repo, tmp_path):
-    base = _module_and_test(repo)
-    head = _commit(repo, {"safe/cli.py": None, "tests/test_safe_cli.py": None}, "delete safe")
-    claims = _claims(tmp_path, "tests/test_safe_cli.py::test_main | code-deleted | safe/ is gone\n")
-    r = _weak(run_script, repo, base, head, "--claims", claims)
-    assert r.returncode == 0, r.stdout
-
-
-def test_a_claim_naming_the_wrong_rule_is_a_mismatch(run_script, repo, tmp_path):
-    base = _module_and_test(repo)
-    head = _commit(repo, {"safe/cli.py": None, "tests/test_safe_cli.py": None}, "delete safe")
-    claims = _claims(tmp_path, "tests/test_safe_cli.py::test_main | ported-from | moved\n")
-    r = _weak(run_script, repo, base, head, "--claims", claims)
-    assert r.returncode == 3
-    assert "MISMATCH tests/test_safe_cli.py::test_main" in r.stdout
-
-
-def test_an_unclaimed_removal_is_a_mismatch(run_script, repo, tmp_path):
-    base = _module_and_test(repo)
-    head = _commit(repo, {"safe/cli.py": None, "tests/test_safe_cli.py": None}, "delete safe")
-    r = _weak(run_script, repo, base, head, "--claims", _claims(tmp_path, ""))
-    assert r.returncode == 3
-    assert "MISMATCH tests/test_safe_cli.py::test_main" in r.stdout
+    head = change(repo)
+    r = _weak(run_script, repo, base, head)
+    assert r.returncode == code, r.stdout
+    for needle in needles:
+        assert needle in r.stdout
 
 
 def test_a_todo_in_product_code_is_reported_on_its_own_line(run_script, repo):
@@ -254,44 +228,32 @@ def _submit_with(run_script, repo, worktree, files: dict[str, str]):
     return run_script("task-submit.sh", epic, red, red, "--test-paths", "tests/", cwd=wt)
 
 
-def test_a_fixed_sleep_in_a_test_fails_no_fixed_sleeps(run_script, repo, worktree):
-    r = _submit_with(run_script, repo, worktree, {
-        "tests/test_x.py": "import time\n\n\ndef test_x():\n    time.sleep(2.0)\n    assert False\n",
-    })
-    assert r.returncode == 1
-    assert r.stdout.strip().splitlines()[-1].startswith("SUBMIT FAIL test-authoring: no-fixed-sleeps")
-
-
-def test_a_short_poll_sleep_is_allowed(run_script, repo, worktree):
-    r = _submit_with(run_script, repo, worktree, {
-        "tests/test_x.py": "import time\n\n\ndef test_x():\n    time.sleep(0.05)\n    assert False\n",
-    })
-    assert r.stdout.strip().splitlines()[-1] == "SUBMIT OK", r.stdout
-
-
-def test_a_sleep_in_product_code_is_not_a_test_authoring_matter(run_script, repo, worktree):
-    r = _submit_with(run_script, repo, worktree, {
-        "tests/test_x.py": "def test_x():\n    assert False\n",
-        "src/poll.py": "import time\ntime.sleep(5)\n",
-    })
-    assert r.stdout.strip().splitlines()[-1] == "SUBMIT OK", r.stdout
-
-
-def test_asserting_a_path_is_gone_fails_gone_means_untracked(run_script, repo, worktree):
-    r = _submit_with(run_script, repo, worktree, {
-        "tests/test_x.py": "from pathlib import Path\n\n\ndef test_x():\n    assert not Path('safe').exists()\n",
-    })
-    assert r.returncode == 1
-    assert "gone-means-untracked" in r.stdout.strip().splitlines()[-1]
-
-
-def test_a_platform_skip_fails_platform_neutral(run_script, repo, worktree):
-    r = _submit_with(run_script, repo, worktree, {
-        "tests/test_x.py": (
+@pytest.mark.parametrize("files, verdict", [
+    pytest.param(
+        {"tests/test_x.py": "import time\n\n\ndef test_x():\n    time.sleep(2.0)\n    assert False\n"},
+        "SUBMIT FAIL test-authoring: no-fixed-sleeps", id="fixed-sleep-fails"),
+    pytest.param(
+        {"tests/test_x.py": "import time\n\n\ndef test_x():\n    time.sleep(0.05)\n    assert False\n"},
+        "SUBMIT OK", id="short-poll-sleep-allowed", marks=pytest.mark.slow),
+    pytest.param(
+        {"tests/test_x.py": "def test_x():\n    assert False\n",
+         "src/poll.py": "import time\ntime.sleep(5)\n"},
+        "SUBMIT OK", id="sleep-in-product-code-allowed", marks=pytest.mark.slow),
+    pytest.param(
+        {"tests/test_x.py": "from pathlib import Path\n\n\ndef test_x():\n    assert not Path('safe').exists()\n"},
+        "gone-means-untracked", id="path-gone-fails", marks=pytest.mark.slow),
+    pytest.param(
+        {"tests/test_x.py": (
             "import sys\nimport pytest\n\n\n"
             "@pytest.mark.skipif(sys.platform == 'win32', reason='posix')\n"
-            "def test_x():\n    assert False\n"
-        ),
-    })
-    assert r.returncode == 1
-    assert "platform-neutral" in r.stdout
+            "def test_x():\n    assert False\n")},
+        "platform-neutral", id="platform-skip-fails", marks=pytest.mark.slow),
+])
+def test_test_authoring_rules_judge_the_added_test_lines(run_script, repo, worktree, files, verdict):
+    r = _submit_with(run_script, repo, worktree, files)
+    last = r.stdout.strip().splitlines()[-1]
+    if verdict == "SUBMIT OK":
+        assert last == "SUBMIT OK", r.stdout
+    else:
+        assert r.returncode == 1, r.stdout
+        assert last.startswith("SUBMIT FAIL") and verdict in last, r.stdout

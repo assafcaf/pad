@@ -104,7 +104,8 @@ def test_html_has_the_same_content_with_images_side_by_side(repo, run_script):
     assert "<link" not in html and "<script" not in html
 
 
-def test_second_packet_lists_only_keys_merged_since(repo, run_script):
+@pytest.mark.slow
+def test_next_packet_lists_only_keys_merged_since_and_since_zero_lists_everything(repo, run_script):
     _board(repo, [("E7-T1", "done", "1111111", "-"), ("E7-T2", "doing", "-", "-")])
     _evidence(repo, "E7-T1")
     assert _review(run_script, repo).returncode == 0
@@ -120,17 +121,11 @@ def test_second_packet_lists_only_keys_merged_since(repo, run_script):
     assert "E7-T2" in merged
     assert "E7-T1" not in merged
 
-
-def test_since_zero_lists_everything_again(repo, run_script):
-    _board(repo, [("E7-T1", "done", "1111111", "-")])
-    _evidence(repo, "E7-T1")
-    assert _review(run_script, repo).returncode == 0
-
     r = _review(run_script, repo, "--since", "0")
 
     assert r.returncode == 0, r.stdout + r.stderr
-    merged = _section((_rundir(repo) / "review-2.md").read_text(encoding="utf-8"), "## Merged")
-    assert "E7-T1" in merged
+    merged = _section((_rundir(repo) / "review-3.md").read_text(encoding="utf-8"), "## Merged")
+    assert "E7-T1" in merged and "E7-T2" in merged
 
 
 def test_incomplete_render_pair_is_unverified(repo, run_script):

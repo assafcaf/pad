@@ -16,7 +16,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from conftest import BASH, BIN, git
+
+pytestmark = pytest.mark.slow
 
 SCRIPT = "merge-task.sh"
 KEY = "T-1"
@@ -183,28 +187,17 @@ def _contrast(run_script, repo, worktree, tmp_path, *failing: str):
     assert _runs(counter) == 2, out
 
 
-def test_gate_failing_in_a_test_file_the_task_touched_is_not_rerun(
-    repo, worktree, run_script, tmp_path
+@pytest.mark.parametrize("failing", [
+    ("tests/test_task.py",),
+    ("tests/test_base.py",),
+    ("tests/test_other.py", "tests/test_task.py"),
+    (),
+], ids=["a-test-file-the-task-touched", "a-test-file-importing-a-changed-file",
+        "an-untouched-and-a-task-test-file", "no-test-file-named"])
+def test_gate_failing_in_a_file_the_task_owns_is_not_rerun(
+    repo, worktree, run_script, tmp_path, failing
 ):
-    _contrast(run_script, repo, worktree, tmp_path, "tests/test_task.py")
-
-
-def test_gate_failing_in_a_test_file_that_imports_a_changed_file_is_not_rerun(
-    repo, worktree, run_script, tmp_path
-):
-    _contrast(run_script, repo, worktree, tmp_path, "tests/test_base.py")
-
-
-def test_gate_failing_in_both_an_untouched_and_a_task_test_file_is_not_rerun(
-    repo, worktree, run_script, tmp_path
-):
-    _contrast(run_script, repo, worktree, tmp_path, "tests/test_other.py", "tests/test_task.py")
-
-
-def test_gate_failing_without_naming_any_test_file_is_not_rerun(
-    repo, worktree, run_script, tmp_path
-):
-    _contrast(run_script, repo, worktree, tmp_path)
+    _contrast(run_script, repo, worktree, tmp_path, *failing)
 
 
 # O11 --------------------------------------------------------------------------------------------
@@ -248,7 +241,7 @@ def _base(d: Path, name: str) -> str:
     return f.read_text(encoding="utf-8").strip() if f.exists() else ""
 
 
-def test_two_merges_started_together_both_merge_one_after_the_other(
+def test_two_merges_started_together_merge_in_turn_the_second_gated_on_the_first(
     repo, worktree, tmp_path
 ):
     epic_wt, epic_head, d, res = _start_pair(repo, worktree, tmp_path)
@@ -257,14 +250,6 @@ def test_two_merges_started_together_both_merge_one_after_the_other(
     assert _last(res["a"][0]).startswith("MERGED ") and _last(res["b"][0]).startswith("MERGED "), report
     overlap = d / "overlap"
     assert not overlap.exists(), overlap.read_text(encoding="utf-8") + report
-
-
-def test_two_merges_started_together_the_second_is_gated_on_the_first_ones_merge(
-    repo, worktree, tmp_path
-):
-    epic_wt, epic_head, d, res = _start_pair(repo, worktree, tmp_path)
-    report = "\n".join(f"--- {n} (exit {c})\n{o}" for n, (o, c, _) in res.items())
-    assert res["a"][1] == 0 and res["b"][1] == 0, report
     merged = {n: _last(o).split()[-1] for n, (o, _, _) in res.items()}
     first, second = ("a", "b") if _base(d, "a") == epic_head else ("b", "a")
     assert _base(d, first) == epic_head, report

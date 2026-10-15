@@ -12,6 +12,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 SCRIPT = "merge-task.sh"
@@ -93,7 +95,8 @@ def _assert_untouched(epic_wt: Path, repo: Path, epic_head: str, result) -> None
 # O8 ---------------------------------------------------------------------------------------------
 
 
-def test_green_task_prints_merged_with_the_new_epic_head(repo, worktree, run_script):
+@pytest.mark.slow
+def test_green_task_is_merged_as_one_no_ff_commit_pushed_and_printed(repo, worktree, run_script):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
     r = _merge(run_script, repo, epic_wt, red, head)
@@ -101,28 +104,15 @@ def test_green_task_prints_merged_with_the_new_epic_head(repo, worktree, run_scr
     new_head = git("rev-parse", "HEAD", cwd=epic_wt)
     assert new_head != epic_head
     assert _last(r) == f"MERGED {new_head}"
-
-
-def test_green_task_adds_exactly_one_no_ff_merge_commit(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    _, red, head = _task(repo, worktree, epic_head)
-    r = _merge(run_script, repo, epic_wt, red, head)
-    assert r.returncode == 0, r.stdout + r.stderr
     assert git("rev-list", "--count", "--first-parent", f"{epic_head}..HEAD", cwd=epic_wt) == "1"
     parents = git("log", "-1", "--format=%P", cwd=epic_wt).split()
     assert parents == [epic_head, head]
     assert git("log", "-1", "--format=%s", cwd=epic_wt) == f"Merge {KEY}: {GOAL}"
-
-
-def test_green_task_merge_is_pushed_to_the_epic_branch(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    _, red, head = _task(repo, worktree, epic_head)
-    r = _merge(run_script, repo, epic_wt, red, head)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert _origin_epic(repo) == git("rev-parse", "HEAD", cwd=epic_wt)
+    assert _origin_epic(repo) == new_head
     assert git("status", "--porcelain", cwd=epic_wt) == ""
 
 
+@pytest.mark.slow
 def test_gate_and_lint_run_in_the_epic_worktree_on_the_merged_tree(repo, worktree, run_script, tmp_path):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
@@ -133,6 +123,7 @@ def test_gate_and_lint_run_in_the_epic_worktree_on_the_merged_tree(repo, worktre
     assert seen.read_text(encoding="utf-8") == "BASE = 1\nX = 1\n" * 2
 
 
+@pytest.mark.slow
 def test_setup_runs_before_the_gate_when_given(repo, worktree, run_script, tmp_path):
     """Setup is optional; when the merge changes a manifest it runs before the gate."""
     epic_wt, epic_head = _epic(repo, worktree)
@@ -157,6 +148,7 @@ def test_setup_runs_before_the_gate_when_given(repo, worktree, run_script, tmp_p
     assert order.read_text(encoding="utf-8").split() == ["setup", "gate", "lint"]
 
 
+@pytest.mark.slow
 def test_setup_is_skipped_when_no_manifest_changed(repo, worktree, run_script, tmp_path):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
@@ -169,24 +161,20 @@ def test_setup_is_skipped_when_no_manifest_changed(repo, worktree, run_script, t
 # O9---------------------------------------------------------------------------------------------
 
 
-def test_failing_gate_is_rejected_with_the_failing_output_tail(repo, worktree, run_script):
+@pytest.mark.slow
+def test_failing_gate_is_rejected_with_its_output_tail_and_leaves_the_epic_as_before(
+    repo, worktree, run_script
+):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
     r = _merge(run_script, repo, epic_wt, red, head, gate="echo GATE-TAIL-7f3e && false")
     assert r.returncode == 1, r.stdout + r.stderr
     assert _last(r).startswith(f"REJECTED {KEY}")
     assert "GATE-TAIL-7f3e" in r.stdout
-
-
-def test_failing_gate_leaves_epic_head_and_tree_exactly_as_before(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    _, red, head = _task(repo, worktree, epic_head)
-    r = _merge(run_script, repo, epic_wt, red, head, gate="false")
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r).startswith(f"REJECTED {KEY}")
     _assert_untouched(epic_wt, repo, epic_head, r)
 
 
+@pytest.mark.slow
 def test_gate_failing_on_the_merged_code_is_rejected(repo, worktree, run_script):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head, impl="X = 2\n")
@@ -196,6 +184,7 @@ def test_gate_failing_on_the_merged_code_is_rejected(repo, worktree, run_script)
     _assert_untouched(epic_wt, repo, epic_head, r)
 
 
+@pytest.mark.slow
 def test_failing_lint_is_rejected_and_leaves_epic_untouched(repo, worktree, run_script):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
@@ -206,6 +195,7 @@ def test_failing_lint_is_rejected_and_leaves_epic_untouched(repo, worktree, run_
     _assert_untouched(epic_wt, repo, epic_head, r)
 
 
+@pytest.mark.slow
 def test_conflicting_task_prints_conflict_with_paths_and_aborts(repo, worktree, run_script):
     """A task cut from an earlier epic head, while another task changed the same file."""
     epic_wt, first = _epic(repo, worktree)
@@ -235,6 +225,7 @@ def test_dirty_epic_worktree_is_an_infrastructure_failure_and_keeps_the_change(
     assert not _merge_in_progress(epic_wt)
 
 
+@pytest.mark.slow
 def test_failed_push_is_an_infrastructure_failure(repo, worktree, run_script):
     epic_wt, epic_head = _epic(repo, worktree)
     _, red, head = _task(repo, worktree, epic_head)
@@ -247,19 +238,8 @@ def test_failed_push_is_an_infrastructure_failure(repo, worktree, run_script):
 # O12 --------------------------------------------------------------------------------------------
 
 
-def test_task_failing_submission_is_rejected_with_its_reason(repo, worktree, run_script):
-    epic_wt, epic_head = _epic(repo, worktree)
-    twt, red, _ = _task(repo, worktree, epic_head)
-    head = _commit(
-        twt, {"tests/test_new.py": "def test_new():\n    assert True\n"}, f"feat({KEY}): edit test"
-    )
-    r = _merge(run_script, repo, epic_wt, red, head)
-    assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r).startswith(f"REJECTED {KEY}:")
-    assert "test-changed-after-red" in _last(r)
-
-
-def test_task_failing_submission_never_touches_the_tree_or_runs_the_gate(
+@pytest.mark.slow
+def test_task_failing_submission_is_rejected_with_its_reason_before_the_gate_runs(
     repo, worktree, run_script, tmp_path
 ):
     epic_wt, epic_head = _epic(repo, worktree)
@@ -271,6 +251,7 @@ def test_task_failing_submission_never_touches_the_tree_or_runs_the_gate(
     r = _merge(run_script, repo, epic_wt, red, head, gate=f'touch "{ran.as_posix()}"')
     assert r.returncode == 1, r.stdout + r.stderr
     assert _last(r).startswith(f"REJECTED {KEY}:")
+    assert "test-changed-after-red" in _last(r)
     assert not ran.exists()
     _assert_untouched(epic_wt, repo, epic_head, r)
 

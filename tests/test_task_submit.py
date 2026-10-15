@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 TESTS = "tests"
@@ -44,6 +46,7 @@ def _red(wt: Path) -> str:
     )
 
 
+@pytest.mark.slow
 def test_clean_branch_is_submitted_ok(repo, worktree, run_script):
     epic = _epic(repo)
     wt = _branch(repo, worktree, "t-clean", epic)
@@ -63,6 +66,7 @@ def test_sha_that_is_not_a_commit_fails_not_a_commit(repo, worktree, run_script)
     assert _last(r).startswith("SUBMIT FAIL not-a-commit:")
 
 
+@pytest.mark.slow
 def test_test_file_changed_after_red_fails(repo, worktree, run_script):
     epic = _epic(repo)
     wt = _branch(repo, worktree, "t-changed", epic)
@@ -75,6 +79,7 @@ def test_test_file_changed_after_red_fails(repo, worktree, run_script):
     assert _last(r).startswith("SUBMIT FAIL test-changed-after-red:")
 
 
+@pytest.mark.slow
 def test_red_commit_after_a_code_commit_fails(repo, worktree, run_script):
     epic = _epic(repo)
     wt = _branch(repo, worktree, "t-order", epic)
@@ -85,25 +90,19 @@ def test_red_commit_after_a_code_commit_fails(repo, worktree, run_script):
     assert _last(r).startswith("SUBMIT FAIL red-after-code:")
 
 
-def test_weakened_test_fails(repo, worktree, run_script):
+@pytest.mark.slow
+@pytest.mark.parametrize("old_test, code_commit", [
+    ("import pytest\n\n@pytest.mark." + "skip\ndef test_old():\n    assert True\n", True),
+    ("X = 1\n", False),
+], ids=["skipped", "removed"])
+def test_weakened_or_removed_test_fails_weakened_tests(
+    repo, worktree, run_script, old_test, code_commit
+):
     epic = _epic(repo)
     wt = _branch(repo, worktree, "t-weak", epic)
-    red = _commit(
-        wt,
-        {"tests/test_old.py": "import pytest\n\n@pytest.mark." + "skip\ndef test_old():\n    assert True\n"},
-        "test(T-1): o1 [red]",
-    )
-    head = _commit(wt, {"src/impl.py": "X = 1\n"}, "feat(T-1): impl")
+    red = _commit(wt, {"tests/test_old.py": old_test}, "test(T-1): o1 [red]")
+    head = _commit(wt, {"src/impl.py": "X = 1\n"}, "feat(T-1): impl") if code_commit else red
     r = _submit(run_script, wt, epic, red, head)
-    assert r.returncode == 1
-    assert _last(r).startswith("SUBMIT FAIL weakened-tests:")
-
-
-def test_removed_test_fails_weakened_tests(repo, worktree, run_script):
-    epic = _epic(repo)
-    wt = _branch(repo, worktree, "t-removed", epic)
-    red = _commit(wt, {"tests/test_old.py": "X = 1\n"}, "test(T-1): o1 [red]")
-    r = _submit(run_script, wt, epic, red, red)
     assert r.returncode == 1
     assert _last(r).startswith("SUBMIT FAIL weakened-tests:")
 

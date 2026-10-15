@@ -46,33 +46,15 @@ def test_status_from_linked_worktree_updates_main_checkout_ticket(
     text = _read(ticket)
     assert re.search(r"^status: doing\s*$", text, re.M)
     assert "status: todo" not in text
+    # the rest of the ticket is untouched
+    for line in ("key: E1-T4", "title: ledger.sh", "blocked_by: [E1-T1]",
+                 "labels: [agent-planned]", "## Goal", "Something."):
+        assert line in text
     log = text.split("## Log\n", 1)[1].splitlines()
     assert log[0] == "- 2026-09-01: created"
     assert len(log) == 2
     assert re.fullmatch(r"- \d{4}-\d{2}-\d{2}: picked up", log[1])
     assert not (wt / ".work").exists()
-
-
-def test_status_change_leaves_rest_of_ticket_untouched(repo, ledger, run_script):
-    ticket = _write(ledger / "E1-T4.md", TICKET + "\n## Log\n- 2026-09-01: created\n")
-    r = run_script("ledger.sh", "E1-T4", "status", "review", "ready", cwd=repo)
-    assert r.returncode == 0, r.stderr
-    text = _read(ticket)
-    for line in ("key: E1-T4", "title: ledger.sh", "blocked_by: [E1-T1]",
-                 "labels: [agent-planned]", "## Goal", "Something."):
-        assert line in text
-    assert re.search(r"^status: review\s*$", text, re.M)
-
-
-def test_status_creates_log_heading_when_missing(repo, ledger, run_script):
-    ticket = _write(ledger / "E1-T4.md", TICKET)
-    r = run_script("ledger.sh", "E1-T4", "status", "done", "merged", cwd=repo)
-    assert r.returncode == 0, r.stderr
-    text = _read(ticket)
-    assert text.count("## Log") == 1
-    log = text.split("## Log", 1)[1].strip().splitlines()
-    assert len(log) == 1
-    assert re.fullmatch(r"- \d{4}-\d{2}-\d{2}: merged", log[0])
 
 
 def test_comment_appends_log_line_and_keeps_status(repo, worktree, ledger, run_script):
@@ -88,12 +70,20 @@ def test_comment_appends_log_line_and_keeps_status(repo, worktree, ledger, run_s
     assert re.fullmatch(r"- \d{4}-\d{2}-\d{2}: red proven", log[1])
 
 
-def test_two_updates_append_two_log_lines_in_order(repo, ledger, run_script):
+def test_first_update_creates_the_log_heading_and_updates_append_in_order(repo, ledger, run_script):
     ticket = _write(ledger / "E1-T4.md", TICKET)
-    run_script("ledger.sh", "E1-T4", "status", "doing", "first", cwd=repo)
+    r = run_script("ledger.sh", "E1-T4", "status", "done", "first", cwd=repo)
+    assert r.returncode == 0, r.stderr
+    text = _read(ticket)
+    assert re.search(r"^status: done\s*$", text, re.M)
+    log = text.split("## Log", 1)[1].strip().splitlines()
+    assert len(log) == 1
+    assert re.fullmatch(r"- \d{4}-\d{2}-\d{2}: first", log[0])
     r = run_script("ledger.sh", "E1-T4", "comment", "second", cwd=repo)
     assert r.returncode == 0, r.stderr
-    log = _read(ticket).split("## Log", 1)[1].strip().splitlines()
+    text = _read(ticket)
+    assert text.count("## Log") == 1
+    log = text.split("## Log", 1)[1].strip().splitlines()
     assert len(log) == 2
     assert log[0].endswith(": first") and log[1].endswith(": second")
 

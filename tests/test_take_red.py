@@ -13,6 +13,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 CONFIG = "claude/workflow/config.example.md"
@@ -162,27 +164,23 @@ def test_o3_take_red_puts_the_designers_own_red_commit_on_the_owner_branch(
     assert git("rev-parse", "HEAD", cwd=code_wt) == red
 
 
-def test_o3_after_merge_the_test_designer_branch_deletes_with_branch_d(
-    payload_text, run_script, repo, worktree
+@pytest.mark.slow
+@pytest.mark.parametrize("flow", ["first-red", "follow-up-red"])
+def test_o3_after_merge_the_designer_and_owner_branches_delete_with_branch_d(
+    payload_text, run_script, repo, worktree, flow
 ):
-    epic_wt, tests_wt, code_wt, _ = _first_red_task(payload_text, run_script, repo, worktree)
-    result = _clean_up(payload_text, epic_wt, tests_wt, code_wt)[TESTS_BRANCH]
-    assert result.returncode == 0, result.stderr
-    assert TESTS_BRANCH not in _branches(repo)
-
-
-def test_o3_after_merge_the_owner_branch_deletes_with_branch_d(
-    payload_text, run_script, repo, worktree
-):
-    epic_wt, tests_wt, code_wt, _ = _first_red_task(payload_text, run_script, repo, worktree)
-    result = _clean_up(payload_text, epic_wt, tests_wt, code_wt)[CODE_BRANCH]
-    assert result.returncode == 0, result.stderr
-    assert CODE_BRANCH not in _branches(repo)
+    task = _first_red_task if flow == "first-red" else _follow_up_red_task
+    epic_wt, tests_wt, code_wt, _ = task(payload_text, run_script, repo, worktree)
+    results = _clean_up(payload_text, epic_wt, tests_wt, code_wt)
+    for branch in (TESTS_BRANCH, CODE_BRANCH):
+        assert results[branch].returncode == 0, (branch, results[branch].stderr)
+        assert branch not in _branches(repo)
 
 
 # --- follow-up red, rebased in with rebase-red ---
 
 
+@pytest.mark.slow
 def test_o3_follow_up_red_rebase_puts_the_code_on_top_of_the_fixed_red(
     payload_text, repo, worktree
 ):
@@ -199,21 +197,3 @@ def test_o3_follow_up_red_rebase_puts_the_code_on_top_of_the_fixed_red(
     assert again.returncode == 0, again.stderr
     assert git("rev-parse", "HEAD~1", cwd=code_wt) == fixed
     assert git("rev-parse", "HEAD~2", cwd=code_wt) == red
-
-
-def test_o3_after_a_follow_up_red_the_test_designer_branch_deletes_with_branch_d(
-    payload_text, run_script, repo, worktree
-):
-    epic_wt, tests_wt, code_wt, _ = _follow_up_red_task(payload_text, run_script, repo, worktree)
-    result = _clean_up(payload_text, epic_wt, tests_wt, code_wt)[TESTS_BRANCH]
-    assert result.returncode == 0, result.stderr
-    assert TESTS_BRANCH not in _branches(repo)
-
-
-def test_o3_after_a_follow_up_red_the_owner_branch_deletes_with_branch_d(
-    payload_text, run_script, repo, worktree
-):
-    epic_wt, tests_wt, code_wt, _ = _follow_up_red_task(payload_text, run_script, repo, worktree)
-    result = _clean_up(payload_text, epic_wt, tests_wt, code_wt)[CODE_BRANCH]
-    assert result.returncode == 0, result.stderr
-    assert CODE_BRANCH not in _branches(repo)

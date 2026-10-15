@@ -112,6 +112,7 @@ def test_github_failure_is_ledger_fail(repo, stubs, run_script):
 
 # --- jira --------------------------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_jira_done_takes_the_transition_to_the_configured_name(repo, stubs, run_script):
     env, log = stubs
     _configure(repo, "jira")

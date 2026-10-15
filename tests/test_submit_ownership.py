@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 
@@ -59,70 +61,48 @@ def _last(r) -> str:
     return r.stdout.strip().splitlines()[-1]
 
 
-def test_changes_inside_owns_and_touches_pass(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-ok")
-    head = _commit(wt, {"src/feature/a.py": "X = 1\n", "src/registry.py": "A = 1\nC = 2\n"}, "feat")
-    t = _ticket(tmp_path, ["src/feature/"], ["src/registry.py"])
+NO_TICKET = None
+CASES = {
+    # id: (changed files, Owns, Touches, exit code or None, last line or its prefix)
+    "changes-inside-owns-and-touches-pass": (
+        {"src/feature/a.py": "X = 1\n", "src/registry.py": "A = 1\nC = 2\n"},
+        ["src/feature/"], ["src/registry.py"], 0, "SUBMIT OK"),
+    "path-outside-owns-fails": (
+        {"src/feature/a.py": "X = 1\n", "src/other.py": "B = 2\n"},
+        ["src/feature"], [], 1, "SUBMIT FAIL ownership: src/other.py"),
+    "dir-prefix-is-not-a-dir-match": (
+        {"src/featurex/a.py": "X = 1\n"},
+        ["src/feature"], [], None, "SUBMIT FAIL ownership: src/featurex/a.py"),
+    "touches-losing-a-line-fails": (
+        {"src/registry.py": "C = 2\n"},
+        ["src/feature"], ["src/registry.py"], 1,
+        "SUBMIT FAIL ownership: src/registry.py (Touches is append-only)"),
+    "owned-file-may-be-rewritten-or-deleted": (
+        {"src/registry.py": None, "src/other.py": "rewritten\n"},
+        ["src/registry.py", "src/other.py"], [], 0, None),
+    "red-commit-tests-count-as-owned": (
+        {"src/feature/a.py": "X = 1\n"}, ["src/feature"], [], 0, None),
+    "existing-rules-still-report-first": (
+        {"tests/test_new.py": "def test_new():\n    assert True\n", "zzz.py": "1\n"},
+        ["src"], [], None, "SUBMIT FAIL test-changed-after-red:"),
+    "without-ticket-no-ownership-check": (
+        {"anywhere/x.py": "1\n"}, NO_TICKET, [], None, "SUBMIT OK"),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("files, owns, touches, code, last", list(CASES.values()), ids=list(CASES))
+def test_ownership(repo, worktree, run_script, tmp_path, files, owns, touches, code, last):
+    epic, wt, red = _setup(repo, worktree, "own")
+    head = _commit(wt, files, "feat")
+    t = None if owns is NO_TICKET else _ticket(tmp_path, owns, touches)
     r = _submit(run_script, wt, epic, red, head, t)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert _last(r) == "SUBMIT OK"
-
-
-def test_path_outside_owns_fails(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-out")
-    head = _commit(wt, {"src/feature/a.py": "X = 1\n", "src/other.py": "B = 2\n"}, "feat")
-    t = _ticket(tmp_path, ["src/feature"], [])
-    r = _submit(run_script, wt, epic, red, head, t)
-    assert r.returncode == 1
-    assert _last(r) == "SUBMIT FAIL ownership: src/other.py"
-
-
-def test_dir_prefix_is_not_a_dir_match(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-prefix")
-    head = _commit(wt, {"src/featurex/a.py": "X = 1\n"}, "feat")
-    t = _ticket(tmp_path, ["src/feature"], [])
-    r = _submit(run_script, wt, epic, red, head, t)
-    assert _last(r) == "SUBMIT FAIL ownership: src/featurex/a.py"
-
-
-def test_touches_losing_a_line_fails(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-touch")
-    head = _commit(wt, {"src/registry.py": "C = 2\n"}, "feat")
-    t = _ticket(tmp_path, ["src/feature"], ["src/registry.py"])
-    r = _submit(run_script, wt, epic, red, head, t)
-    assert r.returncode == 1
-    assert _last(r) == "SUBMIT FAIL ownership: src/registry.py (Touches is append-only)"
-
-
-def test_owned_file_may_be_rewritten_or_deleted(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-rewrite")
-    head = _commit(wt, {"src/registry.py": None, "src/other.py": "rewritten\n"}, "feat")
-    t = _ticket(tmp_path, ["src/registry.py", "src/other.py"], [])
-    r = _submit(run_script, wt, epic, red, head, t)
-    assert r.returncode == 0, r.stdout
-
-
-def test_red_commit_tests_count_as_owned(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-red")
-    head = _commit(wt, {"src/feature/a.py": "X = 1\n"}, "feat")
-    t = _ticket(tmp_path, ["src/feature"], [])
-    r = _submit(run_script, wt, epic, red, head, t)
-    assert r.returncode == 0, r.stdout
-
-
-def test_existing_rules_still_report_first(repo, worktree, run_script, tmp_path):
-    epic, wt, red = _setup(repo, worktree, "own-order")
-    head = _commit(wt, {"tests/test_new.py": "def test_new():\n    assert True\n", "zzz.py": "1\n"}, "feat")
-    t = _ticket(tmp_path, ["src"], [])
-    r = _submit(run_script, wt, epic, red, head, t)
-    assert _last(r).startswith("SUBMIT FAIL test-changed-after-red:")
-
-
-def test_without_ticket_no_ownership_check(repo, worktree, run_script):
-    epic, wt, red = _setup(repo, worktree, "own-none")
-    head = _commit(wt, {"anywhere/x.py": "1\n"}, "feat")
-    r = _submit(run_script, wt, epic, red, head)
-    assert _last(r) == "SUBMIT OK"
+    if code is not None:
+        assert r.returncode == code, r.stdout + r.stderr
+    if last is not None:
+        assert _last(r).startswith(last), r.stdout
+        if not last.endswith(":"):
+            assert _last(r) == last, r.stdout
 
 
 def test_missing_ticket_file_is_usage(repo, worktree, run_script, tmp_path):

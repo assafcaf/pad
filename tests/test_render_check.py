@@ -91,44 +91,26 @@ def test_picks_the_named_surface(repo, run_script):
     assert out.read_bytes() == b"web"
 
 
-def test_nonzero_exit_fails(repo, run_script):
-    _config(repo, [("web", "printf x > {out}; exit 3")])
-
-    r, _ = _render(run_script, repo)
-
-    assert r.returncode == 1
-    assert _last(r).startswith("RENDER FAIL web: ")
-    assert "3" in _last(r)
-
-
-def test_missing_output_fails(repo, run_script):
-    _config(repo, [("web", "true")])
-
-    r, _ = _render(run_script, repo)
-
-    assert r.returncode == 1
-    assert _last(r).startswith("RENDER FAIL web: ")
-
-
-def test_empty_output_fails(repo, run_script):
-    _config(repo, [("web", ": > {out}")])
-
-    r, _ = _render(run_script, repo)
-
-    assert r.returncode == 1
-    assert _last(r).startswith("RENDER FAIL web: ")
-
-
-def test_a_stale_output_from_before_does_not_count(repo, run_script):
-    _config(repo, [("web", "true")])
+@pytest.mark.parametrize("cmd, surface, stale, needle", [
+    ("printf x > {out}; exit 3", "web", False, "3"),
+    ("true", "web", False, ""),
+    (": > {out}", "web", False, ""),
+    ("true", "web", True, ""),
+    (WRITE, "mobile", False, ""),
+], ids=["nonzero-exit", "missing-output", "empty-output", "stale-output-does-not-count",
+        "unknown-surface"])
+def test_a_render_that_produces_no_fresh_file_fails(repo, run_script, cmd, surface, stale, needle):
+    _config(repo, [("web", cmd)])
     out = repo.parent / "shots" / "home.png"
-    out.parent.mkdir(parents=True)
-    out.write_bytes(b"old")
+    if stale:
+        out.parent.mkdir(parents=True)
+        out.write_bytes(b"old")
 
-    r, _ = _render(run_script, repo, out=out)
+    r, _ = _render(run_script, repo, surface=surface, out=out)
 
     assert r.returncode == 1
-    assert _last(r).startswith("RENDER FAIL web: ")
+    assert _last(r).startswith(f"RENDER FAIL {surface}: ")
+    assert needle in _last(r)
 
 
 def test_no_render_command_is_none(repo, run_script):
@@ -149,15 +131,6 @@ def test_no_render_column_is_none(repo, run_script):
 
     assert r.returncode == 1
     assert _last(r) == "RENDER NONE web"
-
-
-def test_unknown_surface_fails(repo, run_script):
-    _config(repo, [("web", WRITE)])
-
-    r, _ = _render(run_script, repo, surface="mobile")
-
-    assert r.returncode == 1
-    assert _last(r).startswith("RENDER FAIL mobile: ")
 
 
 def test_command_output_stays_off_the_last_line(repo, run_script):

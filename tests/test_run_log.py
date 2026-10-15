@@ -1,6 +1,8 @@
 """O6: from any worktree, run-log.sh appends to the main checkout's run log, never rewrites it."""
 from pathlib import Path
 
+import pytest
+
 RUN = "E1-20260929"
 
 
@@ -15,25 +17,20 @@ def test_o6_line_from_main_checkout_lands_in_new_progress_file(repo, run_script)
     assert progress(repo).read_bytes() == b"wave 1 started\n"
 
 
-def test_o6_line_from_linked_worktree_lands_in_main_checkout(repo, worktree, run_script):
+def test_o6_line_from_linked_worktree_or_its_subdirectory_lands_in_main_checkout(
+    repo, worktree, run_script
+):
     wt = worktree(repo, "E1-T2")
-
-    result = run_script("run-log.sh", RUN, "E1-T2 red proven", cwd=wt)
-
-    assert result.returncode == 0, result.stderr
-    assert progress(repo).read_bytes() == b"E1-T2 red proven\n"
-    assert not (wt / ".work").exists()
-
-
-def test_o6_line_from_worktree_subdirectory_lands_in_main_checkout(repo, worktree, run_script):
-    wt = worktree(repo, "E1-T3")
     sub = wt / "deep" / "er"
     sub.mkdir(parents=True)
 
-    result = run_script("run-log.sh", RUN, "from a subdirectory", cwd=sub)
-
+    result = run_script("run-log.sh", RUN, "E1-T2 red proven", cwd=wt)
     assert result.returncode == 0, result.stderr
-    assert progress(repo).read_bytes() == b"from a subdirectory\n"
+    assert progress(repo).read_bytes() == b"E1-T2 red proven\n"
+
+    result = run_script("run-log.sh", RUN, "from a subdirectory", cwd=sub)
+    assert result.returncode == 0, result.stderr
+    assert progress(repo).read_bytes() == b"E1-T2 red proven\nfrom a subdirectory\n"
     assert not (wt / ".work").exists()
     assert not (sub / ".work").exists()
 
@@ -61,6 +58,7 @@ def test_o6_existing_log_content_is_kept_and_line_appended(repo, worktree, run_s
     assert log.read_bytes() == b"# Run E1-20260929\n\nplanner: 3 tasks\nE1-T4 doing\n"
 
 
+@pytest.mark.slow
 def test_o6_lines_from_several_worktrees_accumulate_in_call_order(repo, worktree, run_script):
     a = worktree(repo, "E1-T5")
     b = worktree(repo, "E1-T6")
@@ -89,22 +87,10 @@ def test_o6_line_is_written_literally_without_expansion(repo, run_script):
     assert progress(repo).read_text(encoding="utf-8") == line + "\n"
 
 
-def test_o6_no_arguments_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("run-log.sh", cwd=repo)
-
-    assert result.returncode == 64
-    assert not (repo / ".work").exists()
-
-
-def test_o6_run_id_without_line_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("run-log.sh", RUN, cwd=repo)
-
-    assert result.returncode == 64
-    assert not (repo / ".work").exists()
-
-
-def test_o6_empty_run_id_is_usage_error_and_writes_nothing(repo, run_script):
-    result = run_script("run-log.sh", "", "orphan line", cwd=repo)
+@pytest.mark.parametrize("argv", [(), (RUN,), ("", "orphan line")],
+                         ids=["no-arguments", "run-id-without-line", "empty-run-id"])
+def test_o6_bad_arguments_are_a_usage_error_and_write_nothing(repo, run_script, argv):
+    result = run_script("run-log.sh", *argv, cwd=repo)
 
     assert result.returncode == 64
     assert not (repo / ".work").exists()

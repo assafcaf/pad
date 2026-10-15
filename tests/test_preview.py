@@ -102,7 +102,9 @@ def surface(tmp_path, repo, worktree, run_script):
         _preview(run_script, repo, "stop", wt)
 
 
-def test_start_waits_for_ready_when_and_reports_running(repo, surface, run_script):
+@pytest.mark.slow
+def test_start_status_stop_lifecycle(repo, surface, run_script):
+    """start waits for Ready when and reports running; status follows; stop ends the process."""
     wt, beat, ready = surface
     r = _preview(run_script, repo, "start", wt)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -110,27 +112,16 @@ def test_start_waits_for_ready_when_and_reports_running(repo, surface, run_scrip
     assert ready.exists(), "start returned before Ready when was true"
     assert _pidfile(repo).is_file()
     assert _beating(beat)
-
-
-def test_status_reports_running_then_stopped(repo, surface, run_script):
-    wt, _, _ = surface
-    _preview(run_script, repo, "start", wt)
     r = _preview(run_script, repo, "status", wt)
     assert r.returncode == 0, r.stdout + r.stderr
     assert _last(r) == "PREVIEW running web"
-    _preview(run_script, repo, "stop", wt)
-    r = _preview(run_script, repo, "status", wt)
-    assert _last(r) == "PREVIEW stopped web"
-
-
-def test_stop_ends_the_preview_process_and_removes_the_pid_file(repo, surface, run_script):
-    wt, beat, _ = surface
-    _preview(run_script, repo, "start", wt)
     r = _preview(run_script, repo, "stop", wt)
     assert r.returncode == 0, r.stdout + r.stderr
     assert _last(r) == "PREVIEW stopped web"
     assert not _pidfile(repo).exists()
     assert _still(beat), "the preview kept running after stop"
+    r = _preview(run_script, repo, "status", wt)
+    assert _last(r) == "PREVIEW stopped web"
 
 
 def test_stop_when_nothing_runs_still_exits_zero(repo, surface, run_script):
@@ -140,6 +131,7 @@ def test_stop_when_nothing_runs_still_exits_zero(repo, surface, run_script):
     assert _last(r) == "PREVIEW stopped web"
 
 
+@pytest.mark.slow
 def test_restart_replaces_the_process_and_waits_until_ready(repo, surface, run_script):
     wt, beat, ready = surface
     _preview(run_script, repo, "start", wt)
@@ -183,6 +175,7 @@ def _task_touching(repo, worktree, epic_head: str, files: dict[str, str]):
     return red, head
 
 
+@pytest.mark.slow
 def test_merge_touching_a_restart_trigger_stops_the_preview_before_setup_and_starts_it_after(
         repo, worktree, run_script, tmp_path):
     epic_wt, epic_head, beat = _epic_with_preview(repo, worktree, tmp_path)
@@ -203,6 +196,7 @@ def test_merge_touching_a_restart_trigger_stops_the_preview_before_setup_and_sta
         _preview(run_script, repo, "stop", epic_wt)
 
 
+@pytest.mark.slow
 def test_merge_touching_no_restart_trigger_leaves_the_preview_running_through_setup(
         repo, worktree, run_script, tmp_path):
     epic_wt, epic_head, _ = _epic_with_preview(repo, worktree, tmp_path)
@@ -222,6 +216,7 @@ def test_merge_touching_no_restart_trigger_leaves_the_preview_running_through_se
         _preview(run_script, repo, "stop", epic_wt)
 
 
+@pytest.mark.slow
 def test_merge_does_not_start_a_preview_that_was_not_running(
         repo, worktree, run_script, tmp_path):
     epic_wt, epic_head, _ = _epic_with_preview(repo, worktree, tmp_path)
@@ -256,6 +251,7 @@ def _native_app(beat: Path, ready: Path) -> tuple[str, str]:
     return f"{py} {script.as_posix()}; true", f"test -f {ready.as_posix()}"
 
 
+@pytest.mark.slow
 def test_stop_ends_a_native_grandchild_of_the_preview_shell(tmp_path, repo, worktree, run_script):
     beat, ready = tmp_path / "nbeat", tmp_path / "nready"
     start, ready_when = _native_app(beat, ready)
@@ -271,6 +267,7 @@ def test_stop_ends_a_native_grandchild_of_the_preview_shell(tmp_path, repo, work
         _preview(run_script, repo, "stop", wt)
 
 
+@pytest.mark.slow
 def test_stop_on_windows_kills_the_process_tree_with_taskkill(
     tmp_path, repo, surface, run_script
 ):

@@ -11,6 +11,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 SCRIPT = "check-moves.sh"
 
 MOVES = {
@@ -144,51 +146,43 @@ def assert_only_fails(result, *caps: str):
 
 
 def test_o2_every_capability_allowed_across_three_layers_prints_moves_ok(tmp_path, run_script):
-    assert_ok(Stack(tmp_path).run(run_script))
+    stack = Stack(tmp_path)
+    # The fixture config has a Commands table after Git moves whose commands no rule allows:
+    # rows outside the Git moves section are not checked.
+    assert "python -m pytest" in stack.config.read_text(encoding="utf-8")
+    assert_ok(stack.run(run_script))
 
 
-def test_o2_default_paths_read_user_project_and_local_settings(repo, tmp_path, run_script):
-    home = tmp_path / "home"
-    write(home / ".claude" / "settings.json", settings_json(USER_ALLOW))
-    write(repo / ".claude" / "settings.json", settings_json(PROJECT_ALLOW))
-    write(repo / ".claude" / "settings.local.json", settings_json(LOCAL_ALLOW))
+def _default_layers(repo, home, user_deny=(), local_file=True):
+    write(home / ".claude" / "settings.json", settings_json(USER_ALLOW, deny=list(user_deny)))
+    if local_file:
+        write(repo / ".claude" / "settings.json", settings_json(PROJECT_ALLOW))
+        write(repo / ".claude" / "settings.local.json", settings_json(LOCAL_ALLOW))
+    else:
+        write(repo / ".claude" / "settings.json", settings_json(PROJECT_ALLOW + LOCAL_ALLOW))
     write(repo / ".claude" / "workflow" / "config.md", config_md())
+
+
+@pytest.mark.parametrize("user_deny, local_file, failing", [
+    pytest.param((), True, (), id="reads-user-project-and-local"),
+    pytest.param(("Bash(git push:*)",), True, ("push-epic",), id="deny-in-user-settings-fails",
+                 marks=pytest.mark.slow),
+    pytest.param((), False, (), id="missing-local-file-is-not-an-error", marks=pytest.mark.slow),
+])
+def test_o2_default_paths_read_the_three_settings_layers(
+    repo, tmp_path, run_script, user_deny, local_file, failing
+):
+    home = tmp_path / "home"
+    _default_layers(repo, home, user_deny, local_file)
 
     result = run_script(
         SCRIPT, cwd=repo, env={"HOME": home.as_posix(), "USERPROFILE": str(home)}
     )
 
-    assert_ok(result)
-
-
-def test_o2_default_paths_deny_in_user_settings_fails_capability(repo, tmp_path, run_script):
-    home = tmp_path / "home"
-    write(
-        home / ".claude" / "settings.json",
-        settings_json(USER_ALLOW, deny=["Bash(git push:*)"]),
-    )
-    write(repo / ".claude" / "settings.json", settings_json(PROJECT_ALLOW))
-    write(repo / ".claude" / "settings.local.json", settings_json(LOCAL_ALLOW))
-    write(repo / ".claude" / "workflow" / "config.md", config_md())
-
-    result = run_script(
-        SCRIPT, cwd=repo, env={"HOME": home.as_posix(), "USERPROFILE": str(home)}
-    )
-
-    assert_only_fails(result, "push-epic")
-
-
-def test_o2_default_paths_missing_local_settings_file_is_not_an_error(repo, tmp_path, run_script):
-    home = tmp_path / "home"
-    write(home / ".claude" / "settings.json", settings_json(USER_ALLOW))
-    write(repo / ".claude" / "settings.json", settings_json(PROJECT_ALLOW + LOCAL_ALLOW))
-    write(repo / ".claude" / "workflow" / "config.md", config_md())
-
-    result = run_script(
-        SCRIPT, cwd=repo, env={"HOME": home.as_posix(), "USERPROFILE": str(home)}
-    )
-
-    assert_ok(result)
+    if failing:
+        assert_only_fails(result, *failing)
+    else:
+        assert_ok(result)
 
 
 def test_o2_settings_without_permissions_key_contribute_no_rules(tmp_path, run_script):
@@ -222,27 +216,24 @@ def test_o2_command_matching_no_rule_fails_naming_capability_and_command(tmp_pat
     assert fails(result)["rebase-red"].group("cmd") == "git rebase <sha>"
 
 
-def test_o2_suggested_allow_rule_makes_failing_capability_pass(tmp_path, run_script):
+@pytest.mark.parametrize("layer, rule, cap, cmd", [
+    pytest.param("user", "Bash(git rebase:*)", "rebase-red", "git rebase <sha>",
+                 id="with-placeholder", marks=pytest.mark.slow),
+    pytest.param("project", "Bash(git merge --abort)", "abort-merge", "git merge --abort",
+                 id="without-placeholder"),
+])
+def test_o2_suggested_allow_rule_makes_failing_capability_pass(
+    tmp_path, run_script, layer, rule, cap, cmd
+):
     stack = Stack(tmp_path)
-    stack.user["allow"].remove("Bash(git rebase:*)")
+    getattr(stack, layer)["allow"].remove(rule)
     failing = fails(stack.run(run_script))
-    assert "rebase-red" in failing
-    pattern = failing["rebase-red"].group("pattern")
-    assert pattern.startswith("git rebase")
+    assert cap in failing
+    assert failing[cap].group("cmd") == cmd
+    pattern = failing[cap].group("pattern")
+    assert pattern.startswith(cmd.split(" <")[0])
 
     stack.local["allow"].append(f"Bash({pattern})")
-
-    assert_ok(stack.run(run_script))
-
-
-def test_o2_suggested_rule_for_command_without_placeholder_makes_it_pass(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.project["allow"].remove("Bash(git merge --abort)")
-    failing = fails(stack.run(run_script))
-    assert "abort-merge" in failing
-    assert failing["abort-merge"].group("cmd") == "git merge --abort"
-
-    stack.user["allow"].append(f"Bash({failing['abort-merge'].group('pattern')})")
 
     assert_ok(stack.run(run_script))
 
@@ -271,79 +262,57 @@ def test_o2_empty_settings_fail_every_capability(tmp_path, run_script):
     assert_only_fails(stack.run(run_script), *MOVES)
 
 
-# --- deny ------------------------------------------------------------------------------------
+# --- deny and rule-matching forms ------------------------------------------------------------
+
+# case: (layer, rules removed from its allow, rules added to its allow, rules added to its deny,
+#        capabilities that must fail; none means MOVES OK)
+RULE_CASES = {
+    "deny-in-one-layer-beats-allow-in-another":
+        ("local", [], [], ["Bash(git reset --hard:*)"], ["move-onto-sha"]),
+    "deny-glob-matching-command-fails":
+        ("project", [], [], ["Bash(git * origin *)"], ["push-epic"]),
+    "exact-deny-matching-command-fails":
+        ("user", [], [], ["Bash(git commit --no-edit)"], ["commit-merge"]),
+    "deny-not-matching-command-leaves-it-allowed":
+        ("user", [], [], ["Bash(git push --force:*)", "Bash(git reset --soft:*)",
+                          "Bash(git branch -D:*)", "Bash(git merge --abortx)",
+                          "Read(./secrets/**)"], []),
+    "exact-allow-does-not-cover-more-words":
+        ("local", ["Bash(git branch -d:*)"], ["Bash(git branch -d)"], [],
+         ["delete-merged-branch"]),
+    "prefix-rule-needs-a-word-boundary":
+        ("user", ["Bash(git rebase:*)"], ["Bash(git rebas:*)"], [], ["rebase-red", "rebase-onto-epic-head"]),
+    "prefix-rule-for-another-command-does-not-allow":
+        ("user", ["Bash(git reset --hard:*)"], ["Bash(git reset --soft:*)"], [],
+         ["move-onto-sha"]),
+    "glob-with-star-in-the-middle-allows":
+        ("user", ["Bash(git reset --hard:*)"], ["Bash(git * --hard *)"], [], []),
+    "glob-with-different-literal-does-not-allow":
+        ("local", ["Bash(git push origin *)"], ["Bash(git push upstream *)"], [], ["push-epic"]),
+    "non-bash-rule-naming-the-command-does-not-allow":
+        ("project", ["Bash(git stash push -u)"], ["PowerShell(git stash push -u)"], [],
+         ["set-aside-work"]),
+}
 
 
-def test_o2_deny_in_one_layer_beats_allow_in_another(tmp_path, run_script):
+@pytest.mark.parametrize("case", list(RULE_CASES))
+def test_o2_rule_forms_and_deny(tmp_path, run_script, case):
+    layer, removed, allowed, denied, failing = RULE_CASES[case]
     stack = Stack(tmp_path)
-    stack.local["deny"].append("Bash(git reset --hard:*)")
+    rules = getattr(stack, layer)
+    for rule in removed:
+        rules["allow"].remove(rule)
+    rules["allow"] += allowed
+    rules["deny"] += denied
 
     result = stack.run(run_script)
 
-    assert_only_fails(result, "move-onto-sha")
-    assert result.stdout.count("MOVES FAIL move-onto-sha: git reset --hard <sha>") == 1
-
-
-def test_o2_deny_glob_matching_command_fails_capability(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.project["deny"].append("Bash(git * origin *)")
-
-    assert_only_fails(stack.run(run_script), "push-epic")
-
-
-def test_o2_exact_deny_matching_command_fails_capability(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.user["deny"].append("Bash(git commit --no-edit)")
-
-    assert_only_fails(stack.run(run_script), "commit-merge")
-
-
-def test_o2_deny_rule_not_matching_command_leaves_it_allowed(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.user["deny"] += [
-        "Bash(git push --force:*)",
-        "Bash(git reset --soft:*)",
-        "Bash(git branch -D:*)",
-        "Bash(git merge --abortx)",
-        "Read(./secrets/**)",
-    ]
-
-    assert_ok(stack.run(run_script))
-
-
-# --- rule-matching forms ---------------------------------------------------------------------
-
-
-def test_o2_exact_allow_rule_does_not_cover_command_with_more_words(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.local["allow"].remove("Bash(git branch -d:*)")
-    stack.local["allow"].append("Bash(git branch -d)")
-
-    assert_only_fails(stack.run(run_script), "delete-merged-branch")
-
-
-def test_o2_prefix_rule_needs_a_word_boundary(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.user["allow"].remove("Bash(git rebase:*)")
-    stack.user["allow"].append("Bash(git rebas:*)")
-
-    assert_only_fails(stack.run(run_script), "rebase-red", "rebase-onto-epic-head")
-
-
-def test_o2_prefix_rule_for_another_command_does_not_allow(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.user["allow"].remove("Bash(git reset --hard:*)")
-    stack.user["allow"].append("Bash(git reset --soft:*)")
-
-    assert_only_fails(stack.run(run_script), "move-onto-sha")
-
-
-def test_o2_glob_with_star_in_the_middle_allows_command(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.user["allow"].remove("Bash(git reset --hard:*)")
-    stack.user["allow"].append("Bash(git * --hard *)")
-
-    assert_ok(stack.run(run_script))
+    if failing:
+        assert_only_fails(result, *failing)
+        for cap in failing:
+            assert result.stdout.count(f"MOVES FAIL {cap}: ") == 1, result.stdout
+    else:
+        assert_ok(result)
 
 
 def test_o2_broad_glob_allows_every_git_command(tmp_path, run_script):
@@ -355,31 +324,7 @@ def test_o2_broad_glob_allows_every_git_command(tmp_path, run_script):
     assert_ok(stack.run(run_script))
 
 
-def test_o2_glob_with_different_literal_does_not_allow(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.local["allow"].remove("Bash(git push origin *)")
-    stack.local["allow"].append("Bash(git push upstream *)")
-
-    assert_only_fails(stack.run(run_script), "push-epic")
-
-
-def test_o2_non_bash_rule_naming_the_command_does_not_allow(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.project["allow"].remove("Bash(git stash push -u)")
-    stack.project["allow"].append("PowerShell(git stash push -u)")
-
-    assert_only_fails(stack.run(run_script), "set-aside-work")
-
-
 # --- config ----------------------------------------------------------------------------------
-
-
-def test_o2_rows_outside_git_moves_section_are_not_checked(tmp_path, run_script):
-    # The fixture config has a Commands table after Git moves whose commands no rule allows.
-    stack = Stack(tmp_path)
-    assert "python -m pytest" in stack.config.read_text(encoding="utf-8")
-
-    assert_ok(stack.run(run_script))
 
 
 def test_o2_capability_missing_from_table_fails_naming_it(tmp_path, run_script):
@@ -394,9 +339,13 @@ def test_o2_capability_missing_from_table_fails_naming_it(tmp_path, run_script):
     assert "MOVES OK" not in lines(result)
 
 
-def test_o2_config_without_git_moves_section_fails(tmp_path, run_script):
+@pytest.mark.parametrize("missing", ["section", "file"])
+def test_o2_config_without_git_moves_fails(tmp_path, run_script, missing):
     stack = Stack(tmp_path)
-    write(stack.config, config_md(section=False))
+    if missing == "section":
+        write(stack.config, config_md(section=False))
+    else:
+        stack.config.unlink()
 
     result = stack.run(run_script)
 
@@ -404,16 +353,7 @@ def test_o2_config_without_git_moves_section_fails(tmp_path, run_script):
     assert "MOVES OK" not in result.stdout
 
 
-def test_o2_missing_config_file_fails(tmp_path, run_script):
-    stack = Stack(tmp_path)
-    stack.config.unlink()
-
-    result = stack.run(run_script)
-
-    assert result.returncode == 1, result.stdout + result.stderr
-    assert "MOVES OK" not in result.stdout
-
-
+@pytest.mark.slow
 def test_o2_malformed_settings_file_fails_rather_than_passing(tmp_path, run_script):
     stack = Stack(tmp_path)
     good = stack.run(run_script)

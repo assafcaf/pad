@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 OWNER = "claude/agents/owner.md"
@@ -52,52 +54,37 @@ def test_a_committed_file_under_the_default_dev_path_is_rejected(run_script, rep
     assert _last(r).startswith("SUBMIT FAIL test-changed-after-red") or "dev-tests-stay-out" in _last(r)
 
 
-def test_a_dev_file_in_the_red_commit_is_rejected_by_the_rule(run_script, repo, worktree):
+SCRATCH_CONFIG = "## Commands\n\n| Gate | Command |\n|---|---|\n| Dev tests | `tests/scratch/` |\n"
+RED_TEST = "def test_x():\n    assert False\n"
+DEV_STEP = "def test_step():\n    assert True\n"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("config, files, verdict", [
+    pytest.param(None, {"tests/test_x.py": RED_TEST, "tests/_dev/test_step.py": DEV_STEP},
+                 "SUBMIT FAIL test-authoring: dev-tests-stay-out", id="dev-file-in-red-commit"),
+    pytest.param(None, {"tests/test_x.py": (
+        "import pytest\n\n\n@pytest.mark.dev\ndef test_x():\n    assert False\n")},
+                 "dev-tests-stay-out", id="dev-marked-test"),
+    pytest.param(SCRATCH_CONFIG,
+                 {"tests/test_x.py": RED_TEST, "tests/scratch/test_step.py": DEV_STEP},
+                 "dev-tests-stay-out", id="dev-path-from-config"),
+    pytest.param(None, {"tests/test_x.py": RED_TEST}, "SUBMIT OK", id="permanent-tests-alone-pass"),
+])
+def test_the_red_commit_is_judged_by_dev_tests_stay_out(run_script, repo, worktree, config, files,
+                                                         verdict):
+    if config is not None:
+        _commit(repo, {".claude/workflow/config.md": config}, "config")
     epic = git("rev-parse", "HEAD", cwd=repo)
     wt = worktree(repo, "t-dev-red")
     git("reset", "-q", "--hard", epic, cwd=wt)
-    red = _commit(wt, {
-        "tests/test_x.py": "def test_x():\n    assert False\n",
-        "tests/_dev/test_step.py": "def test_step():\n    assert True\n",
-    }, "test(T-1): o1 [red]")
+    red = _commit(wt, files, "test(T-1): o1 [red]")
     r = run_script("task-submit.sh", epic, red, red, "--test-paths", "tests/", cwd=wt)
-    assert r.returncode == 1
-    assert _last(r).startswith("SUBMIT FAIL test-authoring: dev-tests-stay-out")
-
-
-def test_a_dev_marked_test_is_rejected(run_script, repo, worktree):
-    epic = git("rev-parse", "HEAD", cwd=repo)
-    wt = worktree(repo, "t-dev-mark")
-    git("reset", "-q", "--hard", epic, cwd=wt)
-    red = _commit(wt, {
-        "tests/test_x.py": "import pytest\n\n\n@pytest.mark.dev\ndef test_x():\n    assert False\n",
-    }, "test(T-1): o1 [red]")
-    r = run_script("task-submit.sh", epic, red, red, "--test-paths", "tests/", cwd=wt)
-    assert r.returncode == 1
-    assert "dev-tests-stay-out" in _last(r)
-
-
-def test_the_dev_path_comes_from_the_config(run_script, repo, worktree):
-    config = "## Commands\n\n| Gate | Command |\n|---|---|\n| Dev tests | `tests/scratch/` |\n"
-    _commit(repo, {".claude/workflow/config.md": config}, "config")
-    epic = git("rev-parse", "HEAD", cwd=repo)
-    wt = worktree(repo, "t-dev-cfg")
-    git("reset", "-q", "--hard", epic, cwd=wt)
-    red = _commit(wt, {
-        "tests/test_x.py": "def test_x():\n    assert False\n",
-        "tests/scratch/test_step.py": "def test_step():\n    assert True\n",
-    }, "test(T-1): o1 [red]")
-    r = run_script("task-submit.sh", epic, red, red, "--test-paths", "tests/", cwd=wt)
-    assert "dev-tests-stay-out" in _last(r)
-
-
-def test_permanent_tests_alone_pass(run_script, repo, worktree):
-    epic = git("rev-parse", "HEAD", cwd=repo)
-    wt = worktree(repo, "t-perm")
-    git("reset", "-q", "--hard", epic, cwd=wt)
-    red = _commit(wt, {"tests/test_x.py": "def test_x():\n    assert False\n"}, "test(T-1): o1 [red]")
-    r = run_script("task-submit.sh", epic, red, red, "--test-paths", "tests/", cwd=wt)
-    assert _last(r) == "SUBMIT OK", r.stdout
+    if verdict == "SUBMIT OK":
+        assert _last(r) == "SUBMIT OK", r.stdout
+    else:
+        assert r.returncode == 1, r.stdout
+        assert _last(r).startswith("SUBMIT FAIL") and verdict in _last(r), r.stdout
 
 
 # --- prose --------------------------------------------------------------------------------------
@@ -116,20 +103,15 @@ def _dev_step(text: str) -> str:
     return " ".join(paras[0].split())
 
 
-def test_owner_writes_dev_tests_under_the_dev_path_and_never_commits_one(payload_text):
+def test_owner_dev_step_writes_under_the_dev_path_and_triages_before_submit(payload_text):
     step = _dev_step(payload_text(OWNER))
+    # where dev tests go, and never committed
     assert "under the config's dev path" in step
     assert "Never commit one." in step
-
-
-def test_owner_promotes_or_deletes_every_dev_test_before_it_submits(payload_text):
-    step = _dev_step(payload_text(OWNER))
+    # promote or delete every one before submitting
     assert "Before you submit, promote any that checks behaviour a caller relies on" in step
     assert "delete the rest" in step
-
-
-def test_owner_under_strict_gets_a_promoted_dev_test_as_a_follow_up_red(payload_text):
-    step = _dev_step(payload_text(OWNER))
+    # under strict, a promoted dev test comes back as a follow-up red
     assert "strict: ask `<KEY>-tests` for a follow-up red commit" in step
     assert "the `rebase-red` move" in step
 

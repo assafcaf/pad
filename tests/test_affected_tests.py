@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from conftest import git
 
 
@@ -53,21 +55,13 @@ def test_a_changed_test_file_selects_itself(run_script, repo):
     assert set(last.split()[1:]) == {"tests/test_other.py"}
 
 
-def test_a_conftest_change_forces_the_full_suite(run_script, repo):
-    _, last = _run(run_script, repo, {"tests/conftest.py": "X = 1\n"})
-    assert last.startswith("FULL ") and "conftest.py" in last
-
-
-def test_a_manifest_change_forces_the_full_suite(run_script, repo):
-    _, last = _run(run_script, repo, {"pyproject.toml": "[project]\nname = 'x'\n"})
-    assert last.startswith("FULL ") and "pyproject.toml" in last
-
-
-def test_a_test_helper_change_forces_the_full_suite(run_script, repo):
-    _, last = _run(run_script, repo, {"tests/helpers.py": "def h():\n    return 0\n"})
-    assert last.startswith("FULL ") and "tests/helpers.py" in last
-
-
-def test_a_change_no_test_reaches_runs_the_full_suite(run_script, repo):
-    _, last = _run(run_script, repo, {"docs/notes.md": "notes\n"})
-    assert last.startswith("FULL ")
+@pytest.mark.parametrize("changes, named", [
+    ({"tests/conftest.py": "X = 1\n"}, "conftest.py"),
+    ({"pyproject.toml": "[project]\nname = 'x'\n"}, "pyproject.toml"),
+    ({"tests/helpers.py": "def h():\n    return 0\n"}, "tests/helpers.py"),
+    ({"docs/notes.md": "notes\n"}, ""),
+], ids=["conftest", "manifest", "test-helper", "no-test-reached"])
+def test_a_change_the_selection_cannot_narrow_forces_the_full_suite(run_script, repo, changes,
+                                                                     named):
+    _, last = _run(run_script, repo, changes)
+    assert last.startswith("FULL ") and named in last

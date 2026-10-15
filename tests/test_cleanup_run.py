@@ -116,6 +116,7 @@ def _cleanup(run_script, repo, env, *extra):
     return run_script("cleanup-run.sh", "--run", RUN, "--epic-branch", EPIC, *extra, cwd=repo, env=env)
 
 
+@pytest.mark.slow
 def test_merged_epic_removes_everything_of_the_run(repo, worktree, run_script, gh):
     s = _setup(repo, worktree)
 
@@ -145,11 +146,13 @@ def test_merged_epic_removes_everything_of_the_run(repo, worktree, run_script, g
     assert _last(r) == f"CLEANUP OK {n} removed"
 
 
-def test_unmerged_epic_is_refused_and_nothing_changes(repo, worktree, run_script, gh):
+@pytest.mark.parametrize("gh_state", ["OPEN", "fail"], ids=["pr-open", "gh-failure"])
+def test_unmerged_epic_is_refused_and_nothing_changes(repo, worktree, run_script, gh, gh_state):
+    """A failing `gh` counts as not merged."""
     s = _setup(repo, worktree, merged=False)
     before = _branches(repo)
 
-    r = _cleanup(run_script, repo, gh("OPEN"))
+    r = _cleanup(run_script, repo, gh(gh_state))
 
     assert r.returncode == 1
     assert _last(r).startswith("CLEANUP REFUSED ")
@@ -161,16 +164,7 @@ def test_unmerged_epic_is_refused_and_nothing_changes(repo, worktree, run_script
     assert not any(l.startswith(("REMOVED", "DELETED")) for l in r.stdout.splitlines())
 
 
-def test_gh_failure_counts_as_not_merged(repo, worktree, run_script, gh):
-    s = _setup(repo, worktree, merged=False)
-
-    r = _cleanup(run_script, repo, gh("fail"))
-
-    assert r.returncode == 1
-    assert _last(r).startswith("CLEANUP REFUSED ")
-    assert s["epic"].exists()
-
-
+@pytest.mark.slow
 def test_squash_merge_accepted_through_gh(repo, worktree, run_script, gh):
     s = _setup(repo, worktree, merged=False, squash=True)
 
@@ -182,6 +176,7 @@ def test_squash_merge_accepted_through_gh(repo, worktree, run_script, gh):
     assert EPIC in gh.log.read_text(encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_dirty_worktree_is_skipped_with_its_branch(repo, worktree, run_script, gh):
     s = _setup(repo, worktree)
     (s["t1"] / "notes.txt").write_bytes(b"unsaved\n")       # untracked, not ignored
@@ -201,6 +196,7 @@ def test_dirty_worktree_is_skipped_with_its_branch(repo, worktree, run_script, g
     assert _last(r) == f"CLEANUP PARTIAL {skipped} skipped"
 
 
+@pytest.mark.slow
 def test_ignored_files_do_not_make_a_worktree_dirty(repo, worktree, run_script, gh):
     _commit(repo, ".gitignore", "node_modules/\n")
     git("push", "-q", "origin", "main", cwd=repo)
@@ -214,6 +210,7 @@ def test_ignored_files_do_not_make_a_worktree_dirty(repo, worktree, run_script, 
     assert not s["t1"].exists()
 
 
+@pytest.mark.slow
 def test_dry_run_changes_nothing(repo, worktree, run_script, gh):
     s = _setup(repo, worktree)
     before = _branches(repo)
@@ -236,6 +233,7 @@ def test_dry_run_changes_nothing(repo, worktree, run_script, gh):
     assert (s["common"] / "pad-preview" / "web.pid").exists()
 
 
+@pytest.mark.slow
 def test_absent_remote_branch_is_skipped_quietly(repo, worktree, run_script, gh):
     s = _setup(repo, worktree)
     git("push", "-q", "origin", "--delete", EPIC, cwd=repo)
@@ -247,6 +245,7 @@ def test_absent_remote_branch_is_skipped_quietly(repo, worktree, run_script, gh)
     assert not s["epic"].exists()
 
 
+@pytest.mark.slow
 def test_runs_from_a_linked_worktree(repo, worktree, run_script, gh):
     s = _setup(repo, worktree)
 
