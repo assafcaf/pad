@@ -18,6 +18,7 @@ MOVES = {
     "move-onto-sha": "git reset --hard <sha>",
     "take-red": "git merge --ff-only <sha>",
     "rebase-red": "git rebase <sha>",
+    "rebase-onto-epic-head": "git rebase <sha>",
     "discard-changes": "git checkout -- <path>",
     "set-aside-work": "git stash push -u",
     "try-merge": "git merge --no-ff --no-commit <branch>",
@@ -217,7 +218,7 @@ def test_o2_command_matching_no_rule_fails_naming_capability_and_command(tmp_pat
 
     result = stack.run(run_script)
 
-    assert_only_fails(result, "rebase-red")
+    assert_only_fails(result, "rebase-red", "rebase-onto-epic-head")
     assert fails(result)["rebase-red"].group("cmd") == "git rebase <sha>"
 
 
@@ -326,7 +327,7 @@ def test_o2_prefix_rule_needs_a_word_boundary(tmp_path, run_script):
     stack.user["allow"].remove("Bash(git rebase:*)")
     stack.user["allow"].append("Bash(git rebas:*)")
 
-    assert_only_fails(stack.run(run_script), "rebase-red")
+    assert_only_fails(stack.run(run_script), "rebase-red", "rebase-onto-epic-head")
 
 
 def test_o2_prefix_rule_for_another_command_does_not_allow(tmp_path, run_script):
