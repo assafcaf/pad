@@ -6,7 +6,7 @@ Content tests: the payload's prose is the product, so these read it.
 """
 from __future__ import annotations
 
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 OWNER = "claude/agents/owner.md"
 DOD = "claude/workflow/definition-of-done.md"
 SETTINGS = "claude/settings.example.json"

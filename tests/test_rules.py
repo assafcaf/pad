@@ -127,7 +127,7 @@ def test_every_agent_a_rule_can_name_loads_its_rules_at_start():
     for agent in ("owner", "test-designer",
                   "memory-curator", "knowledge-scanner"):
         assert agent in loaders, agent
-    skill = (PAYLOAD / "claude" / "skills" / "batch-implement" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (PAYLOAD / "claude" / "skills" / "pad-run" / "SKILL.md").read_text(encoding="utf-8")
     assert "rules.sh for orchestrator" in skill
 
 

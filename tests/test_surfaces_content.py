@@ -4,11 +4,12 @@ from __future__ import annotations
 import re
 
 CONFIG = "claude/workflow/config.example.md"
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 
 SURFACE_COLUMNS = [
     "Surface", "Entry point", "Test drives it by", "Person looks by", "Automated check",
     "Preview start", "Ready when", "Restart when changed", "Cannot show",
+    "Reference dir", "Render command", "Viewport",
 ]
 
 
@@ -35,14 +36,14 @@ def test_o32_config_no_longer_has_local_app_section(payload_text):
     assert not re.search(r"^## Local app", payload_text(CONFIG), re.M)
 
 
-def test_o32_review_cadence_defaults_to_after_first_wave_and_lists_the_options(payload_text):
+def test_o32_review_cadence_defaults_to_per_wave_and_lists_the_options(payload_text):
     body = section(payload_text(CONFIG), "Review")
-    assert re.search(r"Cadence:\**\s*`?after-first-wave`?", body)
+    assert re.search(r"Cadence:\**\s*`?per-wave`?", body)
     for option in ("after-first-wave", "per-wave", "end-only", "none"):
         assert option in body
 
 
-def test_o32_batch_implement_skill_no_longer_refers_to_local_app(payload_text):
+def test_o32_pad_run_skill_no_longer_refers_to_local_app(payload_text):
     assert "Local app" not in payload_text(SKILL)
 
 

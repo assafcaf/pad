@@ -9,7 +9,7 @@ import re
 
 from conftest import PAYLOAD
 
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 OWNER = "claude/agents/owner.md"
 RETIRED = (
     "claude/agents/ticket-owner.md",
@@ -51,7 +51,7 @@ def report_row(text: str, start: str) -> str:
 
 def operator_list(text: str) -> str:
     """From 'need the operator' to the end of its paragraph: the list of what needs a person."""
-    m = re.search(r"need the operator.*?(?=\n\s*\n)", text, re.S)
+    m = re.search(r"need\s+the\s+operator.*?(?=\n\s*\n)", text, re.S)
     assert m, "skill no longer lists what needs the operator"
     return m.group(0)
 

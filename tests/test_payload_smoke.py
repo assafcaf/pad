@@ -8,8 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAYLOAD = ROOT / "payload" / "claude"
 
-SKILLS = ["batch-implement", "knowledge-layer", "pad-update", "setup-workflow", "spec", "tickets"]
+SKILLS = [
+    "batch-implement", "knowledge-layer", "pad-run", "pad-update", "setup-workflow", "spec", "tickets",
+]
 AGENTS = [
+    "evaluator",
     "knowledge-scanner",
     "memory-curator",
     "owner",

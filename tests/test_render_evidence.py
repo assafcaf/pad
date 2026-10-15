@@ -142,6 +142,6 @@ def test_o7_unknown_flag_is_usage_error_and_writes_nothing(repo, run_script):
 def test_o7_merge_task_records_finished_tasks_with_the_script(payload_text):
     # The merge writes its own evidence; the orchestrator writes none of it again.
     assert "render-evidence.sh" in payload_text("claude/workflow/bin/merge-task.sh")
-    text = payload_text("claude/skills/batch-implement/SKILL.md")
+    text = payload_text("claude/skills/pad-run/SKILL.md")
     assert "merge-task.sh --run" in text
-    assert "Write none of those again" in text
+    assert "Write none of those again" in " ".join(text.split())

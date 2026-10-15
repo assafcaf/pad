@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 OWNER = "claude/agents/owner.md"
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 
 
 def steps(text: str) -> dict[int, str]:

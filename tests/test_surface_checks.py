@@ -95,8 +95,8 @@ def test_o35_default_config_is_the_installed_workflow_config(run_script, tmp_pat
     assert _last(r.stdout) == "SURFACES FAIL web"
 
 
-def test_o35_epic_gate_step_in_batch_implement_runs_surface_checks(payload_text):
-    text = payload_text("claude/skills/batch-implement/SKILL.md")
+def test_o35_epic_gate_step_in_pad_run_runs_surface_checks(payload_text):
+    text = payload_text("claude/skills/pad-run/SKILL.md")
     start = text.index("## 4. Finish the epic")
     step1 = text[start:text.index("2. **Final review.**", start)]
     assert "surface-checks.sh" in step1

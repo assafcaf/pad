@@ -1,12 +1,12 @@
 """O14 / O16: a question parks one task and the run keeps going; every halt is logged.
 
-Content tests: the batch-implement skill's prose is the product, so these read it.
+Content tests: the pad-run skill's prose is the product, so these read it.
 """
 from __future__ import annotations
 
 import re
 
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 AGENT_MEMORY = "claude/workflow/agent-memory.md"
 
 

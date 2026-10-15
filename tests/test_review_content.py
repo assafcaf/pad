@@ -1,56 +1,67 @@
-"""E1-T22: batch-implement has a Review checkpoints section (O34)."""
+"""O34, retargeted for 0.4.0: /pad-run reviews every wave with the operator (step 3f).
+
+The 0.3.0 "Review checkpoints" section and its fix-<slug> tasks are retired: review.sh builds
+the packet, and feedback becomes new tickets through /tickets (step 3g).
+"""
 from __future__ import annotations
 
 import re
 
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 
 
-def checkpoints(payload_text) -> str:
+def step(payload_text, letter: str, title: str) -> str:
     text = payload_text(SKILL)
-    m = re.search(r"^(#{2,4}) Review checkpoints[ \t]*$", text, re.M)
-    assert m, "no 'Review checkpoints' section"
-    rest = text[m.end():]
-    end = re.search(r"^#{1,%d} \S" % len(m.group(1)), rest, re.M)
-    return rest[: end.start()] if end else rest
+    m = re.search(r"^\*\*%s\. %s[.,]\*\*(.*?)(?=^\*\*[a-z]\. |^## )" % (letter, re.escape(title)),
+                  text, re.M | re.S)
+    assert m, f"no step {letter}. {title}"
+    return m.group(1)
 
 
-def test_o34_section_uses_the_configured_review_cadence(payload_text):
-    body = checkpoints(payload_text)
+def review(payload_text) -> str:
+    return step(payload_text, "f", "Review every wave")
+
+
+def test_o34_review_uses_the_configured_review_cadence(payload_text):
+    body = review(payload_text)
     assert "Cadence" in body
     for option in ("after-first-wave", "per-wave", "end-only", "none"):
         assert option in body
 
 
-def test_o34_packet_is_written_to_review_n_file_in_the_run_dir(payload_text):
-    assert ".work/runs/<id>/review-<n>.md" in checkpoints(payload_text)
+def test_o34_packet_is_built_by_review_sh_into_review_n(payload_text):
+    body = review(payload_text)
+    assert "bash .claude/workflow/bin/review.sh --run <run id>" in body
+    assert "review-<n>.md" in body
 
 
-def test_o34_packet_lists_every_required_part(payload_text):
-    body = checkpoints(payload_text).lower()
-    for part in ("merged since the last", "surfaces", "how to look", "unverified", "operator-run"):
+def test_o34_packet_shows_merges_render_pairs_and_what_is_unverified(payload_text):
+    body = review(payload_text).lower()
+    for part in ("merged keys and shas", "render pairs", "unverified"):
         assert part in body, part
 
 
 def test_o34_operator_is_notified_by_push_notification(payload_text):
-    body = checkpoints(payload_text).lower()
-    assert "notif" in body
-    assert "review packet" in body
+    body = review(payload_text).lower()
+    assert "push notification" in body
+    assert "packet" in body
 
 
-def test_o34_checkpoint_does_not_stop_the_run(payload_text):
-    body = checkpoints(payload_text).lower()
+def test_o34_review_does_not_stop_the_run(payload_text):
+    body = review(payload_text).lower()
     assert re.search(r"without stopping|does not stop|never stop|doesn't stop|not stop", body)
 
 
-def test_o34_each_finding_becomes_a_fix_task_with_its_own_red_test(payload_text):
-    body = checkpoints(payload_text)
-    assert "fix-<slug>" in body
-    assert re.search(r"finding", body, re.I)
-    assert re.search(r"red test", body, re.I)
-    assert re.search(r"same run", body, re.I)
+def test_o34_feedback_becomes_new_tickets_through_tickets(payload_text):
+    body = step(payload_text, "g", "Replan")
+    assert re.search(r"free-text feedback", body)
+    assert "**new tickets**" in body
+    assert "/tickets" in body
+    assert "fix-<slug>" not in payload_text(SKILL)
 
 
-def test_o34_final_review_at_end_of_epic_is_left_unchanged(payload_text):
-    body = checkpoints(payload_text).lower()
-    assert "final review" in body
+def test_o34_final_review_at_end_of_epic_remains(payload_text):
+    text = payload_text(SKILL)
+    finish = text[text.index("## 4. Finish the epic"):]
+    assert "**Final review.**" in finish
+    assert "/code-review <level>" in finish

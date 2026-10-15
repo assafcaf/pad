@@ -5,7 +5,7 @@ Content tests: the payload's prose is the product, so these read it.
 from __future__ import annotations
 
 CONFIG = "claude/workflow/config.example.md"
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 
 
 def test_config_commands_table_has_a_derived_files_row(payload_text):

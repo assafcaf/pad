@@ -9,7 +9,7 @@ import re
 TEMPLATE = "claude/workflow/ticket-template.md"
 TICKETS = "claude/skills/tickets/SKILL.md"
 CONFIG = "claude/workflow/config.example.md"
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 
 
 def _headings(text: str) -> list[str]:

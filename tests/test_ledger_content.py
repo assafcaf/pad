@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 OWNER = "claude/agents/owner.md"
 TRACKER = "claude/agents/tracker.md"
 TEMPLATE = "claude/skills/setup-workflow/tracker-agent-template.md"
@@ -17,12 +17,11 @@ def _frontmatter(text: str) -> dict[str, str]:
     return dict(re.findall(r"^(\w+):\s*(.*)$", block, re.M))
 
 
-def test_o5_batch_implement_never_calls_enter_worktree(payload_text):
-    text = payload_text(SKILL)
-    offending = [
-        line for line in text.splitlines()
-        if "EnterWorktree" in line and not re.search(r"\b(never|not|no|don't)\b", line, re.I)
-    ]
+def test_o5_pad_run_never_calls_enter_worktree(payload_text):
+    text = re.sub(r"\s+", " ", payload_text(SKILL))
+    mentions = [s for s in re.split(r"(?<=[.!?])\s+(?=[A-Z`*])", text) if "EnterWorktree" in s]
+    assert mentions, "skill no longer forbids EnterWorktree"
+    offending = [s for s in mentions if not re.search(r"\b(never|not|no|don't)\b", s, re.I)]
     assert offending == []
 
 

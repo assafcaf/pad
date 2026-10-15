@@ -5,7 +5,7 @@ Content tests: the payload's prose is the product, so these read it.
 from __future__ import annotations
 
 CONFIG = "claude/workflow/config.example.md"
-SKILL = "claude/skills/batch-implement/SKILL.md"
+SKILL = "claude/skills/pad-run/SKILL.md"
 TESTING = "claude/workflow/testing.md"
 
 
