@@ -90,6 +90,7 @@ GITIGNORE = [".work/", ".claude/worktrees/", "CLAUDE.local.md", ".claude/setting
 
 # The `## ` sections of a current config, in the order config.example.md has them.
 SECTIONS = {
+    "Protected paths": "None are configured.\n",
     "Tracker": """- **Adapter:** `local`. Operations are in `.claude/workflow/trackers/local.md`.
 - **Statuses:** todo `To Do`, doing `In Progress`, review `In Review`, done `Done`.
 """,

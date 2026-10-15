@@ -59,16 +59,18 @@ def test_skill_acts_on_the_owners_three_report_lines(payload_text):
 # --- strict discipline: test-designer as a blocking child ---
 
 
-def test_strict_tiers_get_a_test_designer_as_a_blocking_child(payload_text):
+def test_protected_tickets_get_a_test_designer_as_a_blocking_child(payload_text):
     strict = flat(section(payload_text(OWNER), "The strict discipline"))
-    assert "tier is standard or complex" in strict
+    assert "Protected: yes" in strict
+    assert "tier" not in strict
     assert "Dispatch a test-designer as <KEY>-tests, block on it, and take its red commit" in strict
     assert "the tests are read-only to you" in strict
 
 
-def test_small_tickets_tests_are_the_owners_written_first(payload_text):
+def test_unprotected_tickets_tests_are_the_owners_written_first(payload_text):
     strict = flat(section(payload_text(OWNER), "The strict discipline"))
-    assert "A small ticket's tests are yours to write, first, before the code" in strict
+    assert "Everywhere else the tests are yours to write, first, before the code" in strict
+    assert "Never write a PAD-Role: trailer yourself" in strict
 
 
 def test_owner_never_edits_a_test_it_took(payload_text):

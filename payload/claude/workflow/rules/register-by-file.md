@@ -1,7 +1,7 @@
 ---
 name: register-by-file
 kind: practice
-applies-to: owner, test-designer, task-planner
+applies-to: owner, test-designer
 ---
 
 A new entry (a command, a plugin, a task family, a route) goes in a file of its own that the

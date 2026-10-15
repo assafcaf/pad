@@ -1,6 +1,6 @@
 ---
 name: test-designer
-description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the ticket's owner, as a blocking child, when the ticket needs the strict discipline.
+description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the ticket's owner, as a blocking child, when the ticket is protected.
 tools: Read, Edit, Write, Bash, Grep, Glob, SendMessage
 isolation: worktree
 model: sonnet
@@ -49,7 +49,10 @@ summary before it, no recap after it. Every sentence you write is time the next 
    (the typecheck command is in `config.md`; skip it if none is configured).
    Never run the full suite, in any tier: the merge gate runs it. Your stubs must not break an existing test. If one breaks, your stub is wrong, or the
    ticket conflicts with existing behavior: report `BLOCKED`.
-6. **Commit once:** `test(<KEY>): <outcome ids> [red]`. Tests and stubs only, nothing else.
+6. **Commit once:** `test(<KEY>): <outcome ids> [red]`, with the trailer line
+   `PAD-Role: test-designer` at the end of the message (and on every red fix commit too):
+   `merge-task.sh` accepts a protected ticket's red only with it. Tests and stubs only,
+   nothing else.
 7. **Prove your red commit.** Run
    `bash .claude/workflow/bin/verify-red.sh --setup '<setup>' <RED_COMMIT> -- <named tests>`
    on your red commit. Report only after it prints `RED OK`; on anything else, fix the tests

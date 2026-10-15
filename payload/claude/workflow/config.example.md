@@ -36,19 +36,10 @@ in the agent file.
 | Role | Agent | Model | Notes |
 |---|---|---|---|
 | Tracker | `tracker` | `haiku` | The only agent with tracker tools: reads, creates, links. Status writes go through `bin/ledger.sh` |
-| Planning | `task-planner` | `sonnet` | Read-only. Runs once per `/batch-implement` run |
-| Ownership | `owner` | `sonnet` | One per ticket, its own worktree, start to merged: writes the code (and the tests unless strict), proves red, gates, rebases, reports one line |
-| Tests | `test-designer` | `sonnet` | Its own worktree, a blocking child of an owner whose ticket needs the strict discipline. Writes the failing tests and stubs |
+| Ownership | `owner` | `sonnet` | One per ticket, its own worktree, start to merged: writes the code (and the tests unless protected), proves red, gates, rebases, reports one line |
+| Tests | `test-designer` | `sonnet` | Its own worktree, a blocking child of an owner whose ticket is protected. Writes the failing tests and stubs |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 | Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end. Keeps the agents' memory clean; never adds a lesson |
-
-### Tiers
-
-`/tickets` gives every task a tier (`.claude/workflow/ticket-template.md`, "Tiers"). The tier
-decides only who writes the tests: `standard` and `complex` take the strict discipline (the
-owner's `test-designer` writes them, and they are read-only to the owner); `small` lets the
-owner write them first. Models come from the Agents table above, one per agent. A ticket with
-no `## Tier` section is `standard`; one labelled `complex` is `complex`.
 
 **Thinking effort** is set in an agent file's `effort:` field, and a dispatch can't override it.
 The agents inherit the session's effort.
@@ -57,6 +48,18 @@ The agents inherit the session's effort.
 in `.claude/agent-memory/<agent>/MEMORY.md`, committed and loaded on every start. The rules
 are in `.claude/workflow/agent-memory.md`, and `memory-curator` enforces them at the end of
 each epic.
+
+## Protected paths
+
+Where tests are the only oracle — storage, sync, auth, migrations, the data model — a diff
+takes the strict discipline: a `test-designer` writes the tests as the owner's blocking child,
+red is proven, and the tests are read-only to the owner. Everywhere else the owner writes its
+own tests, or none for a visual reference. One glob per line; `/tickets` marks every ticket
+that matches one `Protected: yes`, `plan-check.sh` fails a ticket that matches but says no, and
+`merge-task.sh --protected` rejects a protected diff whose red commit no test-designer wrote.
+None are configured.
+
+<!-- - `src/db/**` -->
 
 ## Tracker updates during a run
 
@@ -68,7 +71,6 @@ scripts"):
 | When | Task | Comment |
 |---|---|---|
 | Wave starts | → doing | run id and epic branch |
-| Red proven (standard, complex) | — | red sha, test count and files. A small task puts it in the done comment |
 | Merged and gates green | → done | at most five lines: merge and red shas, red and green commands with results, files outside the ticket's list. The full evidence is in `.work/runs/<run id>/<KEY>.md` |
 | Gate failed or blocked | stays doing | what failed, and what is needed |
 | Epic finished | epic → review | PR URL |

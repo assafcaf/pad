@@ -124,3 +124,63 @@ def test_merged_with_run_logs_each_rule_explained_removal(repo, worktree, run_sc
     line = f"REMOVALS {KEY}: tests/test_old.py::test_old ported-from"
     assert line in r.stdout
     assert line in (_runs(repo) / "progress.md").read_text(encoding="utf-8")
+
+
+# --- protected paths and ownership ---------------------------------------------------------
+
+def _task_on(repo, worktree, epic_head, path, *, trailer=""):
+    wt = worktree(repo, "ptask")
+    git("reset", "-q", "--hard", epic_head, cwd=wt)
+    (wt / "tests").mkdir(exist_ok=True)
+    (wt / "tests" / "test_db.py").write_bytes(b"def test_db():\n    assert False\n")
+    git("add", "tests/test_db.py", cwd=wt)
+    msg = f"test({KEY}): O1 [red]" + (f"\n\n{trailer}" if trailer else "")
+    git("commit", "-q", "-m", msg, cwd=wt)
+    red = git("rev-parse", "HEAD", cwd=wt)
+    p = wt / path
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"X = 1\n")
+    git("add", path, cwd=wt)
+    git("commit", "-q", "-m", f"feat({KEY}): impl", cwd=wt)
+    return red, git("rev-parse", "HEAD", cwd=wt)
+
+
+def _merge_any(run_script, repo, epic_wt, red, head, extra):
+    return run_script(
+        "merge-task.sh", "--worktree", epic_wt.as_posix(), "--branch", "epic", *extra,
+        "--gate", "true", "--lint", "true", KEY, red, head, GOAL, cwd=repo,
+    )
+
+
+def test_protected_diff_without_a_test_designer_red_is_rejected_needs_strict(repo, worktree, run_script):
+    epic_wt, epic_head = _epic(repo, worktree)
+    red, head = _task_on(repo, worktree, epic_head, "src/db/store.py")
+    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", "src/db/**"))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert _last(r).startswith(f"REJECTED {KEY}: needs-strict (src/db/store.py is a protected path")
+    assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head
+
+
+def test_protected_diff_with_a_test_designer_red_merges(repo, worktree, run_script):
+    epic_wt, epic_head = _epic(repo, worktree)
+    red, head = _task_on(repo, worktree, epic_head, "src/db/store.py", trailer="PAD-Role: test-designer")
+    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", "src/db/**"))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _last(r).startswith("MERGED ")
+
+
+def test_unprotected_diff_needs_no_trailer(repo, worktree, run_script):
+    epic_wt, epic_head = _epic(repo, worktree)
+    red, head = _task_on(repo, worktree, epic_head, "src/ui/page.py")
+    r = _merge_any(run_script, repo, epic_wt, red, head, ("--protected", "src/db/**, src/auth/**"))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_ticket_is_passed_to_task_submit_ownership(repo, worktree, run_script, tmp_path):
+    epic_wt, epic_head = _epic(repo, worktree)
+    red, head = _task_on(repo, worktree, epic_head, "src/ui/page.py")
+    ticket = tmp_path / "E1-T1.md"
+    ticket.write_bytes(b"## Outcome\nx\n\n## Owns\n- src/other/\n\n## Touches\nnone\n")
+    r = _merge_any(run_script, repo, epic_wt, red, head, ("--ticket", ticket.as_posix()))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert _last(r) == f"REJECTED {KEY}: ownership: src/ui/page.py"

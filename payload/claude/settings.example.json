@@ -19,6 +19,7 @@
       "Bash(git commit *)",
       "Bash(git cherry-pick *)",
       "Bash(git merge *)",
+      "Bash(git rebase *)",
       "Bash(git revert *)",
       "Bash(git restore -- .claude/agent-memory)",
       "Bash(git push origin *)",
@@ -29,7 +30,17 @@
       "Bash(bash .claude/workflow/bin/verify-red.sh *)",
       "Bash(bash .claude/workflow/bin/weakened-tests.sh *)",
       "Bash(bash .claude/workflow/bin/rules.sh *)",
-      "Bash(bash .claude/workflow/bin/affected-tests.sh *)"
+      "Bash(bash .claude/workflow/bin/affected-tests.sh *)",
+      "Bash(bash .claude/workflow/bin/task-submit.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-task.sh *)",
+      "Bash(bash .claude/workflow/bin/ledger.sh *)",
+      "Bash(bash .claude/workflow/bin/run-log.sh *)",
+      "Bash(bash .claude/workflow/bin/channel.sh *)",
+      "Bash(bash .claude/workflow/bin/plan-check.sh *)",
+      "Bash(bash .claude/workflow/bin/review.sh *)",
+      "Bash(bash .claude/workflow/bin/render-check.sh *)",
+      "Bash(bash .claude/workflow/bin/run-stats.sh *)",
+      "Bash(bash .claude/workflow/bin/cleanup-run.sh *)"
     ],
     "deny": [
       "Bash(git checkout *)",

@@ -40,6 +40,22 @@ The redesign lands in seven steps. Recorded so far:
    workflow and `--mode workflow` are deleted. Models are one Agents-table column per agent;
    until step 3 the tier only decides the strict discipline.
 
+3. **Tickets are ownership units.** A ticket is valid only if it is ownable (disjoint `Owns`,
+   append-only `Touches`), checkable (it names its reference, or it is a spike that produces
+   one and no product code), finishable by one owner, and owned start to merged. `/tickets`
+   splits by surface or module, never by concern, and lints the plan with `plan-check.sh`
+   (overlaps, hotspots, protected mismatches, the critical path, sweeps) before the operator
+   sees it; `task-planner` is retired. `task-submit.sh --ticket` rejects a write outside the
+   ticket's files. Tiers are gone: ceremony follows what the diff touches. A ticket whose files
+   match the config's `## Protected paths` takes the strict discipline, and
+   `merge-task.sh --protected` rejects a protected diff whose red commit has no
+   `PAD-Role: test-designer` trailer (a guard against honest mistakes, not against a forger).
+4. **The spec is the scope; done is per reference class.** `/spec` names a reference per area
+   (or a spike), the protected paths and the domains, and writes outcomes only where tests are
+   the reference; `/tickets` copies it to the run's `scope.md`. `definition-of-done.md` judges
+   each reference class — visual, contract tests, behaviour tests, reproduction, golden or
+   metric, human — by someone other than the writer.
+
 Open questions from the brief, as settled:
 - (a) The owner's rebase uses `git rebase <sha>`, the form `rebase-red` already needed, under
   its own capability `rebase-onto-epic-head`, so `check-moves.sh` proves it is allowed. Whether

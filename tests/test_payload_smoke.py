@@ -13,7 +13,6 @@ AGENTS = [
     "knowledge-scanner",
     "memory-curator",
     "owner",
-    "task-planner",
     "test-designer",
     "tracker",
 ]

@@ -16,7 +16,6 @@ from pathlib import Path
 SCRIPT = "knowledge-paths.sh"
 SKILL = "claude/skills/knowledge-layer/SKILL.md"
 FORMAT = "claude/skills/knowledge-layer/PROJECT-FORMAT.md"
-PLANNER = "claude/agents/task-planner.md"
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -123,8 +122,6 @@ def test_readers_load_the_repo_level_plus_the_packages_their_files_touch(payload
     assert "plus the package files of every package its task's Files touch" in payload_text(SKILL)
 
 
-def test_planner_reads_every_packages_overlaps(payload_text):
-    assert "every package's `PROJECT.md` Standing overlaps" in payload_text(PLANNER)
 
 
 def test_format_describes_the_package_level(payload_text):

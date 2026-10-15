@@ -136,9 +136,9 @@ Working specs are not committed (`spec_commit: ask` in config).
 Run `/tickets <spec path>` in the same session, so the scope gate and the ticket-list gate are
 one conversation.
 
-The approved spec is the run's `scope.md`. Once `/tickets` has created the epic, set the spec's
-`Tracker:` line and copy it to `.work/runs/<epic>/scope.md` in the main checkout (resolved like
-`run-log.sh`, so it is the same file from any worktree). The scope was frozen at the scope
-gate; the copy changes nothing else in it, and nobody edits it during the run. A change of
+The approved spec is the run's `scope.md`. Once it has created the epic, `/tickets` sets the
+spec's `Tracker:` line and copies it to `.work/runs/<epic>/scope.md` in the main checkout
+(resolved like `run-log.sh`, so it is the same file from any worktree). The scope was frozen at
+the scope gate; the copy changes nothing else in it, and nobody edits it during the run. A change of
 scope is a new `/spec`, not an edit; rulings made during the run go to the brief's
 `## Rulings`.

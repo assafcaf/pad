@@ -6,7 +6,6 @@ from __future__ import annotations
 
 CONFIG = "claude/workflow/config.example.md"
 SKILL = "claude/skills/batch-implement/SKILL.md"
-PLANNER = "claude/agents/task-planner.md"
 
 
 def test_config_commands_table_has_a_derived_files_row(payload_text):
@@ -23,10 +22,9 @@ def test_owner_mode_merge_passes_each_derived_file(payload_text):
     assert '--derived "<path>=<cmd>"' in payload_text(SKILL)
 
 
-def test_planner_gives_a_hotspot_one_owner_per_wave(payload_text):
-    text = payload_text(PLANNER)
-    assert "HOTSPOTS" in text
-    assert "one owner per wave" in text
+def test_plan_check_reports_hotspots_and_tickets_acts_on_them(payload_text):
+    assert "HOTSPOTS" in payload_text("claude/workflow/bin/plan-check.sh")
+    assert "HOTSPOTS" in payload_text("claude/skills/tickets/SKILL.md")
 
 
 def test_owner_checks_it_is_in_its_own_worktree_before_committing(payload_text):

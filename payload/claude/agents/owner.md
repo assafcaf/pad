@@ -1,6 +1,6 @@
 ---
 name: owner
-description: Owns one ticket from start to merged - writes its tests and code (with a test-designer as a blocking child when the strict discipline applies), proves red, gates, submits, rebases onto the epic head and reports one line. Dispatched by /batch-implement, one per ticket.
+description: Owns one ticket from start to merged - writes its tests and code (with a test-designer as a blocking child when the ticket is protected), proves red, gates, submits, rebases onto the epic head and reports one line. Dispatched by /batch-implement, one per ticket.
 tools: Read, Edit, Write, Bash, Grep, Glob, Agent, SendMessage
 isolation: worktree
 model: sonnet
@@ -41,7 +41,7 @@ arrives on its own; while you wait, end your turn.
 
 ## What you read
 
-Your dispatch carries the ticket file's path, the key, the tier, the run id and epic branch,
+Your dispatch carries the ticket file's path, the key, the run id and epic branch,
 the setup, named-tests, typecheck and lint commands, and the config's test paths. Read the
 ticket, `.claude/workflow/definition-of-done.md` and `.claude/workflow/testing.md`. When the
 config's `## Project knowledge` is `Mode: on`, read `CONTEXT.md` and `project.md`'s Invariants
@@ -51,10 +51,15 @@ called by; don't read further to be thorough.
 
 ## The strict discipline
 
-A ticket whose tier is `standard` or `complex` gets independently written tests: the reference
-is tests, so the writer must not author them. Dispatch a `test-designer` as `<KEY>-tests`,
-**block** on it, and take its red commit. From then on the tests are read-only to you. A
-`small` ticket's tests are yours to write, first, before the code.
+A ticket marked `Protected: yes` (its files match the config's `## Protected paths`: storage,
+sync, auth, migrations, the data model) gets independently written tests: there the tests are
+the only oracle, so the writer must not author them. Dispatch a `test-designer` as
+`<KEY>-tests`, **block** on it, and take its red commit. From then on the tests are read-only
+to you. `merge-task.sh --protected` rejects a protected diff whose red commit no test-designer
+wrote (`needs-strict`), so a diff that strays into a protected path takes this route too.
+Never write a `PAD-Role:` trailer yourself: it is the test-designer's mark.
+Everywhere else the tests are yours to write, first, before the code; a visual ticket's
+reference is its mock, judged as `definition-of-done.md` says.
 
 ## Procedure
 
@@ -62,7 +67,7 @@ is tests, so the writer must not author them. Dispatch a `test-designer` as `<KE
    `git merge-base --is-ancestor <epic head> HEAD` passes, run the `move-onto-sha` move with it.
 2. **Red.**
    - Strict: dispatch `test-designer` as `<KEY>-tests` with only the ticket's path, the key,
-     the tier, the epic head, and the setup and named-tests commands. End your turn
+     the epic head, and the setup and named-tests commands. End your turn
      until it reports. Take its `RED_COMMIT` with the `take-red` move.
    - Otherwise: write at least one test per outcome, named for it, with only the stubs they
      need, and commit them alone as `test(<KEY>): <outcome ids> [red]`.
@@ -80,7 +85,9 @@ is tests, so the writer must not author them. Dispatch a `test-designer` as `<KE
    take it with the `rebase-red` move and prove red again), and delete the rest.
 5. **Commit** as `feat(<KEY>): <goal>`, after the location check.
 6. **Submit check.** From your worktree run
-   `bash .claude/workflow/bin/task-submit.sh <epic head> <RED> HEAD --test-paths "<test paths>"`.
+   `bash .claude/workflow/bin/task-submit.sh <epic head> <RED> HEAD --test-paths "<test paths>" --ticket <ticket file>`.
+   It also rejects a change outside the ticket's `Owns ∪ Touches`, or a `Touches` line removed:
+   that change is a request to the file's owner, by message, not an edit.
    On `SUBMIT FAIL`, fix it here and run it again.
 7. **Rebase onto the epic head.** Read the epic head again; when it moved, run the
    `rebase-onto-epic-head` move with it, then re-run the named tests, typecheck and lint, and

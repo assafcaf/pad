@@ -4,7 +4,8 @@
 #   merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup "<cmd>"]
 #                 --gate "<cmd>" --lint "<cmd>" [--typecheck "<cmd>"] [--test-paths "<pathspecs>"]
 #                 [--derived "<path>=<cmd>" ...] [--affected "<cmd with {tests}>"]
-#                 [--workers <n>] [--run <id> [--outcomes "<ids>"]] <KEY> <RED> <TASK_HEAD> "<GOAL>"
+#                 [--workers <n>] [--protected "<globs>"] [--ticket <path>]
+#                 [--run <id> [--outcomes "<ids>"]] <KEY> <RED> <TASK_HEAD> "<GOAL>"
 #
 # Order: merge lock -> task-submit.sh -> git merge --no-ff --no-commit -> setup (only when a
 # dependency manifest or lockfile changed) -> gate -> typecheck -> lint -> commit "Merge <KEY>: <GOAL>" -> push
@@ -35,6 +36,11 @@
 # signal, a timeout), and a merge left in progress is aborted, so no orphaned workers keep
 # running and the epic worktree is left as it was.
 #
+# --ticket <path> passes the ticket to task-submit.sh, which rejects a change outside its
+# Owns and Touches. --protected "<globs>" (space or comma separated, the config's Protected
+# paths) rejects, as `REJECTED <KEY>: needs-strict (...)`, a diff that touches a protected path
+# when its red commit carries no `PAD-Role: test-designer` trailer.
+#
 # --run <id> writes the bookkeeping once the merge is pushed, so no agent does: the evidence file
 # and run-log line through render-evidence.sh (its PR-table row is printed), a `REMOVALS <KEY>:`
 # line (printed and logged) naming each test the merge removed and the rule that explains it,
@@ -51,12 +57,12 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup \"<cmd>\"] --gate \"<cmd>\" --lint \"<cmd>\" [--typecheck \"<cmd>\"] [--run <id> [--outcomes \"<ids>\"]] [--test-paths \"<pathspecs>\"] [--derived \"<path>=<cmd>\" ...] [--affected \"<cmd>\"] [--workers <n>] <KEY> <RED> <TASK_HEAD> \"<GOAL>\"" >&2
+  echo "usage: merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup \"<cmd>\"] --gate \"<cmd>\" --lint \"<cmd>\" [--typecheck \"<cmd>\"] [--protected \"<globs>\"] [--ticket <path>] [--run <id> [--outcomes \"<ids>\"]] [--test-paths \"<pathspecs>\"] [--derived \"<path>=<cmd>\" ...] [--affected \"<cmd>\"] [--workers <n>] <KEY> <RED> <TASK_HEAD> \"<GOAL>\"" >&2
   exit 64
 }
 
 wt=""; branch=""; setup=""; gate=""; lint=""; typecheck=""; paths="tests/"
-run=""; outcomes=""
+run=""; outcomes=""; protected=""; ticket=""
 derived=()
 affected=""
 workers=""
@@ -71,6 +77,8 @@ while [ $# -gt 0 ]; do
     --typecheck) typecheck="${2:-}"; shift 2 ;;
     --run) run="${2:-}"; shift 2 ;;
     --outcomes) outcomes="${2:-}"; shift 2 ;;
+    --protected) protected="${2:-}"; shift 2 ;;
+    --ticket) ticket="${2:-}"; shift 2 ;;
     --test-paths) paths="${2:-}"; shift 2 ;;
     --derived) derived+=("${2:-}"); shift 2 ;;
     --affected) affected="${2:-}"; shift 2 ;;
@@ -171,11 +179,33 @@ derived_cmd() {
 # Submission rules, before the tree is touched. A task cut from an earlier epic head is checked
 # against the head it was cut from; the merge below then finds any conflict.
 base="$(g merge-base "$before" "$head" 2>/dev/null)" || base="$before"
-out="$(cd "$wt" && bash "$bin/task-submit.sh" "$base" "$red" "$head" --test-paths "$paths" 2>&1)"
+submit=(--test-paths "$paths")
+[ -z "$ticket" ] || submit+=(--ticket "$ticket")
+out="$(cd "$wt" && bash "$bin/task-submit.sh" "$base" "$red" "$head" "${submit[@]}" 2>&1)"
 if [ $? -ne 0 ]; then
   reason="$(printf '%s\n' "$out" | tail -n 1)"
   echo "REJECTED $key: ${reason#SUBMIT FAIL }"
   exit 1
+fi
+
+# The protected-path guard: a diff touching a protected glob needs a red commit a test-designer
+# wrote, which it marks with a `PAD-Role: test-designer` trailer. `*` matches across `/` here,
+# which errs toward asking for the strict discipline.
+if [ -n "$protected" ]; then
+  hit=""
+  set -f
+  for f in $(g diff --name-only "$base" "$head"); do
+    for p in ${protected//,/ }; do
+      # shellcheck disable=SC2254
+      case "$f" in $p|${p#\*\*/}) hit="$f"; break 2 ;; esac
+    done
+  done
+  set +f
+  if [ -n "$hit" ] &&
+    ! g log -1 --format=%B "$red" 2>/dev/null | grep -qE '^PAD-Role:[[:space:]]*test-designer[[:space:]]*$'; then
+    echo "REJECTED $key: needs-strict ($hit is a protected path; the red commit ${red:0:7} has no PAD-Role: test-designer trailer)"
+    exit 1
+  fi
 fi
 
 abort() { merging=""; g merge --abort >/dev/null 2>&1 || g reset -q --merge >/dev/null 2>&1; }

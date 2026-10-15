@@ -22,9 +22,8 @@ two agents. Your verbs are partition, sequence, land, replan and escalate.
 
 | Agent | Does | Dispatched by |
 |---|---|---|
-| `task-planner` | Waves, file conflicts, interface mismatches, risks | You, once, before the first wave |
-| `owner` | One ticket from start to merged: its tests (unless strict), its code, its gates, its rebase | You, one per ticket |
-| `test-designer` | A strict ticket's failing tests + stubs, committed red | Its owner, as a blocking child |
+| `owner` | One ticket from start to merged: its tests (unless protected), its code, its gates, its rebase | You, one per ticket |
+| `test-designer` | A protected ticket's failing tests + stubs, committed red | Its owner, as a blocking child |
 | `tracker` | Tracker reads, ticket creation and links | You only. Owners never dispatch it. Status and comment writes go through `ledger.sh`, for every adapter |
 | `memory-curator` | Keeps the agents' persistent memory clean: keeps, tightens, merges or deletes lessons, never adds them | You, once, at the end of the epic |
 
@@ -119,16 +118,13 @@ run log's `agents:` lines give you back each owner's id; trust the run log and
 
 ## 2. Start
 
-1. **Plan.** Dispatch `task-planner` with the ticket bodies. Reconcile its waves with the
-   tickets' own edges; log a ruling for each disagreement you settle. Take its `HOTSPOTS`: one
-   task per wave edits each hotspot, so move the others to a later wave or add the edge it
-   suggests, and log it as a ruling. Drop the edges it lists
-   under `EDGES TO DROP` unless you can name a use it missed, and take its `TIERS`
-   suggestions unless the ticket says why not; log both as rulings. Its `CONTRADICTIONS`,
-   `GAPS` and `RISKS` may change the models you choose or send you back to `/tickets`.
-2. **Confirm once.** Show the waves with each task's tier, the critical path, the epic branch
-   name, the planner's conflicts, contradictions and gaps, and that you will push that branch
-   and update the tracker as tasks land. Wait for yes.
+1. **Plan.** Run `bash .claude/workflow/bin/plan-check.sh <the run's ticket dir>`. It
+   computes what a planner used to: `OVERLAPS` and `PROTECTED` mismatches (planning errors: send
+   them back to `/tickets`), `HOTSPOTS`, `SWEEPS` and the `CRITICAL-PATH`. Waves follow the
+   tickets' `Depends on`.
+2. **Confirm once.** Show the waves with each ticket's Protected flag, the critical path, the
+   epic branch name, the script's hotspots, and that you will push that branch and update the
+   tracker as tickets land. Wait for yes.
 3. **Enter the epic worktree.** Create it if missing (`git fetch origin`, then
    `git worktree add .claude/worktrees/<KEY> -b <epic branch> origin/HEAD`), then
    Never call `EnterWorktree`: it
@@ -154,16 +150,15 @@ run log's `agents:` lines give you back each owner's id; trust the run log and
 
 **a. Fill the free slots.** Ready tasks are those not done whose blockers are all done. Start
 them all in key order, or up to the config's parallelism cap if it sets one, skipping only
-a task the planner listed under `CONFLICTS` with one already running. Sharing a file is not a conflict: `merge-task.sh`
-merges additions to one file, and a real conflict comes back as `CONFLICT` and the owner rebases. Don't wait
+nothing: tickets own disjoint files, and shared files are `Touches`, additions only, which
+`merge-task.sh` merges. A real conflict comes back as `CONFLICT` and the owner rebases. Don't wait
 for a whole wave to close. Whenever a ticket merges or fails, start whatever is ready now. The
 waves are the plan's order, not a barrier.
 
 **b. Dispatch one `owner` per ticket, in one message,** so they run in parallel. Name each
 `<task key>-owner`, append `agents: <task key>-owner <id>` to the run log, and mark it doing
 (3f). Each prompt carries only: the ticket file's absolute path (not its text), the task key,
-the task's tier (`small` | `standard` | `complex` from its `## Tier` section; a ticket with
-none is `standard`, and one labelled `complex` is `complex`), the run id and epic branch, the
+the run id and epic branch, the
 setup, named-tests, typecheck and lint commands, and the config's test paths.
 
 From here each owner writes, proves red, gates, submits and rebases its own branch, and
@@ -177,13 +172,13 @@ last line. Act only on:
 
 | Report | You |
 |---|---|
-| Owner `READY <KEY> <TASK_HEAD> <RED>` | Run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --typecheck "<typecheck>" --lint "<lint>" --test-paths "<test paths>" [--derived "<path>=<cmd>" …] --run <run id> --outcomes "<O ids>" <KEY> <RED> <TASK_HEAD> "<the ticket's title>"`, one `--derived` per row of the config's Derived files, in the background (`run_in_background`), and end your turn. That is the whole hand-off: one turn |
+| Owner `READY <KEY> <TASK_HEAD> <RED>` | Run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --typecheck "<typecheck>" --lint "<lint>" --test-paths "<test paths>" [--derived "<path>=<cmd>" …] --protected "<the config's Protected paths>" --ticket <ticket file> --run <run id> --outcomes "<O ids>" <KEY> <RED> <TASK_HEAD> "<the ticket's title>"`, one `--derived` per row of the config's Derived files, in the background (`run_in_background`), and end your turn. That is the whole hand-off: one turn |
 | `merge-task.sh` `MERGED <sha>` | Nothing to write: the script recorded it (3e). If the owner's report listed `RESOURCE_PROBES`, run them (below). Fill the free slot (a) |
 | `merge-task.sh` `CONFLICT …` or `REJECTED …` | `SendMessage` the owner that line unchanged. It rebases or fixes, re-gates and reports `READY` again |
 | `merge-task.sh` `REJECTED` whose failing tests all sit in files the task didn't touch and doesn't import | A false positive: the script already reran them once. Rerun `merge-task.sh` once in the background with the same `RED` and `TASK_HEAD`; the owner hears only the rerun's last line |
 | `merge-task.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the ticket. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead. A second `ERROR` is a question (above): park that ticket |
 | Owner `NEEDS_RULING <KEY> <question>` | Decide it, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` the answer to the owner. If it needs the operator, it's a question (above): park the ticket |
-| Owner `FAILED <KEY> <why>` | Record it (3e). Its dependents wait; everything else continues. A ticket that fails twice is replanned (split, re-referenced or re-tiered), never re-dispatched as it is |
+| Owner `FAILED <KEY> <why>` | Record it (3e). Its dependents wait; everything else continues. A ticket that fails twice is replanned (split, re-referenced, or re-scoped) through `/tickets`' lint, never re-dispatched as it is |
 
 **Resource probes.** After `MERGED`, run the owner's `RESOURCE_PROBES` one at a time across the
 whole run, with the configured runner, at the merge sha, from a throwaway
@@ -218,7 +213,7 @@ the current branch for quoted outcomes). Same gates, same bookkeeping.
 
 **f. Ledger writes are scripts.** Owners never dispatch `tracker`, and no agent writes a status
 by hand. At dispatch (b), run `bash .claude/workflow/bin/ledger.sh <KEY> status doing "<run id>,
-<epic branch>, <tier>" --run <run id> --owner <owner's agent id>` from the epic worktree.
+<epic branch>" --run <run id> --owner <owner's agent id>` from the epic worktree.
 `merge-task.sh --run` moves a merged task to `done`. On `FAILED`, run
 `ledger.sh <KEY> comment "<the owner's reason>" --run <run id>` and leave the status at
 `doing`. `ledger.sh` writes through the configured adapter: local files, `gh`, or the Jira REST

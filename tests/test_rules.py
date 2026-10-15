@@ -71,7 +71,7 @@ def test_for_prints_only_the_rules_that_name_the_agent(run_script, repo, tmp_pat
     d = tmp_path / "r"
     d.mkdir()
     (d / "a.md").write_text(_rule("a", "practice", "owner", body="Alpha guidance."), encoding="utf-8")
-    (d / "b.md").write_text(_rule("b", "practice", "task-planner", body="Beta guidance."), encoding="utf-8")
+    (d / "b.md").write_text(_rule("b", "practice", "test-designer", body="Beta guidance."), encoding="utf-8")
     r = run_script("rules.sh", "for", "owner", cwd=repo, env={"PAD_RULES_DIR": str(d)})
     assert r.returncode == 0, r.stderr
     assert "Alpha guidance." in r.stdout
@@ -124,7 +124,7 @@ def test_validate_rejects_a_missing_field(run_script, repo, tmp_path):
 
 def test_every_agent_a_rule_can_name_loads_its_rules_at_start():
     loaders = [p.stem for p in AGENTS.glob("*.md") if f"rules.sh for {p.stem}" in p.read_text(encoding="utf-8")]
-    for agent in ("owner", "test-designer", "task-planner",
+    for agent in ("owner", "test-designer",
                   "memory-curator", "knowledge-scanner"):
         assert agent in loaders, agent
     skill = (PAYLOAD / "claude" / "skills" / "batch-implement" / "SKILL.md").read_text(encoding="utf-8")

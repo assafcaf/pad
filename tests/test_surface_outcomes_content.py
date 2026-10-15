@@ -8,19 +8,12 @@ import re
 
 SPEC = "claude/skills/spec/SKILL.md"
 TICKETS = "claude/skills/tickets/SKILL.md"
-PLANNER = "claude/agents/task-planner.md"
 
 
 def bullet(text: str, lead: str) -> str:
     m = re.search(rf"^- \*\*{re.escape(lead)}.*?(?=^- \*\*|^## |\Z)", text, re.S | re.M)
     assert m, f"no bullet starting {lead!r}"
     return m.group(0)
-
-
-def gaps_block(text: str) -> str:
-    m = re.search(r"^GAPS:\n(.*?)(?=^[A-Z]+:|^```)", text, re.S | re.M)
-    assert m, "no GAPS section in planner report format"
-    return m.group(1)
 
 
 def test_o33_spec_outcome_level_can_be_a_named_surface(payload_text):
@@ -55,25 +48,15 @@ def test_o33_spec_checklist_fails_a_capability_without_a_surface_outcome(payload
 
 
 def test_o33_tickets_cover_every_outcome_gives_surface_outcome_one_owner(payload_text):
-    b = bullet(payload_text(TICKETS), "Cover every outcome").lower()
+    b = bullet(payload_text(TICKETS), "Outcomes only where tests are the reference").lower()
     assert "surface outcome" in b
-    assert "exactly one task" in b
+    assert "exactly one ticket" in b
 
 
 def test_o33_tickets_unowned_surface_outcome_is_a_gap_that_blocks_the_plan(payload_text):
-    b = bullet(payload_text(TICKETS), "Cover every outcome")
+    b = bullet(payload_text(TICKETS), "Outcomes only where tests are the reference")
     assert "GAP" in b
     assert "blocks the plan" in b.lower() or "block the plan" in b.lower()
 
 
-def test_o33_planner_gaps_lists_surface_outcome_no_task_owns(payload_text):
-    g = gaps_block(payload_text(PLANNER)).lower()
-    assert "surface outcome" in g
 
-
-def test_o33_planner_says_an_unowned_surface_outcome_blocks_the_plan(payload_text):
-    text = payload_text(PLANNER)
-    paras = [p.lower() for p in re.split(r"\n\s*\n", text)
-             if "surface outcome" in p.lower()]
-    assert paras, "planner never mentions surface outcomes"
-    assert any("blocks the plan" in p or "block the plan" in p for p in paras)
