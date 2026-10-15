@@ -1,6 +1,6 @@
 ---
 name: test-designer
-description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the ticket's owner, as a blocking child, when the ticket is protected.
+description: Writes the failing tests for one task's outcomes, plus the stubs they need to run, and commits them as that task's red commit. Writes no implementation; dispatched by the ticket's owner, as a blocking child, when the ticket is protected. Reads the run's brief and the ticket's reference.
 tools: Read, Edit, Write, Bash, Grep, Glob, SendMessage
 isolation: worktree
 model: sonnet

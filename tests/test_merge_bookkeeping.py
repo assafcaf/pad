@@ -184,3 +184,42 @@ def test_ticket_is_passed_to_task_submit_ownership(repo, worktree, run_script, t
     r = _merge_any(run_script, repo, epic_wt, red, head, ("--ticket", ticket.as_posix()))
     assert r.returncode == 1, r.stdout + r.stderr
     assert _last(r) == f"REJECTED {KEY}: ownership: src/ui/page.py"
+
+
+def test_with_run_each_result_is_logged_as_a_timestamped_event(repo, worktree, run_script):
+    _ticket(repo)
+    epic_wt, epic_head = _epic(repo, worktree)
+    _, red, head = _task(repo, worktree, epic_head)
+    r = _merge(run_script, repo, epic_wt, red, head, extra=("--typecheck", "exit 3", "--run", RUN))
+    assert r.returncode == 1
+    r = _merge(run_script, repo, epic_wt, red, head, extra=("--run", RUN))
+    assert r.returncode == 0, r.stdout + r.stderr
+    sha = git("rev-parse", "HEAD", cwd=epic_wt)
+    events = [l for l in (_runs(repo) / "progress.md").read_text(encoding="utf-8").splitlines()
+              if re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ", l)]
+    assert [e.split(" ", 1)[1] for e in events] == [
+        f"REJECTED {KEY} typecheck failed (exit 3)",
+        f"MERGED {KEY} {sha}",
+    ]
+
+
+def test_capture_renders_the_merged_tree_into_the_evidence_dir(repo, worktree, run_script):
+    _ticket(repo)
+    epic_wt, epic_head = _epic(repo, worktree)
+    _, red, head = _task(repo, worktree, epic_head)
+    r = _merge(run_script, repo, epic_wt, red, head,
+               extra=("--run", RUN, "--capture", "cat src/impl.py > {out}"))
+    assert r.returncode == 0, r.stdout + r.stderr
+    shot = _runs(repo) / "evidence" / KEY / "merged.png"
+    assert shot.read_bytes().replace(b"\r\n", b"\n") == b"X = 1\n"
+    assert f"EVIDENCE {KEY}: " in r.stdout
+
+
+def test_a_failed_capture_is_bookkeeping_not_a_rejection(repo, worktree, run_script):
+    _ticket(repo)
+    epic_wt, epic_head = _epic(repo, worktree)
+    _, red, head = _task(repo, worktree, epic_head)
+    r = _merge(run_script, repo, epic_wt, red, head, extra=("--run", RUN, "--capture", "exit 4"))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _last(r).startswith("MERGED ")
+    assert f"BOOKKEEPING FAIL {KEY}: capture: no render at" in r.stdout

@@ -5,7 +5,7 @@
 #                 --gate "<cmd>" --lint "<cmd>" [--typecheck "<cmd>"] [--test-paths "<pathspecs>"]
 #                 [--derived "<path>=<cmd>" ...] [--affected "<cmd with {tests}>"]
 #                 [--workers <n>] [--protected "<globs>"] [--ticket <path>]
-#                 [--run <id> [--outcomes "<ids>"]] <KEY> <RED> <TASK_HEAD> "<GOAL>"
+#                 [--run <id> [--outcomes "<ids>"] [--capture "<cmd with {out}>"]] <KEY> <RED> <TASK_HEAD> "<GOAL>"
 #
 # Order: merge lock -> task-submit.sh -> git merge --no-ff --no-commit -> setup (only when a
 # dependency manifest or lockfile changed) -> gate -> typecheck -> lint -> commit "Merge <KEY>: <GOAL>" -> push
@@ -46,6 +46,10 @@
 # line (printed and logged) naming each test the merge removed and the rule that explains it,
 # and the ticket to done through ledger.sh with the run's board.md row (branch, merge sha,
 # evidence path).
+# --capture "<cmd>" (a visual ticket's Surfaces render command, `{out}` left in) renders the
+# merged tree to <main checkout>/.work/runs/<id>/evidence/<KEY>/merged.png and prints
+# `EVIDENCE <KEY>: <path>`; a render that fails is a BOOKKEEPING FAIL, not a rejection: the
+# evaluator judged the owner's render before READY.
 # --outcomes "<ids>" fills the evidence's outcome column (default `-`). A bookkeeping write that
 # fails prints `BOOKKEEPING FAIL <KEY>: <what>` and is logged with run-log.sh to be made again
 # before the PR; it never turns the merge into a failure: the last line is still MERGED.
@@ -62,7 +66,7 @@ usage() {
 }
 
 wt=""; branch=""; setup=""; gate=""; lint=""; typecheck=""; paths="tests/"
-run=""; outcomes=""; protected=""; ticket=""
+run=""; outcomes=""; protected=""; ticket=""; capture=""
 derived=()
 affected=""
 workers=""
@@ -79,6 +83,7 @@ while [ $# -gt 0 ]; do
     --outcomes) outcomes="${2:-}"; shift 2 ;;
     --protected) protected="${2:-}"; shift 2 ;;
     --ticket) ticket="${2:-}"; shift 2 ;;
+    --capture) capture="${2:-}"; shift 2 ;;
     --test-paths) paths="${2:-}"; shift 2 ;;
     --derived) derived+=("${2:-}"); shift 2 ;;
     --affected) affected="${2:-}"; shift 2 ;;
@@ -132,12 +137,20 @@ kill_tree() {
   kill -KILL $all 2>/dev/null
   return 0
 }
+# result <last line>: print the result line; with --run, the exit trap also logs it to the run
+# log as a timestamped event (`<ts> MERGED|CONFLICT|REJECTED <KEY> <detail>`) for run-stats.sh.
+final=""
+result() { echo "$1"; final="$1"; }
 cleanup() {
   kill_tree "$gate_pid"
   [ -z "$merging" ] || abort
   rm -f "$log"
   restart_previews
   [ -z "$lock" ] || rm -rf "$lock"
+  if [ -n "$run" ] && [ -n "$final" ]; then
+    case "$final" in MERGED*) final="MERGED $key ${final#MERGED }" ;; *) final="${final/"$key:"/$key}" ;; esac
+    (cd "$wt" && bash "$bin/run-log.sh" "$run" "$(date -u +%Y-%m-%dT%H:%M:%SZ) $final") >/dev/null 2>&1
+  fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -184,7 +197,7 @@ submit=(--test-paths "$paths")
 out="$(cd "$wt" && bash "$bin/task-submit.sh" "$base" "$red" "$head" "${submit[@]}" 2>&1)"
 if [ $? -ne 0 ]; then
   reason="$(printf '%s\n' "$out" | tail -n 1)"
-  echo "REJECTED $key: ${reason#SUBMIT FAIL }"
+  result "REJECTED $key: ${reason#SUBMIT FAIL }"
   exit 1
 fi
 
@@ -203,7 +216,7 @@ if [ -n "$protected" ]; then
   set +f
   if [ -n "$hit" ] &&
     ! g log -1 --format=%B "$red" 2>/dev/null | grep -qE '^PAD-Role:[[:space:]]*test-designer[[:space:]]*$'; then
-    echo "REJECTED $key: needs-strict ($hit is a protected path; the red commit ${red:0:7} has no PAD-Role: test-designer trailer)"
+    result "REJECTED $key: needs-strict ($hit is a protected path; the red commit ${red:0:7} has no PAD-Role: test-designer trailer)"
     exit 1
   fi
 fi
@@ -220,13 +233,13 @@ if ! g merge --no-ff --no-commit "$head" >"$log" 2>&1; then
     # Take the epic's copy now; its command rebuilds it once setup has run.
     for c in $conflicts; do
       { g checkout -q --ours -- "$c" && g add -- "$c"; } || {
-        abort; echo "CONFLICT $key: $c (could not take the epic's copy)"; exit 1; }
+        abort; result "CONFLICT $key: $c (could not take the epic's copy)"; exit 1; }
       rebuild+=("$c")
     done
   else
     abort
     if [ -n "$conflicts" ]; then
-      echo "CONFLICT $key: ${conflicts% }"
+      result "CONFLICT $key: ${conflicts% }"
       exit 1
     fi
     tail -n 40 "$log"
@@ -238,7 +251,7 @@ fi
 reject_step() {
   tail -n 40 "$log"
   abort
-  echo "REJECTED $key: $1 failed (exit $2)"
+  result "REJECTED $key: $1 failed (exit $2)"
   exit 1
 }
 
@@ -309,7 +322,7 @@ for c in ${rebuild[@]+"${rebuild[@]}"}; do
   if [ "$rc" -ne 0 ] || grep -q '^<<<<<<< ' "$wt/$c" 2>/dev/null; then
     tail -n 40 "$log"
     abort
-    echo "CONFLICT $key: $c (rebuild failed: exit $rc)"
+    result "CONFLICT $key: $c (rebuild failed: exit $rc)"
     exit 1
   fi
   g add -- "$c"
@@ -353,6 +366,17 @@ if [ -n "$run" ]; then
   [ -z "$typecheck" ] || green="$green; $typecheck -> pass"
   out="$(cd "$wt" && bash "$bin/render-evidence.sh" --run "$run" --key "$key" --red "$red"     --merge "$sha" --outcomes "${outcomes:--}" --red-result "red commit ${red:0:7} checked by task-submit.sh"     --green-result "$green" 2>&1)" && printf '%s
 ' "$out" || bk_fail "evidence: $(printf '%s' "$out" | tail -n 1)"
+  # A visual ticket's render of the merged tree, beside the owner's reference/app pair.
+  if [ -n "$capture" ]; then
+    shot="$(cd "$common/.." && pwd)/.work/runs/$run/evidence/$key/merged.png"
+    mkdir -p "${shot%/*}" 2>/dev/null
+    rm -f "$shot"
+    if (cd "$wt" && bash -c "${capture//\{out\}/\"$shot\"}") >/dev/null 2>&1 && [ -s "$shot" ]; then
+      echo "EVIDENCE $key: $shot"
+    else
+      bk_fail "capture: no render at $shot"
+    fi
+  fi
   # The tests this merge removed, each with the rule that explains it, for the PR body.
   removals="$(cd "$wt" && bash "$bin/weakened-tests.sh" "$base" "$head" 2>/dev/null |
     sed -n '/^weakened-tests: removed tests explained by rules:/,/^weakened-tests: [^r]/p' |
@@ -366,4 +390,4 @@ if [ -n "$run" ]; then
     bk_fail "ledger: $(printf '%s' "$out" | tail -n 1)"
 fi
 
-echo "MERGED $sha"
+result "MERGED $sha"

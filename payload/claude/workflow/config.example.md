@@ -1,6 +1,6 @@
 # Workflow config
 
-Read by `/spec`, `/tickets`, `/batch-implement` and the agents in `.claude/agents/`. Everything
+Read by `/spec`, `/tickets`, `/pad-run` and the agents in `.claude/agents/`. Everything
 specific to this repository lives here, so the skills and agents stay project-agnostic. The
 installer wrote this from your answers; `/setup-workflow` fills in what it can discover
 (statuses, transition ids, the commands that actually run here) and checks the rest. After
@@ -38,6 +38,7 @@ in the agent file.
 | Tracker | `tracker` | `haiku` | The only agent with tracker tools: reads, creates, links. Status writes go through `bin/ledger.sh` |
 | Ownership | `owner` | `sonnet` | One per ticket, its own worktree, start to merged: writes the code (and the tests unless protected), proves red, gates, rebases, reports one line |
 | Tests | `test-designer` | `sonnet` | Its own worktree, a blocking child of an owner whose ticket is protected. Writes the failing tests and stubs |
+| Visual judge | `evaluator` | `sonnet` | Fresh context, dispatched by an owner on a visual ticket: compares the render with the reference and returns a verdict. Never sees the owner's reasoning |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 | Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end. Keeps the agents' memory clean; never adds a lesson |
 
@@ -92,7 +93,8 @@ None installed.
 |---|---|---|
 | Working specs | `.work/specs/<yyyy-mm-dd>-<slug>.md` | no |
 | Plans (task bodies + tracker keys) | `.work/plans/<slug>.md` | no |
-| Run logs for `/batch-implement` | `.work/runs/<run-id>/progress.md` | no |
+| A run's files: scope, brief, board, channel, run log, ticket bodies, evidence, review packets | `.work/runs/<run-id>/{scope,brief,board,channel,progress}.md`, `tickets/`, `evidence/<KEY>/`, `review-<n>.md` | no |
+| Jira credentials for `ledger.sh` | `.work/secrets/jira.env` | no |
 | Progress snapshot for the status line | `.work/progress.json` | no |
 | Development record | `docs/decisions/NNNN-<slug>.md` | yes |
 | Promoted specs | `docs/specs/<slug>.md` | yes, only when the operator says so |
@@ -189,14 +191,21 @@ does not run it but writes a review packet for the operator, and the outcome wai
 
 The places where the product is seen or used. Optional; none are configured.
 
-| Surface | Entry point | Test drives it by | Person looks by | Automated check | Preview start | Ready when | Restart when changed | Cannot show |
-|---|---|---|---|---|---|---|---|---|
-| `<name>` | `<url, command or file>` | `<how a test drives it>` | `<how a person looks>` | `<command>` | `<dev server command>` | `<signal it is up>` | `<paths that need a restart>` | `<what it cannot show>` |
+| Surface | Entry point | Test drives it by | Person looks by | Automated check | Preview start | Ready when | Restart when changed | Cannot show | Reference dir | Render command | Viewport |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `<name>` | `<url, command or file>` | `<how a test drives it>` | `<how a person looks>` | `<command>` | `<dev server command>` | `<signal it is up>` | `<paths that need a restart>` | `<what it cannot show>` | `<where the mock crops live>` | `<command writing {out} for {route} at {width}x{height}>` | `<WxH>` |
+
+A surface with a **Render command** has a visual reference class: tickets on it are judged
+against a mock crop from its **Reference dir**, at its **Viewport**, by the `evaluator`
+(`definition-of-done.md`). `bin/render-check.sh` runs the command with `{route}`, `{viewport}`,
+`{width}`, `{height}`, `{state}` and `{out}` filled in, and `preflight.sh` runs it once. A
+surface without one — a CLI, a backend — has no visual class; nothing in PAD assumes a web app.
 
 ## Review
 
-- **Cadence:** `after-first-wave`. When the operator reviews the running product. Options:
-  `after-first-wave` (once, after the first wave merges), `per-wave` (after every wave),
+- **Cadence:** `per-wave`. When the operator reviews the running product, from the packet
+  `bin/review.sh` writes; feedback becomes new tickets. Options: `per-wave` (after every
+  wave), `after-first-wave` (once, after the first wave merges),
   `end-only` (once, before the PR), `none`.
 
 ## Execution
@@ -209,7 +218,7 @@ The places where the product is seen or used. Optional; none are configured.
 - **Gate:** `full`. What `merge-task.sh` runs per merge: `full` (the full suite) or `affected`
   (the named-tests command on the tests the change reaches through imports, from
   `bin/affected-tests.sh`; the full suite still runs when a conftest, manifest, lockfile or
-  test helper changed, and at the end of the epic). `/batch-implement --gate` overrides it.
+  test helper changed, and at the end of the epic). `/pad-run --gate` overrides it.
 - **Test workers:** `none`. A number caps the workers a parallel suite may start on this host
   (e.g. `-n {workers}` with pytest-xdist): `merge-task.sh --workers` fills `{workers}` in the
   Full suite and Run named tests commands. Size it so a gate plus the agents' named-test runs
