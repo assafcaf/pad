@@ -147,6 +147,24 @@ def test_a_new_upstream_script_is_added_executable(pad, repo):
     assert staged.startswith("100755")
 
 
+def test_the_optional_skill_is_not_added_where_it_is_absent(pad, repo):
+    _install(pad, repo)
+    _commit(pad, {"claude/skills/writing-for-readers/SKILL.md": "w\n"}, "add optional skill")
+    result = _run(pad, repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "writing-for-readers" not in result.stdout
+    assert not (repo / ".claude" / "skills" / "writing-for-readers").exists()
+
+
+def test_the_optional_skill_is_updated_where_it_is_installed(pad, repo):
+    _commit(pad, {"claude/skills/writing-for-readers/SKILL.md": "w\n"}, "add optional skill")
+    _install(pad, repo)
+    _commit(pad, {"claude/skills/writing-for-readers/SKILL.md": "w2\n"}, "change it")
+    result = _run(pad, repo)
+    assert "REPLACE .claude/skills/writing-for-readers/SKILL.md" in result.stdout.splitlines()
+    assert _read(repo, ".claude/skills/writing-for-readers/SKILL.md") == "w2\n"
+
+
 def test_a_file_pad_retired_is_deleted_when_untouched(pad, repo):
     _install(pad, repo)
     _commit(pad, {}, "retire spec", remove=("claude/skills/spec/SKILL.md",))
