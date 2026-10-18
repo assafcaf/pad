@@ -131,3 +131,31 @@ def test_install_from_a_packaged_copy_writes_no_lock_and_drops_a_stale_one(repo,
     lock.write_text("commit: 0123456\n", encoding="utf-8")
     assert _install_from(source, repo).returncode == 0
     assert not lock.exists()
+
+
+# The optional skill
+
+
+def _install_with(project: Path, *flags: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [BASH, (ROOT / "install.sh").as_posix(), "--project", project.as_posix(),
+         "--tracker", "local", *flags],
+        cwd=str(project), capture_output=True, text=True, encoding="utf-8",
+        check=False, timeout=120,
+    )
+
+
+def test_writing_skill_is_installed_by_default_and_invokes_itself(repo):
+    assert _install(repo).returncode == 0
+    skill = repo / ".claude" / "skills" / "writing-for-readers"
+    assert (skill / "references" / "anti-patterns.md").is_file()
+    front = (skill / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
+    assert "disable-model-invocation" not in front
+
+
+def test_no_writing_skill_leaves_it_out_and_the_rest_in(repo):
+    result = _install_with(repo, "--no-writing-skill")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (repo / ".claude" / "skills" / "writing-for-readers").exists()
+    assert (repo / ".claude" / "skills" / "pad-run" / "SKILL.md").is_file()
+    assert "writing-for-readers left out" in result.stdout

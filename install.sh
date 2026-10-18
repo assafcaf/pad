@@ -15,6 +15,8 @@
 #     --jira-site <name>    the <name> in <name>.atlassian.net (jira)
 #     --jira-cloud-id <id>  Jira cloud id, blank if unknown    (jira)
 #     --gh-repo <o/r>       owner/repo                         (github; defaults from `gh`)
+#     --writing-skill       install writing-for-readers        (asked if neither is given;
+#     --no-writing-skill    leave it out                        default: install it)
 #     --no-config           install the files, write no config
 #     --force               overwrite existing files without keeping a .bak
 #     --dry-run             print every action, change nothing
@@ -24,6 +26,10 @@
 # have it regenerated.
 #
 # Re-running is safe: identical files are skipped.
+#
+# writing-for-readers is the one optional skill, and the one the model invokes on its own: it
+# shapes any prose meant for a person (docs, READMEs, reports in the chat). Leaving it out
+# installs nothing and removes nothing; /pad-update only updates it where it is installed.
 #
 # Run from a git checkout of PAD, it records the commit in .claude/workflow/pad.lock, which is
 # where /pad-update starts from. From a packaged copy the commit is unknown and no lock is
@@ -40,6 +46,7 @@ jira_site=""
 jira_cloud=""
 key=""
 gh_repo=""
+writing=""
 do_config=yes
 force=no
 dry=no
@@ -54,10 +61,12 @@ while [ $# -gt 0 ]; do
     --jira-cloud-id) jira_cloud="${2-}"; shift 2 ;;
     --key)           key="${2-}"; shift 2 ;;
     --gh-repo)       gh_repo="${2-}"; shift 2 ;;
+    --writing-skill)    writing=yes; shift ;;
+    --no-writing-skill) writing=no; shift ;;
     --no-config)     do_config=no; shift ;;
     --force)         force=yes; shift ;;
     --dry-run)       dry=yes; shift ;;
-    -h|--help)       sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)       sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf '%s: unknown option %s\n' "$SELF" "$1" >&2; exit 2 ;;
   esac
 done
@@ -76,6 +85,33 @@ case "$tracker" in ''|jira|github|local) ;; *)
 esac
 
 say "$SELF -> $project"
+
+ask() { # ask <prompt> <default> -> echoes the answer
+  local prompt="$1" default="${2-}" reply=""
+  if [ -t 0 ]; then
+    if [ -n "$default" ]; then printf '  %s [%s]: ' "$prompt" "$default" >&2
+    else printf '  %s: ' "$prompt" >&2; fi
+    read -r reply
+  fi
+  printf '%s' "${reply:-$default}"
+}
+
+# --- The optional skill ------------------------------------------------------------------
+OPTIONAL_SKILL="claude/skills/writing-for-readers"
+if [ -z "$writing" ]; then
+  if [ -t 0 ]; then
+    say ""
+    say "  writing-for-readers makes Claude put the point first and show processes, comparisons"
+    say "  and formulas as diagrams, tables and equations whenever it writes for a person: docs,"
+    say "  READMEs, reports in the chat. Unlike the other skills it starts on its own."
+    case "$(ask 'Install writing-for-readers? (y/n)' 'y')" in
+      [nN]*) writing=no ;;
+      *)     writing=yes ;;
+    esac
+  else
+    writing=yes
+  fi
+fi
 
 # --- Files that track upstream: updated on reinstall, with a .bak of any local edit ------
 install_file() { # install_file <payload-rel> <project-rel>
@@ -116,8 +152,10 @@ install_once() { # install_once <project-rel> <writer-command...>
 say ""
 say "Skills -> .claude/skills/"
 for f in $(cd "$SRC" && find claude/skills -type f | sort); do
+  case "$f" in "$OPTIONAL_SKILL"/*) [ "$writing" = yes ] || continue ;; esac
   install_file "$f" ".${f}"
 done
+[ "$writing" = yes ] || say "  writing-for-readers left out (--writing-skill installs it)"
 
 say ""
 say "Agents -> .claude/agents/"
@@ -174,16 +212,6 @@ say "Development record -> docs/decisions/"
 install_once "docs/decisions/README.md" cat "$SRC/docs/decisions/README.md"
 
 # --- Configuration ------------------------------------------------------------------------
-ask() { # ask <prompt> <default> -> echoes the answer
-  local prompt="$1" default="${2-}" reply=""
-  if [ -t 0 ]; then
-    if [ -n "$default" ]; then printf '  %s [%s]: ' "$prompt" "$default" >&2
-    else printf '  %s: ' "$prompt" >&2; fi
-    read -r reply
-  fi
-  printf '%s' "${reply:-$default}"
-}
-
 default_gh_repo() {
   (cd "$project" && gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) \
     || printf '<owner>/<repo>'
@@ -191,7 +219,8 @@ default_gh_repo() {
 
 render_config() {
   local pad_version
-  pad_version="$(tr -d '' < "$SRC/claude/workflow/VERSION" | head -n 1 | tr -d '[:space:]')"
+  pad_version="$(tr -d '
+' < "$SRC/claude/workflow/VERSION" | head -n 1 | tr -d '[:space:]')"
   # `|` as the sed delimiter, because every one of these can contain a slash.
   sed -e "s|<TRACKER>|${tracker}|g" \
       -e "s|<JIRA_SITE>|${jira_site:-<your-site>}|g" \
@@ -286,4 +315,5 @@ say "     installs the status line."
 say "  2. Read .claude/workflow/config.md, especially Commands, and make it true of this repo."
 say "  3. /spec <idea>  ->  /tickets <spec>  ->  /pad-run <epic>."
 say ""
-say "Every skill is user-invoked only (disable-model-invocation), so nothing runs on its own."
+say "Every skill but writing-for-readers is user-invoked only (disable-model-invocation),"
+say "so no workflow step runs on its own."

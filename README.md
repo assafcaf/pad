@@ -13,7 +13,8 @@ ledger. The tracker is updated as tickets merge, so progress is visible there.
 /pad-run <epic>          →  epic branch + draft PR     one owner per ticket; scripts merge and record
 ```
 
-Every skill is user-invoked only (`disable-model-invocation`), so nothing starts on its own.
+Every workflow skill is user-invoked only (`disable-model-invocation`), so nothing starts on its
+own. The one exception is the optional [`writing-for-readers`](#writing-for-readers) skill.
 `/batch-implement` is the 0.3 name of `/pad-run`, kept as an alias for one version.
 
 > **Status: 0.4.0, a redesign not yet run end to end.** Each gate script is behaviour-tested
@@ -127,7 +128,8 @@ npx github:assafcaf/dispatch-skills
 uvx --from git+https://github.com/assafcaf/dispatch-skills dispatch-skills
 ```
 
-It installs the skills and agents, then asks where your tickets live:
+It asks whether to include the optional `writing-for-readers` skill (default yes), installs the
+skills and agents, then asks where your tickets live:
 
 ```
 1) Jira            — via the atlassian MCP server        [default]
@@ -140,8 +142,18 @@ Every question has a flag, so an unattended install answers them up front:
 ```bash
 npx github:assafcaf/dispatch-skills --tracker jira --key ENG --jira-site acme
 npx github:assafcaf/dispatch-skills --tracker github --gh-repo acme/widgets
-npx github:assafcaf/dispatch-skills --tracker local
+npx github:assafcaf/dispatch-skills --tracker local --no-writing-skill
 ```
+
+### writing-for-readers
+
+An optional skill that Claude invokes on its own whenever it writes prose for a person: a
+document, a README, a report or summary in the chat, a PR body. It puts the point first, keeps
+each section within a reader's working memory, and shows processes, comparisons and formulas
+as diagrams, tables and equations instead of narrating them. `--writing-skill` and
+`--no-writing-skill` answer the installer's question; without a terminal it is installed.
+Declining installs nothing, and `/pad-update` then leaves it out too. To add it later, re-run
+the installer with `--writing-skill`.
 
 `--dry-run` shows every action without taking one. Re-running is safe: identical files are
 skipped, and files that are yours once written are never overwritten.
@@ -179,6 +191,7 @@ When a push to PAD needs more than file copies in the projects that use it, add 
 
 ```
 .claude/skills/{spec,tickets,pad-run,batch-implement,setup-workflow,knowledge-layer,pad-update}/
+.claude/skills/writing-for-readers/     optional; the one skill Claude invokes on its own
 .claude/workflow/pad.lock               the PAD commit the harness came from; committed
 .claude/agents/{owner,test-designer,evaluator,tracker,memory-curator,knowledge-scanner}.md
 .claude/agent-memory/<agent>/MEMORY.md  each agent's lessons, committed; created as agents learn
