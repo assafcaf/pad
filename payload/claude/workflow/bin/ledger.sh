@@ -7,7 +7,8 @@
 #   board options: --run <id> [--owner <agent id>] [--branch <b>] [--sha <s>] [--evidence <path>]
 #
 # The adapter is the config's Tracker → Adapter (`.claude/workflow/config.md` in this worktree,
-# else in the main checkout); with no config it is `local`.
+# else in the main checkout); with no config it is `local`. PAD_LEDGER_ADAPTER, when set,
+# overrides both.
 #
 #   local   <main checkout>/.work/tickets/<EPIC>/<KEY>.md, or .../<EPIC>/epic.md when KEY is an
 #           epic key (E<n>). `status` rewrites the frontmatter `status:` line; both forms append
@@ -72,6 +73,8 @@ if [ -f "$cfg" ]; then
   # An unfilled `<TRACKER>` placeholder counts as unset.
   case "$a" in ''|'<'*) ;; *) adapter="$a" ;; esac
 fi
+# rehearse.sh sets local: its ticket is a throwaway file that no real tracker has.
+[ -z "${PAD_LEDGER_ADAPTER:-}" ] || adapter="$PAD_LEDGER_ADAPTER"
 
 # json_tool: the first of python / jq that runs here, for building and reading JSON.
 json_tool() {

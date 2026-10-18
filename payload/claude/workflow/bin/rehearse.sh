@@ -21,6 +21,10 @@
 #                        and stopped (skipped with PASS when none is configured)
 #   ledger-write         ledger.sh, run from the task worktree, updates a temporary ticket in the
 #                        main checkout's ledger
+#
+# The temporary ticket is a local file, so both ledger steps use the local adapter
+# (PAD_LEDGER_ADAPTER=local) whatever the config's tracker; the tracker connection itself is
+# /setup-workflow's check.
 #   channel-post         channel.sh posts a line from the task worktree to this rehearsal's own
 #                        run channel, and reads it back from the main checkout
 #
@@ -73,6 +77,9 @@ task_wt="$tmp/task"
 key="PADREHEARSAL$$-T1"
 ticket_dir="$main/.work/tickets/${key%%-T*}"
 ticket="$ticket_dir/$key.md"
+# The temporary ticket exists only as a local file, so every ledger write, merge-task.sh's
+# included, goes to the local adapter whatever tracker the project uses.
+export PAD_LEDGER_ADAPTER=local
 made=()
 runs_existed=""
 [ -d "$main/.work/runs" ] && runs_existed=1
