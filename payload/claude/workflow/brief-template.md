@@ -30,9 +30,9 @@ components, fixtures, test harnesses, the render command. One line each.>
 ## Ownership map and team
 | Ticket | Owns | Touches | Protected | Owner |
 |---|---|---|---|---|
-| <KEY> | <paths> | <paths> | yes/no | <agent id, filled at dispatch> |
+| <KEY> | <paths> | <paths> | yes/no | <KEY>-owner <agent id, filled at dispatch> |
 
-Message an owner by its agent id for anything in its files. Post interface decisions, renames
+Message an owner by its agent id (the second word of its Owner cell) for anything in its files. Post interface decisions, renames
 in shared files and discoveries with
 `bash .claude/workflow/bin/channel.sh post <epic> <KEY> "<line>"`; read the channel on start
 and before every rebase (`channel.sh read <epic>`).
