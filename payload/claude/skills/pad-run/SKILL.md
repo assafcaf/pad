@@ -33,10 +33,11 @@ You pay per hand-off, not per work: every turn you take re-reads your whole cont
 ticket costs you one dispatch, one background merge per `READY`, and nothing in between.
 Structure lives in scripts and files, not in your turns.
 
-**Names and addresses.** Give every dispatch a description that names what it works on:
-`<task key>-owner`. Owners name their test-designer `<task key>-tests`. The name is for people
-reading logs; messages are routed by the agent id each dispatch returns, so record every
-owner's id in the brief's roster, and reply to a message at its `from` address.
+**Names and addresses.** Every dispatch gets the fixed name the `addressed-dispatch` rule
+gives its type, as its description: `<task key>-owner`, `<task key>-tests`, `<task key>-eval`,
+`<epic key>-memory`, `<epic key>-tracker`. Messages are routed by the agent id each dispatch
+returns, so wherever an agent is shown (the brief's roster, the run log, the board, your lines
+to the operator) show its name and id together, and reply to a message at its `from` address.
 
 **Wait for notifications; never poll.** An agent's report arrives on its own when it stops.
 A `sleep`, an `echo`, or a status check while you wait re-reads your whole context for nothing.
@@ -172,10 +173,11 @@ ticket merges, start whatever is ready now. The waves are the plan's order, not 
 
 **b. Dispatch one `owner` per ticket, in one message,** so they run in parallel. Each prompt
 carries only the ticket file's absolute path and the brief's: the commands, gates, rules and
-team are in the brief. Name each `<task key>-owner`. Then, for each, fill its agent id into the
-brief's ownership map, append `<ts> dispatch <KEY> <agent id>` to the run log (`ts` from
+team are in the brief. Name each `<task key>-owner`. Then, for each, fill
+`<KEY>-owner <agent id>` into its row of the brief's ownership map, append
+`<ts> dispatch <KEY> <KEY>-owner <agent id>` to the run log (`ts` from
 `date -u +%Y-%m-%dT%H:%M:%SZ`), and mark it doing:
-`bash .claude/workflow/bin/ledger.sh <KEY> status doing "<run id>, <epic branch>" --run <run id> --owner <agent id>`
+`bash .claude/workflow/bin/ledger.sh <KEY> status doing "<run id>, <epic branch>" --run <run id> --owner "<KEY>-owner <agent id>"`
 from the epic worktree.
 
 From here each owner writes, proves red, gates, submits and rebases its own branch, and

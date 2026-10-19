@@ -1,4 +1,4 @@
-"""Status line: model, checkout, context, cost, and epic progress.
+"""Status line: model, session address, checkout, context, cost, and epic progress.
 
 Claude Code pipes session JSON to stdin and prints the first line of stdout under the prompt.
 Installed per machine by /setup-workflow, which writes an absolute path into
@@ -15,6 +15,7 @@ Missing fields are normal before the first API response, so every read has a fal
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -38,6 +39,31 @@ def get(d: object, *path: str, default: object = None) -> object:
             return default
         d = d[key]
     return d if d is not None else default
+
+
+def session_address(payload: dict) -> str:
+    """`@pad-0d`: the name other sessions `SendMessage` this one by, or `@<short id>`.
+
+    Claude Code registers each live session as `<config dir>/sessions/<pid>.json`, with its
+    `sessionId` and the `name` that `ListAgents` shows. The raw id is not an address, so it is
+    only the fallback when no row names this session.
+    """
+    session = str(get(payload, "session_id", default="") or "")
+    if not session:
+        return ""
+    config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    try:
+        rows = list((config / "sessions").glob("*.json"))
+    except OSError:
+        rows = []
+    for row in rows:
+        try:
+            entry = json.loads(row.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(entry, dict) and entry.get("sessionId") == session and entry.get("name"):
+            return f"@{entry['name']}"
+    return f"@{session[:8]}"
 
 
 def branch(cwd: Path, fallback: str) -> str:
@@ -369,6 +395,9 @@ def main() -> None:
     project_dir = Path(str(get(payload, "workspace", "project_dir", default=cwd)))
 
     parts = [str(get(payload, "model", "display_name", default="claude"))]
+    address = session_address(payload)
+    if address:
+        parts.append(address)
     head = branch(cwd, str(get(payload, "workspace", "git_worktree", default=cwd.name)))
     parts.append(head)
 

@@ -68,10 +68,10 @@ def test_dispatch_carries_only_the_paths_and_records_the_owner_by_script(payload
     body = step(payload_text(SKILL), "b", "Dispatch one `owner` per ticket, in one message")
     assert "Each prompt carries only the ticket file's absolute path and the brief's" in body
     assert "Name each `<task key>-owner`" in body
-    assert "fill its agent id into the brief's ownership map" in body
-    assert "dispatch <KEY> <agent id>" in body
+    assert "`<KEY>-owner <agent id>` into its row of the brief's ownership map" in body
+    assert "dispatch <KEY> <KEY>-owner <agent id>" in body
     assert "ledger.sh <KEY> status doing" in body
-    assert "--run <run id> --owner <agent id>" in body
+    assert '--run <run id> --owner "<KEY>-owner <agent id>"' in body
 
 
 def test_ticket_bodies_are_files_never_text(payload_text):

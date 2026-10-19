@@ -74,7 +74,7 @@ Enough to choose the areas, no more. You are not reading the codebase here; the 
 
 ### 2. Scan
 
-Dispatch one `knowledge-scanner` per area, **all in one message**, so they run in parallel. An
+Dispatch one `knowledge-scanner` per area, named `scan-<area>`, **all in one message**, so they run in parallel. An
 area is a top-level module, or the repo root for a small repo. Three to six is the usual range;
 more areas than that means the areas are too small.
 

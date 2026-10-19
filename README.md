@@ -208,7 +208,7 @@ When a push to PAD needs more than file copies in the projects that use it, add 
 .claude/workflow/bin/*.sh               the gates and the bookkeeping: merge-task, ledger, plan-check, review, ...
 .claude/workflow/rules/                 rules agents load at start; add your own beside them
 .claude/workflow/claude-md-snippet.md   offered to your CLAUDE.md by /setup-workflow
-.claude/statusline.py                   model, branch, context, cost, run and epic progress
+.claude/statusline.py                   model, session address (@name), branch, context, cost, progress
 .claude/settings.json                   ← yours: worktree.baseRef + permissions (never overwritten)
 docs/decisions/README.md                ← yours: the committed development record
 CONTEXT.md                              ← yours: the glossary, if the layer is on
