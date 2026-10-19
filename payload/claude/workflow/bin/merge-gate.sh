@@ -15,6 +15,10 @@
 # neither changed nor imports is rerun once; a green rerun counts. --gate full is the configured
 # full suite, lint the configured lint command, anything else is run as the command itself.
 #
+# --run <id> keeps the run's flake record (<main checkout>/.work/runs/<id>/flakes): the tests that
+# failed outside the batch are appended before the rerun, and one already recorded is
+# `GATE FLAKE <test>` (exit 1) with no rerun.
+#
 # Prints the failing output's tail, then `GATE PASS` (exit 0) or `GATE FAIL` (exit 1).
 # Exit 2 on usage or a missing candidate or command.
 
@@ -24,14 +28,15 @@ bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=merge-lib.sh
 . "$bin/merge-lib.sh"
 
-usage() { echo "usage: merge-gate.sh --candidate <path> [--at <commit>] [--gate full|lint|<command>]" >&2; exit 2; }
+usage() { echo "usage: merge-gate.sh --candidate <path> [--at <commit>] [--gate full|lint|<command>] [--run <id>]" >&2; exit 2; }
 
-wt=""; at=""; gate_opt="full"
+wt=""; at=""; gate_opt="full"; run=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --candidate) wt="${2:-}"; shift 2 ;;
     --at) at="${2:-}"; shift 2 ;;
     --gate) gate_opt="${2:-}"; shift 2 ;;
+    --run) run="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -93,6 +98,14 @@ fi
 
 run_cmd "$gate"; code=$?
 if [ "$code" -ne 0 ] && outside_only; then
+  if [ -n "$run" ] && flakes="$(flake_file "$run" "$PWD")"; then
+    if known="$(flake_known "$flakes")"; then
+      tail -n 40 "$log"
+      echo "GATE FLAKE ${known% *}"
+      exit 1
+    fi
+    flake_record "$flakes" batch
+  fi
   echo "gate failed only in test files outside this batch; rerunning it once"
   run_cmd "$gate"; code=$?
 fi

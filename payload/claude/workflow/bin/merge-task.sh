@@ -245,6 +245,14 @@ step() {
   reject_step "$1" "$?"
 }
 
+# A test already recorded as failing outside the change: no further gate on it.
+reject_flaky() {
+  tail -n 40 "$log"
+  abort
+  result "REJECTED $key: flaky $1 (failed $2 times outside the change)"
+  exit 1
+}
+
 # The gate, holding a suite slot ahead of task-side runs, as a child whose tree the exit trap
 # can kill.
 run_gate() {
@@ -310,6 +318,12 @@ fi
 if [ -z "$expect_tree" ]; then
   run_gate; code=$?
   if [ "$code" -ne 0 ] && outside_only; then
+    if [ -n "$run" ] && flakes="$(flake_file "$run" "$wt")"; then
+      if known="$(flake_known "$flakes")"; then
+        reject_flaky "${known% *}" "$(( ${known##* } + 1 ))"
+      fi
+      flake_record "$flakes" "$key"
+    fi
     echo "gate failed only in test files outside $key; rerunning it once"
     run_gate; code=$?
   fi
