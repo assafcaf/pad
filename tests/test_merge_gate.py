@@ -97,7 +97,7 @@ def test_green_candidate_prints_gate_pass_after_gate_typecheck_and_lint(env):
 def test_gate_runs_in_the_candidate_on_its_tree(env):
     e = env(full='grep -q "X = 1" src/impl.py')
     e.commit({"src/impl.py": "X = 1\n"})
-    assert not (e.epic / "src" / "impl.py").exists()
+    assert "src/impl.py" not in git("ls-files", cwd=e.epic).split()
     r = e.gate()
     assert _last(r) == "GATE PASS", r.stdout + r.stderr
 
