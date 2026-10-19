@@ -55,13 +55,21 @@ common="$(cd "$common" && pwd)"
 dir="$main/.work/runs/$run"
 wt="$main/.claude/worktrees/$run"
 queue="$dir/merge-queue"; pidf="$dir/merge-drain.pid"; runfile="$dir/merge-strategy"
-last="$dir/merge-last"; qlock="$dir/merge-queue.lock"
+last="$dir/merge-last"; passf="$dir/merge-pass"; qlock="$dir/merge-queue.lock"
 mkdir -p "$dir"
 cd "$main" || exit 2
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 drain_pid() { local p; p="$(cat "$pidf" 2>/dev/null)"; alive "$p" && printf '%s' "$p"; }
-qcount() { grep -c '[^[:space:]]' "$queue" 2>/dev/null || true; }
+# The waiting tickets: the queue less the lines of the pass in flight (merge-pass).
+qcount() {
+  [ -f "$queue" ] || { echo 0; return; }
+  if [ -n "$(drain_pid)" ] && [ -f "$passf" ]; then
+    awk 'NR == FNR { n[$0]++; next } { l = $0; sub(/\r$/, "", l); if (l ~ /^[[:space:]]*$/) next; if (n[l] > 0) { n[l]--; next } c++ } END { print c + 0 }' "$passf" "$queue"
+  else
+    grep -c '[^[:space:]]' "$queue" 2>/dev/null || true
+  fi
+}
 
 # The queue mutex: a short mkdir lock; one whose owner is gone is reclaimed.
 qtake() {
@@ -144,6 +152,16 @@ choose() {
   while IFS= read -r o; do [ -n "$o" ] && strat_opts+=("$o"); done <<<"$(printf '%s\n' "$out" | tail -n +2)"
 }
 
+# drop_lines <file>: remove one queue line per line of <file>, under the lock --ready appends under.
+drop_lines() {
+  qtake
+  awk 'NR == FNR { n[$0]++; next } { l = $0; sub(/\r$/, "", l); if (n[l] > 0) { n[l]--; next } print }' \
+    "$1" "$queue" > "$tmp/q2" 2>/dev/null
+  cp "$tmp/q2" "$queue"
+  rm -f "$passf"
+  qdrop
+}
+
 while :; do
   # Take the pass, or finish: the check and the pid-file removal are atomic with a --ready.
   qtake
@@ -151,14 +169,15 @@ while :; do
     rm -f "$pidf"; qdrop; break
   fi
   choose
-  cp "$queue" "$tmp/pass"; : > "$queue"
+  cp "$queue" "$tmp/pass"
   qdrop
   tr -d '\r' < "$tmp/pass" | sed '/^[[:space:]]*$/d' > "$tmp/pass.in"
   keys="$(awk '{print $1}' "$tmp/pass.in")"
+  cp "$tmp/pass.in" "$passf"
 
   if [ -n "$strat_err" ]; then
     while IFS= read -r k; do echo "ERROR $k: $strat_err"; done <<<"$keys"
-    rc=2; continue
+    rc=2; drop_lines "$tmp/pass.in"; continue
   fi
 
   before="$(git -C "$wt" rev-parse HEAD 2>/dev/null)"
@@ -216,9 +235,9 @@ while :; do
   [ "$errs" -eq 0 ] || rc=2
   cat "$tmp/print"
 
-  if [ -s "$tmp/requeue" ]; then
-    qtake; cat "$tmp/requeue" "$queue" > "$tmp/q2" 2>/dev/null; cp "$tmp/q2" "$queue"; qdrop
-  fi
+  # The pass's lines leave the queue now, not before; a REQUEUE ticket's line stays for the next pass.
+  grep -vxFf "$tmp/requeue" "$tmp/pass.in" > "$tmp/gone" 2>/dev/null || true
+  drop_lines "$tmp/gone"
   printf 'LAST %s merged=%s rejected=%s conflict=%s gates=%s\n' "$strat_name" "$merged" "$rejected" \
     "$conflict" "$(grep -c . "$gates_file")" > "$last"
 done
