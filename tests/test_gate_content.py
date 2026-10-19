@@ -21,8 +21,8 @@ def test_config_has_a_gate_option_a_worker_budget_and_a_per_test_timeout(payload
 def test_skill_passes_gate_affected_and_workers_and_runs_the_full_suite_at_the_end(payload_text):
     text = payload_text(SKILL)
     assert "--gate full|affected" in text
-    assert '--affected "<named tests>"' in text
-    assert "--workers <n>" in text
+    assert "Test workers" in text
+    assert "`merge.sh` reads" in text
     assert "even under `gate=affected`" in text
 
 

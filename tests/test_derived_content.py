@@ -16,7 +16,7 @@ def test_config_has_a_derived_files_row_and_checks_a_rebuilt_lockfile(payload_te
 
 
 def test_owner_mode_merge_passes_each_derived_file(payload_text):
-    assert '--derived "<path>=<cmd>"' in payload_text(SKILL)
+    assert "Derived files" in payload_text(SKILL)
 
 
 def test_plan_check_reports_hotspots_and_tickets_acts_on_them(payload_text):

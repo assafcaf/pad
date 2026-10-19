@@ -121,7 +121,7 @@ def test_o13_retired_agents_and_workflow_are_gone():
 # O19: the orchestrator runs merge-task.sh; a failure retries fresh; tracker FAIL never stops.
 
 def test_o19_orchestrator_sends_conflict_or_rejected_to_the_owner_unchanged(payload_text):
-    row = report_row(payload_text(SKILL), "`merge-task.sh` `CONFLICT")
+    row = report_row(payload_text(SKILL), "`merge.sh` `CONFLICT")
     assert "REJECTED" in row
     assert re.search(r"SendMessage. the owner that line unchanged", row, re.I)
 
