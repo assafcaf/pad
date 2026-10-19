@@ -10,6 +10,18 @@ set -uo pipefail
 
 bin="${PAD_BIN:?PAD_BIN is not set}"
 run="${PAD_RUN:?PAD_RUN is not set}"
+
+keys=(); heads=(); reds=()
+input="$(cat | tr -d '\r')"
+while read -r key head red _; do
+  [ -n "${key:-}" ] || continue
+  keys+=("$key"); heads+=("$head"); reds+=("$red")
+done <<EOT
+$input
+EOT
+total="${#keys[@]}"
+[ "$total" -gt 0 ] || exit 0
+
 wt="${PAD_EPIC_WORKTREE:?PAD_EPIC_WORKTREE is not set}"
 branch="${PAD_EPIC_BRANCH:?PAD_EPIC_BRANCH is not set}"
 # Read-only argument resolution goes to the real merge-ticket.sh: through the engine's shim a
@@ -32,16 +44,6 @@ if [ -f "$cfg" ]; then
   case "$cell" in none*|"") ;; *) deps="$(printf '%s' "$cell" | sed -n 's/^[^`]*`\([^`]*\)`.*/\1/p')" ;; esac
 fi
 
-keys=(); heads=(); reds=()
-input="$(cat | tr -d '\r')"
-while read -r key head red _; do
-  [ -n "${key:-}" ] || continue
-  keys+=("$key"); heads+=("$head"); reds+=("$red")
-done <<EOT
-$input
-EOT
-total="${#keys[@]}"
-[ "$total" -gt 0 ] || exit 0
 
 # Candidate options, from merge-ticket.sh's resolved merge-task.sh arguments: derived files and
 # test paths are the repo's; --protected is passed when any ticket of the pass is protected.
