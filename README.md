@@ -13,8 +13,10 @@ ledger. The tracker is updated as tickets merge, so progress is visible there.
 /pad-run <epic>          →  epic branch + draft PR     one owner per ticket; scripts merge and record
 ```
 
-Every workflow skill is user-invoked only (`disable-model-invocation`), so nothing starts on its
-own. The one exception is the optional [`writing-for-readers`](#writing-for-readers) skill.
+Every workflow skill but `/knowledge-layer` is user-invoked only (`disable-model-invocation`), so
+nothing starts on its own. `/knowledge-layer` stays callable by an agent because
+`/setup-workflow` and `/pad-run` run it; the optional [`writing-for-readers`](#writing-for-readers)
+skill is the one Claude starts by itself.
 `/batch-implement` is the 0.3 name of `/pad-run`, kept as an alias for one version.
 
 > **Status: 0.4.0, a redesign not yet run end to end.** Each gate script is behaviour-tested

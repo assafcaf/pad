@@ -34,3 +34,11 @@ def test_every_agent_has_an_agent_file():
 def test_gate_scripts_are_present():
     for script in ["verify-red.sh", "weakened-tests.sh", "knowledge-paths.sh"]:
         assert (PAYLOAD / "workflow" / "bin" / script).is_file(), script
+
+
+def test_knowledge_layer_can_be_run_by_an_agent():
+    """/setup-workflow and /pad-run call it through the Skill tool, which the flag would block."""
+    front = (PAYLOAD / "skills" / "knowledge-layer" / "SKILL.md").read_text(encoding="utf-8")
+    front = front.split("---", 2)[1]
+    assert "disable-model-invocation" not in front
+    assert "/setup-workflow" in front and "/pad-run" in front

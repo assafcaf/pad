@@ -1,8 +1,7 @@
 ---
 name: knowledge-layer
-description: Build or refresh this repo's knowledge layer - a glossary the whole workflow shares, and the working notes an agent cannot infer from the code. Scans for what can be cited, asks you for what cannot. Run as /knowledge-layer at any point in a project's life.
+description: Build or refresh this repo's knowledge layer - a glossary the whole workflow shares, and the working notes an agent cannot infer from the code. Scans for what can be cited, asks you for what cannot. Run as /knowledge-layer at any point in a project's life; /setup-workflow and /pad-run call it through the Skill tool. Do not start it unasked otherwise.
 argument-hint: "[refresh [<package>]]"
-disable-model-invocation: true
 ---
 
 # Repo → knowledge layer

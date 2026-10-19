@@ -51,13 +51,14 @@ def _config(start: str, ready: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _set_up(repo: Path, start: str, ready: str) -> None:
+def _set_up(repo: Path, start: str, ready: str, adapter: str = "<TRACKER>") -> None:
     """Make the fixture repo a set-up repo, committed on main and pushed."""
     bin_dir = repo / ".claude" / "workflow" / "bin"
     bin_dir.mkdir(parents=True)
     for script in BIN.glob("*.sh"):
         shutil.copy(script, bin_dir / script.name)
-    (repo / ".claude" / "workflow" / "config.md").write_text(_config(start, ready), encoding="utf-8")
+    config = _config(start, ready).replace("- **Adapter:** `<TRACKER>`", f"- **Adapter:** `{adapter}`")
+    (repo / ".claude" / "workflow" / "config.md").write_text(config, encoding="utf-8")
     (repo / ".gitignore").write_text(".work/\n", encoding="utf-8")
     git("add", ".", cwd=repo)
     git("commit", "-q", "-m", "set up the workflow", cwd=repo)
@@ -80,6 +81,18 @@ def setup_repo(tmp_path, repo, worktree):
     """A set-up repo with a working `web` preview and an unrelated task worktree `feature`."""
     start, ready = _app(tmp_path / "beat", tmp_path / "ready")
     _set_up(repo, start, ready)
+    worktree(repo, "feature")
+    try:
+        yield repo
+    finally:
+        _stop_preview(repo)
+
+
+@pytest.fixture
+def jira_repo(tmp_path, repo, worktree):
+    """A set-up repo whose tracker is Jira, with no Jira credentials anywhere."""
+    start, ready = _app(tmp_path / "beat", tmp_path / "ready")
+    _set_up(repo, start, ready, adapter="jira")
     worktree(repo, "feature")
     try:
         yield repo
@@ -187,6 +200,15 @@ def test_o46_existing_ticket_is_byte_identical_after_the_ledger_write_step(setup
     r = _rehearse(setup_repo)
     assert ("ledger-write", "PASS") in _steps(r), _out(r)
     assert (setup_repo / TICKET).read_bytes() == TICKET_TEXT.encode("utf-8")
+
+
+def test_a_jira_project_rehearses_against_the_local_ledger_and_leaves_nothing(jira_repo):
+    before = _snapshot(jira_repo)
+    r = _rehearse(jira_repo)
+    assert ("merge-bookkeeping", "PASS") in _steps(r), _out(r)
+    assert ("ledger-write", "PASS") in _steps(r), _out(r)
+    assert _last(r) == "REHEARSAL OK", _out(r)
+    _assert_left_nothing(before, _snapshot(jira_repo))
 
 
 def test_ownership_step_reports_the_refused_stray_write(setup_repo):
