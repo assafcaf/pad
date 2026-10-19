@@ -217,10 +217,18 @@ surface without one — a CLI, a backend — has no visual class; nothing in PAD
   from the epic branch.
 - **Parallelism:** `none`: every ready task starts at once. Set a number only to cap
   owners; host load is already bounded by suite slots, below.
-- **Gate:** `full`. What `merge-task.sh` runs per merge: `full` (the full suite) or `affected`
-  (the named-tests command on the tests the change reaches through imports, from
+- **Gate:** `affected`. What `merge-task.sh` runs per merge: `full` (the full suite) or
+  `affected` (the named-tests command on the tests the change reaches through imports, from
   `bin/affected-tests.sh`; the full suite still runs when a conftest, manifest, lockfile or
-  test helper changed, and at the end of the epic). `/pad-run --gate` overrides it.
+  test helper changed). `affected` is safe as the default because the epic's final full gate
+  runs the whole suite on the finished branch before the PR, so anything a selective merge
+  gate missed is caught there. `batch` gates with `--gate affected` when this is `affected`.
+  `/pad-run --gate` overrides it.
+- **Merge strategy:** `dynamic`. How tickets land: `dynamic` lets `/pad-run` choose among the
+  strategies (`single`, `batch`, and any of the repo's own) from the run's signals and switch
+  as they change; a fixed name (`single`, `batch`, or a strategy of your own) uses only that
+  one. Strategies are `<name>.md` + script pairs in `.claude/workflow/merge-strategies/`; a
+  repo adds its own with `/merge-strategy`, and `/pad-update` never touches them.
 - **Test workers:** `none`. A number caps the workers a parallel suite may start on this host
   (e.g. `-n {workers}` with pytest-xdist): `merge-task.sh --workers` fills `{workers}` in the
   Full suite and Run named tests commands. Size it so a gate plus the agents' named-test runs
@@ -229,6 +237,8 @@ surface without one — a CLI, a backend — has no visual class; nothing in PAD
   (pytest-timeout's `--timeout=<s>`) so a hung test fails instead of holding a slot.
 - **Suite slots:** `2` — at most this many full-suite runs at once, through `bin/suite-slot.sh`;
   a waiting merge gate goes first. `PAD_SUITE_SLOTS` overrides it.
+- **Host suite slots:** `none`. A number caps full-suite runs across every repo on this host
+  (read by `bin/suite-slot.sh`; slots live under `PAD_HOST_SLOTS_DIR`, else `~/.pad/slots`).
 - **Final review:** `off`. Set to a `/code-review` level (`low`, `medium`, …) to run one
   review over the finished epic branch before the PR.
 - **Publishing:** `merge-task.sh` pushes the epic branch to `origin` after each merge, so tracker comments cite

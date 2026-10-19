@@ -78,25 +78,6 @@ def test_o13_o19_no_revert_of_a_revert_and_no_retired_merger_replies(payload_tex
     assert "SUBMITTED" not in text
 
 
-def test_o13_false_positive_rejection_is_resubmitted_and_costs_the_owner_nothing(payload_text):
-    hits = [
-        b
-        for rel in (SKILL, OWNER)
-        for b in blocks_matching(payload_text(rel), r"false[- ]positive", r"REJECTED")
-    ]
-    assert hits, "neither skill nor owner handles a false-positive REJECTED"
-    assert any(
-        re.search(r"\bsame\b", b, re.I)
-        and re.search(r"TASK_HEAD|task head", b, re.I)
-        and re.search(r"resubmit|re-?run|again", b, re.I)
-        for b in hits
-    ), hits
-    skill_hits = blocks_matching(payload_text(SKILL), r"false[- ]positive", r"REJECTED")
-    assert any(
-        re.search(r"owner hears only the rerun's last line", b, re.I) for b in skill_hits
-    ), skill_hits
-
-
 def test_o13_every_revert_in_skill_and_owner_is_for_a_serial_resource(payload_text):
     for rel in (SKILL, OWNER):
         stray = [
@@ -121,7 +102,7 @@ def test_o13_retired_agents_and_workflow_are_gone():
 # O19: the orchestrator runs merge-task.sh; a failure retries fresh; tracker FAIL never stops.
 
 def test_o19_orchestrator_sends_conflict_or_rejected_to_the_owner_unchanged(payload_text):
-    row = report_row(payload_text(SKILL), "`merge-task.sh` `CONFLICT")
+    row = report_row(payload_text(SKILL), "`merge.sh` `CONFLICT")
     assert "REJECTED" in row
     assert re.search(r"SendMessage. the owner that line unchanged", row, re.I)
 

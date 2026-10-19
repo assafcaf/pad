@@ -1,7 +1,7 @@
 ---
 name: pad-run
-description: Run an epic's tickets to merged code. One owner per ticket works in its own worktree from start to merged; the orchestrator writes the run's brief, dispatches, lands each READY with merge-task.sh, reviews every wave with the operator, replans, and finishes with a PR. Scripts keep the ledger. Run as /pad-run <epic key | task keys | plan path | outcomes>.
-argument-hint: "<epic key | task keys… | plan path | outcomes in quotes> [--gate full|affected]"
+description: Run an epic's tickets to merged code. One owner per ticket works in its own worktree from start to merged; the orchestrator writes the run's brief, dispatches, hands each READY to merge.sh, reviews every wave with the operator, replans, and finishes with a PR. Scripts keep the ledger. Run as /pad-run <epic key | task keys | plan path | outcomes>.
+argument-hint: "<epic key | task keys… | plan path | outcomes in quotes> [--gate full|affected] [--merge <name> [opt=val…]]"
 disable-model-invocation: true
 ---
 
@@ -13,9 +13,32 @@ Run `bash .claude/workflow/bin/rules.sh for orchestrator` and follow every rule 
 (`.claude/workflow/rules/`).
 
 `--gate full|affected` picks what each merge's gate runs; without it, the config's Execution →
-Gate. With `affected`, every `merge-task.sh` call adds `--affected "<named tests>"` (the config's
-Run named tests command, `{tests}` left in). With the config's Test workers set, every call adds
-`--workers <n>`.
+Gate. `merge.sh` reads the gate, the named-tests command, Test workers, Derived files, Protected
+paths and a surface's Render command from the config and the ticket file; you pass none of
+them. The strategies' building blocks get `--protected "<the config's Protected paths>" --ticket <ticket file>` from `merge.sh`.
+
+`--merge <name> [opt=val…]` picks the merge strategy for the run (`batch max=4`, `single`,
+`dynamic`, or a repo's own name from `merge-strategies.sh list`). At start, write it to the
+run's strategy file, `.work/runs/<run id>/merge-strategy`, with `Write`. Without the flag the
+effective setting is the config's `Merge strategy:` line, else `dynamic`.
+
+**The run's merge strategy.** `merge.sh` reads the file at the start of every pass, so a rewrite
+takes effect from the next pass and never interrupts one. It rejects `dynamic` in the file.
+- **A fixed strategy** (a name, from `--merge` or the config): write it at start and never
+  rewrite the file on your own.
+- **An operator instruction mid-run** to change strategy is a ruling: append it to the brief's
+  `## Rulings`, log `Ruling: <decision> — <why> — <cost if wrong>`, and rewrite the run's `merge-strategy` file. That
+  choice then holds as a fixed strategy.
+- **`dynamic`** means you own the file. At start write `batch`. Afterwards, whenever the signals
+  call for it, switch: read `bash .claude/workflow/bin/merge.sh --run <run id> --status`
+  (`QUEUE`, `DRAIN`, `LAST <strategy> merged= rejected= conflict= gates=`) and the result
+  lines, and choose from `bash .claude/workflow/bin/merge-strategies.sh list` by each
+  strategy's "when to use" text. With the shipped pair, back off from `batch` to `single` after
+  two red batches in a row or a failure that moves between passes, and return to `batch` once
+  two or more tickets queue again and the last single merges were green. Write the file, then
+  log `bash .claude/workflow/bin/run-log.sh <run id> "STRATEGY <name> [opts] — <why>"` for every
+  change. You never ask the operator about a switch, and you never name a strategy the list does
+  not have.
 
 You govern the pipeline, not the conversations. Your verbs are partition, sequence, land,
 replan and escalate. You never write product code, and you never carry a message between two
@@ -30,7 +53,7 @@ agents: owners talk to each other directly and through the run's channel.
 | `memory-curator` | Keeps the agents' persistent memory clean: keeps, tightens, merges or deletes lessons, never adds them | You, once, at the end of the epic |
 
 You pay per hand-off, not per work: every turn you take re-reads your whole context. So a
-ticket costs you one dispatch, one background merge per `READY`, and nothing in between.
+ticket costs you one dispatch, one background `merge.sh` call per `READY`, and nothing in between.
 Structure lives in scripts and files, not in your turns.
 
 **Names and addresses.** Every dispatch gets the fixed name the `addressed-dispatch` rule
@@ -62,7 +85,7 @@ question: it blocks the whole session until someone answers. A `NEEDS_RULING` th
 answer and you shouldn't is parked the same way, for the next review gate: nobody guesses.
 
 **Everything else keeps moving while a ticket is parked.** Keep dispatching ready tickets and
-running `merge-task.sh` for each `READY`. The operator answers by typing into this session:
+handing each `READY` to `merge.sh`. The operator answers by typing into this session:
 append the answer to the brief's `## Rulings`, `SendMessage` it to the parked owner, which
 resumes from where it stopped, and fill any slot its dependents open.
 
@@ -152,7 +175,7 @@ memory.
    attributed. Once green, start each configured preview with
    `bash .claude/workflow/bin/preview.sh start --surface <name> --worktree <epic worktree>` (a
    surface with no `Preview start` is a no-op), so each merge shows up live for the operator.
-   Don't restart it yourself: `merge-task.sh` stops a running preview before setup and starts
+   Don't restart it yourself: the merge stops a running preview before setup and starts
    it again whenever a merge touches the surface's `Restart when changed` paths.
 6. **Write the brief.** Fill `.claude/workflow/brief-template.md` into
    `.work/runs/<run id>/brief.md` with `Write`: links to the scope, the references and the
@@ -181,41 +204,43 @@ team are in the brief. Name each `<task key>-owner`. Then, for each, fill
 from the epic worktree.
 
 From here each owner writes, proves red, gates, submits and rebases its own branch, and
-reports one line. You land it with `merge-task.sh`, which takes the merge lock, so tickets
-merge one at a time, each gated on the head the one before produced. You don't repeat the
-owner's checks, and you don't review its test removals: `merge-task.sh` runs
-`weakened-tests.sh`, which passes a removal only when a rule explains it.
+reports one line. You hand it to `merge.sh`, which queues it and lands it through the run's strategy under the
+merge lock; the gate runs on the tree that lands, alone or as part of a batch. You never build a
+`merge-task.sh` command yourself. You don't repeat the owner's checks, and you don't
+review its test removals: the merge runs `weakened-tests.sh`, which passes a removal only when
+a rule explains it.
 
-**c. Act on the reports.** Each owner report is one line; each `merge-task.sh` run ends with
-one last line. Never read diffs, logs or merge output into your context: act only on:
+**c. Act on the reports.** Each owner report is one line; each `merge.sh` call prints a
+result line for every ticket it lands: `MERGED|REJECTED|CONFLICT|ERROR <KEY>`. Never read diffs, logs or merge output into your context: act only on:
 
 | Report | You |
 |---|---|
-| Owner `READY <KEY> <TASK_HEAD> <RED>` | Run `bash .claude/workflow/bin/merge-task.sh --worktree <epic worktree> --branch <epic branch> --setup "<setup>" --gate "<full suite>" --typecheck "<typecheck>" --lint "<lint>" --test-paths "<test paths>" [--derived "<path>=<cmd>" …] --protected "<the config's Protected paths>" --ticket <ticket file> --run <run id> --outcomes "<O ids or ->" <KEY> <RED> <TASK_HEAD> "<the ticket's title>"`, one `--derived` per row of the config's Derived files, and, for a ticket whose reference is a mock crop on a surface with a Render command, `--capture "bash .claude/workflow/bin/render-check.sh --surface <surface> --route <route> --viewport <WxH> --out {out}"`, in the background (`run_in_background`), and end your turn. That is the whole hand-off: one turn |
-| `merge-task.sh` `MERGED <sha>` | Nothing to write: the script recorded it (3e). If the owner's report listed `RESOURCE_PROBES`, run them (below). Fill the free slot (a) |
-| `merge-task.sh` `CONFLICT …` or `REJECTED …` | `SendMessage` the owner that line unchanged. It rebases or fixes, re-gates and reports `READY` again |
-| `merge-task.sh` `REJECTED` whose failing tests all sit in files the ticket didn't touch and doesn't import | A false positive: the script already reran them once. Rerun `merge-task.sh` once in the background with the same `RED` and `TASK_HEAD`; the owner hears only the rerun's last line |
-| `merge-task.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the ticket. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead. A second `ERROR` is a question (above): park that ticket |
+| Owner `READY <KEY> <TASK_HEAD> <RED>` | Run `bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>` in the background (`run_in_background`), and end your turn. That is the whole hand-off: one turn. The commands, derived files and a visual ticket's render capture come from the config and the ticket file |
+| `merge.sh` `QUEUED <KEY>` | Nothing: another call is draining the queue and lands the ticket in a later pass. Its result line arrives from that call |
+| `merge.sh` `MERGED <KEY> <sha>` | Nothing to write: the script recorded it (3e). If the owner's report listed `RESOURCE_PROBES`, run them (below). Fill the free slot (a). Under `dynamic`, consider a strategy switch |
+| `merge.sh` `CONFLICT …` or `REJECTED …` | `SendMessage` the owner that line unchanged. It rebases or fixes, re-gates and reports `READY` again. Under `dynamic`, consider a strategy switch |
+| `merge.sh` `REJECTED <KEY>: flaky <test>` or `FLAKE <test>` | A defect outside the ticket, so no rerun and no second `merge.sh --ready`. Write one reproduction-class fix ticket for that test through `/tickets`' lint (`plan-check.sh`), log `Ruling: fix the flake as its own ticket, a rerun hides it` without waiting for the operator, and let the ticket wait for the fix. Under `dynamic`, write `single` to the strategy file until that fix merges |
+| `merge.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the ticket. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead. A second `ERROR` is a question (above): park that ticket |
 | Owner `NEEDS_RULING <KEY> <question>` | Answer from the scope and the brief, append the answer to the brief's `## Rulings`, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` it to the owner. If it needs the operator, it's a question (above): park the ticket |
 | Owner `FAILED <KEY> <why>` | Record it (3e). Its dependents wait; everything else continues. **Stall rule:** a ticket that fails twice is replanned (3g), never re-dispatched as it is |
 
 **Resource probes.** After `MERGED`, run the owner's `RESOURCE_PROBES` one at a time across the
 whole run, with the configured runner, at the merge sha, from a throwaway
 `git worktree add --detach`. Keep the output in the run log. On a failure, once no
-`merge-task.sh` is running, revert that merge in the epic worktree with the `revert-merge` move
+`merge.sh` is running, revert that merge in the epic worktree with the `revert-merge` move
 (`config.md`, `## Git moves`), run the full suite and lint there, push with `push-epic`, and
 send the owner `RESOURCE FAILED` with the output tail: it fixes and reports `READY` again. A
 serial-resource failure is the only reason a merge is ever reverted.
 
-A flake that forces reruns is fixed at its cause (`.claude/workflow/testing.md`, "Pass under
+A flake is fixed at its cause (`.claude/workflow/testing.md`, "Pass under
 load"), not rerun again.
 
 **d. Inline instead** when the whole run is one ticket: skip the owner, and do its procedure
-yourself (`.claude/agents/owner.md`), landing it with `merge-task.sh`, in the epic worktree (or
+yourself (`.claude/agents/owner.md`), landing it with `merge.sh --ready`, in the epic worktree (or
 the current branch for quoted outcomes). Same gates, same bookkeeping.
 
 **e. Record each finished ticket.** A merged ticket is already recorded: the
-`merge-task.sh --run` that merged it wrote its evidence file, its run-log event and line, the
+the merge that landed it (`merge-task.sh --run`, called by the strategy) wrote its evidence file, its run-log event and line, the
 ticket's `done` status and its `board.md` row, and printed its PR-table row. Write none of
 those again. A `BOOKKEEPING FAIL` line in that merge's output is a write to make again before
 the PR (step 4). For `FAILED`, run `ledger.sh <KEY> comment "<the owner's reason>" --run <run id>`
@@ -242,8 +267,8 @@ merged ticket is never reopened: a fix is a new ticket that depends on it.
 
 ## 4. Finish the epic
 
-Once every owner has reported and no `merge-task.sh` is running, you may commit and push on the
-epic branch yourself. Final-review fixes (step 2) land through `merge-task.sh` like any ticket,
+Once every owner has reported and no `merge.sh` is running, you may commit and push on the
+epic branch yourself. Final-review fixes (step 2) land through `merge.sh --ready` like any ticket,
 so refresh the knowledge layer and write the development record after they land.
 
 1. **Full gates** at the epic head, even under `gate=affected`: the full suite and lint, then
@@ -252,7 +277,7 @@ so refresh the knowledge layer and write the development record after they land.
    `bash .claude/workflow/bin/preview.sh stop --surface <name> --worktree <epic worktree>`, so
    it holds no file in the worktree.
 2. **Final review.** If config sets a level, run `/code-review <level>`; fix only correctness
-   findings, test-first: one new ticket and one `owner` per fix, landed by `merge-task.sh`. In
+   findings, test-first: one new ticket and one `owner` per fix, landed by `merge.sh --ready`. In
    an inline run, fix them inline.
 3. **Knowledge refresh.** Only when the config's `## Project knowledge` section is `Mode: on`.
    Run `/knowledge-layer refresh` against the epic head. Approve its cited lines (terms,
@@ -276,7 +301,7 @@ so refresh the knowledge layer and write the development record after they land.
    longest ticket. Its `STAT` lines go in the PR body.
 7. **Push and open a draft PR** (`gh pr create --draft`) whose body has the epic link, a table
    of tickets (key, outcomes, merge sha), the rulings, failed tickets, what was not verified,
-   a **Test removals** section (every `REMOVALS <KEY>:` line `merge-task.sh` logged: the test
+   a **Test removals** section (every `REMOVALS <KEY>:` line the merge logged: the test
    and the rule that explains it), the run's `STAT` lines, and an **Agent memory** section: the
    curator's `CHANGED` lines, its `PROJECT_MD_CANDIDATES` (for the operator to add to
    `project.md` or drop), its `UPSTREAM_FIXES`, its `LOCAL_CANDIDATES` (for `CLAUDE.local.md`)

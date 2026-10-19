@@ -51,9 +51,9 @@ red is proven, and the tests are read-only to the owner. Everywhere else the own
 own tests, or none for a visual reference. One glob per line; `/tickets` marks every ticket
 that matches one `Protected: yes`, `plan-check.sh` fails a ticket that matches but says no, and
 `merge-task.sh --protected` rejects a protected diff whose red commit no test-designer wrote.
-None are configured.
 
-<!-- - `src/db/**` -->
+- `payload/claude/workflow/bin/merge*.sh`
+- `payload/claude/workflow/merge-strategies/**`
 
 ## Tracker updates during a run
 

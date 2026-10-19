@@ -220,6 +220,9 @@ Check, fix what you safely can, and report the rest:
   `switch`, `stash`, `reset --hard` and `branch -D` stay denied, as that file's deny list
   has them. `preflight.sh`'s `commands` check names each script rule still missing. Report
   anything missing rather than adding it — widening permissions is the operator's to approve.
+  The merge scripts need rules too (`merge`, `merge-strategies`, `merge-candidate`,
+  `merge-gate`, `merge-ticket`, `merge-rehearse`, `merge-cancel`, `suite-slot`). Tell the
+  operator `/merge-strategy` adds a merge strategy of their own.
 
 ## 6. Project knowledge
 

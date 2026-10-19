@@ -24,7 +24,7 @@ components, fixtures, test harnesses, the render command. One line each.>
 
 ## Gates
 - Named tests: `<command>` · Typecheck: `<command>` · Lint: `<command>`
-- Never the full suite: `merge-task.sh` runs it once per merge, on the merged tree.
+- Never the full suite: the merge gate runs it on the tree that lands, alone or as part of a batch.
 - Test paths: `<paths>` · Dev tests: `<path>` (never committed)
 
 ## Ownership map and team
