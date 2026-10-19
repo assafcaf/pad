@@ -167,7 +167,8 @@ def test_o3_print_args_lists_the_resolved_arguments_one_per_line_and_runs_nothin
     assert lines[-4:] == [KEY, red, head, TITLE]
     assert "--expect-tree" not in lines
     assert git("rev-parse", "HEAD", cwd=epic) == epic_head
-    assert not (repo / ".work" / "runs" / RUN / f"{KEY}.md").exists()
+    run_dir = repo / ".work" / "runs" / RUN
+    assert [p.name for p in run_dir.glob("*.md")] == []
 
 
 def test_o3_a_ticket_not_marked_protected_passes_no_protected_globs(repo, worktree, run_script):
