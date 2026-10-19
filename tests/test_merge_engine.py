@@ -191,7 +191,7 @@ def test_o2_drain_pid_file_exists_while_draining_and_is_gone_after(env):
         env.release(proc)
     finally:
         _stop(proc)
-    assert not (env.run_dir / "merge-drain.pid").exists(), "pid file left after the drain"
+    assert "merge-drain.pid" not in os.listdir(env.run_dir), "pid file left after the drain"
 
 
 @pytest.mark.slow
