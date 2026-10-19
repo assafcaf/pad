@@ -68,3 +68,44 @@ and a way for a repo to plug in its own merge behaviour without editing PAD.
   protected paths, test-removal rules and bookkeeping all run in `merge-task.sh`.
 
 ## Outcome
+Epic E2, 18 tickets, all merged on `epic/E2-merge-strategies`. The final gate at `cb9837a`
+passed: 759 tests, lint ok.
+
+**Built as decided:**
+- the engine: `merge.sh` (queue, drain, contract checks, `--status`), `merge-cancel.sh`,
+  `merge-candidate.sh`, `merge-gate.sh`, `merge-ticket.sh`, and `merge-lib.sh` extracted from
+  `merge-task.sh`, which gained `--expect-tree` and lock handover;
+- the shipped `single` and `batch` strategies, with `merge-strategies.sh` (list, validate,
+  resolve) and `merge-rehearse.sh`;
+- the `/merge-strategy` skill;
+- `/pad-run` handing READY to `merge.sh`;
+- install and migration 0004.
+
+**Departures from the decision above, all made during the run at the operator's request:**
+- **`dynamic` is the default**, not `batch`: the orchestrator picks a strategy before each
+  pass.
+- **Host load and flakes** (from the KAN-136 orchestrator's follow-up):
+  - `suite-slot.sh` takes a host-wide budget shared across repos;
+  - a test that fails outside the change twice is recorded as a flake and gets no third gate;
+  - `batch` requeues instead of bisecting on a known flake;
+  - `/pad-run` opens a fix ticket instead of rerunning.
+- **`affected` is the default gate.** The selector now also picks tests that name a changed
+  file (scripts they run, texts they read), not only tests that import it, and `merge-gate.sh`
+  can gate a batch on the selection. Within the run, the old selector picked only the new test
+  file for a change to `merge-task.sh`, and missed the content test that caught the run's one
+  real cross-ticket break; this run therefore gated with a fixed safety net until the fix
+  landed.
+- **One fix ticket (E2-T18):** `merge.sh` emptied the queue before the strategy ran, while
+  `merge-candidate.sh` reads heads from it. Each ticket's own tests passed; only E2-T11's
+  end-to-end rehearsal exposed it.
+
+**Not yet verified:** O20, an operator running `/merge-strategy` in a scratch repo. `batch`
+and `dynamic` have run only in tests and the rehearsal, not in a live epic.
+
+**Follow-ups found:**
+- the permission classifier denied `move-onto-sha` (`git rebase --onto`), `git reset --hard`,
+  and once even read-only commands, in owner worktrees;
+- an isolated owner cannot run git in a second worktree;
+- an owner reported an invented sha tail;
+- `plan-check.sh` reports OVERLAPS with tickets already merged;
+- `surface-checks.sh` runs the config template's placeholder row.
