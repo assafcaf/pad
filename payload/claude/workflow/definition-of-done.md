@@ -37,7 +37,7 @@ belong inside a ticket whose outcome needs them.
 
 ## The merge gate
 
-Every class passes the same gate, run by `merge-task.sh` at the merged tree. Nothing switches a
+Every class passes the same gate, run on the tree that lands, alone or as part of a batch. Nothing switches a
 check off.
 
 - **Affected tests** pass, and the outcome tests among them.
