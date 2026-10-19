@@ -11,8 +11,8 @@ TESTING = "claude/workflow/testing.md"
 
 def test_config_has_a_gate_option_a_worker_budget_and_a_per_test_timeout(payload_text):
     text = payload_text(CONFIG)
-    assert "- **Gate:** `full`" in text
-    assert "`affected`" in text
+    assert "- **Gate:** `affected`" in text
+    assert "final full gate" in text
     assert "- **Test workers:**" in text
     assert "{workers}" in text
     assert "pytest-timeout" in text
