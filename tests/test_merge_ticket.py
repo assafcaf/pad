@@ -92,6 +92,9 @@ def _setup(repo: Path, worktree, *, protected: str = "no", ticket: bool = True):
         t = repo / ".work" / "runs" / RUN / "tickets" / f"{KEY}.md"
         t.parent.mkdir(parents=True)
         t.write_bytes(TICKET.replace("{protected}", protected).encode("utf-8"))
+        tracker = repo / ".work" / "tickets" / "E1" / f"{KEY}.md"
+        tracker.parent.mkdir(parents=True)
+        tracker.write_bytes(f"---\nkey: {KEY}\nstatus: doing\n---\n\n## Outcome\nx\n".encode())
     epic = repo / ".claude" / "worktrees" / RUN
     epic.parent.mkdir(parents=True)
     git("worktree", "add", "-q", "-b", "epic", epic.as_posix(), "main", cwd=repo)
