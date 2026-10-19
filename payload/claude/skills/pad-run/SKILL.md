@@ -217,7 +217,7 @@ result line for every ticket it lands: `MERGED|REJECTED|CONFLICT|ERROR <KEY>`. N
 | `merge.sh` `QUEUED <KEY>` | Nothing: another call is draining the queue and lands the ticket in a later pass. Its result line arrives from that call |
 | `merge.sh` `MERGED <KEY> <sha>` | Nothing to write: the script recorded it (3e). If the owner's report listed `RESOURCE_PROBES`, run them (below). Fill the free slot (a). Under `dynamic`, consider a strategy switch |
 | `merge.sh` `CONFLICT …` or `REJECTED …` | `SendMessage` the owner that line unchanged. It rebases or fixes, re-gates and reports `READY` again. Under `dynamic`, consider a strategy switch |
-| `merge.sh` `REJECTED` whose failing tests all sit in files the ticket didn't touch and doesn't import | A false positive: the gate already reran them once. Run `merge.sh --ready` once more in the background with the same `RED` and `TASK_HEAD`; the owner hears only the rerun's last line |
+| `merge.sh` `REJECTED <KEY>: flaky <test>` or `FLAKE <test>` | A defect outside the ticket, so no rerun and no second `merge.sh --ready`. Write one reproduction-class fix ticket for that test through `/tickets`' lint (`plan-check.sh`), log `Ruling: fix the flake as its own ticket, a rerun hides it` without waiting for the operator, and let the ticket wait for the fix. Under `dynamic`, write `single` to the strategy file until that fix merges |
 | `merge.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the ticket. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead. A second `ERROR` is a question (above): park that ticket |
 | Owner `NEEDS_RULING <KEY> <question>` | Answer from the scope and the brief, append the answer to the brief's `## Rulings`, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` it to the owner. If it needs the operator, it's a question (above): park the ticket |
 | Owner `FAILED <KEY> <why>` | Record it (3e). Its dependents wait; everything else continues. **Stall rule:** a ticket that fails twice is replanned (3g), never re-dispatched as it is |
@@ -230,7 +230,7 @@ whole run, with the configured runner, at the merge sha, from a throwaway
 send the owner `RESOURCE FAILED` with the output tail: it fixes and reports `READY` again. A
 serial-resource failure is the only reason a merge is ever reverted.
 
-A flake that forces reruns is fixed at its cause (`.claude/workflow/testing.md`, "Pass under
+A flake is fixed at its cause (`.claude/workflow/testing.md`, "Pass under
 load"), not rerun again.
 
 **d. Inline instead** when the whole run is one ticket: skip the owner, and do its procedure

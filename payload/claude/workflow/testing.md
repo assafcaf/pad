@@ -35,6 +35,8 @@ A test here exists to prove one outcome from the ticket, and to fail when that o
   timeout for that load. Fix a flake at its cause; a rerun only hides it. Give a test that waits a bounded
   timeout, so a hang fails the test instead of holding a suite slot, and leave no process
   or global state behind: the gate may run tests in any order, across workers.
+  A test that starts a process stops its whole process tree, even when it fails: a child's
+  children left running hold ports and suite slots for every later test.
 
 ## Permanent and development tests
 
