@@ -23,6 +23,9 @@
 #                         agent in .claude/agents/ or a skill in .claude/skills/
 #   rules                 rules.sh validate passes: every file in .claude/workflow/rules/ is well
 #                         formed, names agents that load rules, and has its check script
+#   merge-strategy        merge-strategies.sh validate passes: every strategy file pair is well
+#                         formed and the config's `Merge strategy:` line names a strategy and
+#                         only options it declares
 #   executable            every .claude/workflow/bin/*.sh is mode 100755 in the git index
 #   gitignore             .gitignore covers .work/ and .claude/worktrees/
 #   line-endings          core.autocrlf and .gitattributes agree: not autocrlf=true with
@@ -338,6 +341,14 @@ check_render() {
   done <<<"$(table "## Surfaces" "Surface,Render command,Viewport")"
 }
 
+check_merge_strategy() {
+  local line
+  [ -f "$here/merge-strategies.sh" ] || return 0
+  while IFS= read -r line; do
+    case "$line" in "STRATEGY FAIL "*) fail merge-strategy "${line#STRATEGY FAIL }" ;; esac
+  done <<<"$(PAD_STRATEGIES_DIR="${PAD_STRATEGIES_DIR:-.claude/workflow/merge-strategies}" bash "$here/merge-strategies.sh" validate --config "$config" 2>&1)"
+}
+
 check_line_endings() {
   local auto eol=""
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -370,6 +381,7 @@ if [ -f "$config" ]; then
   check_render
 fi
 check_rules
+check_merge_strategy
 check_executable
 check_gitignore
 check_line_endings
