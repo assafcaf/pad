@@ -64,6 +64,13 @@ Something.
 - [O1] first, written with a dash bullet.
 * [O2] second, written with a star bullet.
 
+## Owns
+- `src/impl.py`
+- `tests/test_new.py`
+
+## Touches
+none
+
 ## Protected
 {{protected}}
 
