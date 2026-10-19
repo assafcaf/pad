@@ -23,7 +23,9 @@ KEY2 = "E1-T2"
 def _second_ticket(repo: Path, worktree, epic_head: str) -> tuple[str, str]:
     """A second clean ticket on its own files; -> (red, head)."""
     t = repo / ".work" / "runs" / RUN / "tickets" / f"{KEY2}.md"
-    t.write_bytes(TICKET.replace("{protected}", "no").replace(KEY, KEY2).encode("utf-8"))
+    text = (TICKET.replace("{protected}", "no").replace(KEY, KEY2)
+            .replace("src/impl.py", "src/impl2.py").replace("tests/test_new.py", "tests/test_new2.py"))
+    t.write_bytes(text.encode("utf-8"))
     tracker = repo / ".work" / "tickets" / "E1" / f"{KEY2}.md"
     tracker.write_bytes(f"---\nkey: {KEY2}\nstatus: doing\n---\n\n## Outcome\nx\n".encode())
     wt = worktree(repo, "task2")
