@@ -151,13 +151,13 @@ that matches neither would stop the run on a prompt. A failing row prints the al
 
 | Capability | Command |
 |---|---|
-| `branch-from-epic-head` | `git switch -c <branch> <sha>` |
-| `move-onto-sha` | `git reset --hard <sha>` |
+| `branch-from-epic-head` | `git worktree add -b <branch> <path> <sha>` |
+| `move-onto-sha` | `git rebase --onto <sha> HEAD` |
 | `take-red` | `git merge --ff-only <sha>` |
 | `rebase-red` | `git rebase <sha>` |
 | `rebase-onto-epic-head` | `git rebase <sha>` |
-| `discard-changes` | `git checkout -- <path>` |
-| `set-aside-work` | `git stash push -u` |
+| `discard-changes` | `git restore -- <path>` |
+| `set-aside-work` | `git commit -a -m <msg>` |
 | `try-merge` | `git merge --no-ff --no-commit <branch>` |
 | `abort-merge` | `git merge --abort` |
 | `commit-merge` | `git commit --no-edit` |
