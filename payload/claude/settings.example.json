@@ -40,6 +40,14 @@
       "Bash(bash .claude/workflow/bin/review.sh *)",
       "Bash(bash .claude/workflow/bin/render-check.sh *)",
       "Bash(bash .claude/workflow/bin/run-stats.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-cancel.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-candidate.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-gate.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-rehearse.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-strategies.sh *)",
+      "Bash(bash .claude/workflow/bin/merge-ticket.sh *)",
+      "Bash(bash .claude/workflow/bin/merge.sh *)",
+      "Bash(bash .claude/workflow/bin/suite-slot.sh *)",
       "Bash(bash .claude/workflow/bin/cleanup-run.sh *)"
     ],
     "deny": [
