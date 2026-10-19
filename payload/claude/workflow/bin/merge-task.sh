@@ -4,7 +4,7 @@
 #   merge-task.sh --worktree <epic worktree> --branch <epic branch> [--setup "<cmd>"]
 #                 --gate "<cmd>" --lint "<cmd>" [--typecheck "<cmd>"] [--test-paths "<pathspecs>"]
 #                 [--derived "<path>=<cmd>" ...] [--affected "<cmd with {tests}>"]
-#                 [--workers <n>] [--protected "<globs>"] [--ticket <path>]
+#                 [--workers <n>] [--expect-tree <tree> [--batch-label "<text>"]] [--protected "<globs>"] [--ticket <path>]
 #                 [--run <id> [--outcomes "<ids>"] [--capture "<cmd with {out}>"]] <KEY> <RED> <TASK_HEAD> "<GOAL>"
 #
 # Order: merge lock -> task-submit.sh -> git merge --no-ff --no-commit -> setup (only when a
@@ -31,6 +31,12 @@
 # --gate runs instead. Either way one line says which: `gate: affected (<files>)` or
 # `gate: full (<reason>)`. --workers <n> replaces {workers} in --gate and --affected, the host's
 # test-worker budget (e.g. `pytest -n {workers}`).
+#
+# --expect-tree <tree> lands a ticket whose tree was already gated (by merge-gate.sh): the merged
+# tree must equal <tree>, else `REJECTED <KEY>: tree <have> != <want>`; the gate, typecheck and
+# lint do not run again. The evidence records `<gate> -> pass (<--batch-label>, tree <short>)`.
+# PAD_MERGE_LOCK_HELD=<pid> names the pid in the merge lock when the caller already holds it:
+# the merge proceeds without waiting and leaves the lock in place.
 #
 # The gate runs as a child whose whole process tree is killed when this script exits early (a
 # signal, a timeout), and a merge left in progress is aborted, so no orphaned workers keep
@@ -70,6 +76,7 @@ run=""; outcomes=""; protected=""; ticket=""; capture=""
 derived=()
 affected=""
 workers=""
+expect_tree=""; batch_label=""
 pos=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -88,6 +95,8 @@ while [ $# -gt 0 ]; do
     --derived) derived+=("${2:-}"); shift 2 ;;
     --affected) affected="${2:-}"; shift 2 ;;
     --workers) workers="${2:-}"; shift 2 ;;
+    --expect-tree) expect_tree="${2:-}"; shift 2 ;;
+    --batch-label) batch_label="${2:-}"; shift 2 ;;
     *) pos+=("$1"); shift ;;
   esac
 done
@@ -100,6 +109,7 @@ if [ -n "$workers" ]; then
 fi
 
 bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$bin/merge-lib.sh"
 g() { git -C "$wt" "$@"; }
 infra() { echo "ERROR $key: $1"; exit 2; }
 log="$(mktemp)"
@@ -115,28 +125,6 @@ restart_previews() {
 }
 gate_pid=""
 merging=""
-# descendants <pid>: every process below <pid>, deepest last.
-descendants() {
-  local c
-  for c in $(ps -ef 2>/dev/null | awk -v p="$1" '$3 == p { print $2 }'); do
-    echo "$c"
-    descendants "$c"
-  done
-}
-# kill_tree <pid>: <pid> and everything below it. On Windows the native processes (python.exe
-# and its workers) are killed through taskkill /T as well.
-kill_tree() {
-  local p="$1" all w
-  [ -n "$p" ] || return 0
-  all="$p $(descendants "$p")"
-  if command -v taskkill >/dev/null 2>&1; then
-    for w in $all; do
-      [ -r "/proc/$w/winpid" ] && taskkill //F //T //PID "$(cat "/proc/$w/winpid")" >/dev/null 2>&1
-    done
-  fi
-  kill -KILL $all 2>/dev/null
-  return 0
-}
 # result <last line>: print the result line; with --run, the exit trap also logs it to the run
 # log as a timestamped event (`<ts> MERGED|CONFLICT|REJECTED <KEY> <detail>`) for run-stats.sh.
 final=""
@@ -161,16 +149,12 @@ trap 'exit 143' TERM
 common="$(g rev-parse --git-common-dir 2>/dev/null)" &&
   common="$(cd "$wt" && cd "$common" && pwd)" || infra "$wt is not a git worktree"
 mkdir -p "$common/pad-locks" || infra "cannot create $common/pad-locks"
-until mkdir "$common/pad-locks/merge" 2>/dev/null; do
-  owner="$(cat "$common/pad-locks/merge/pid" 2>/dev/null)"
-  if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
-    rm -rf "$common/pad-locks/merge"
-    continue
-  fi
-  sleep 0.1
-done
-lock="$common/pad-locks/merge"
-echo $$ > "$lock/pid"
+if [ -n "${PAD_MERGE_LOCK_HELD:-}" ] &&
+  [ "$(cat "$common/pad-locks/merge/pid" 2>/dev/null)" = "$PAD_MERGE_LOCK_HELD" ]; then
+  : # the caller holds the lock: proceed, and leave it in place
+else
+  lock="$(take_merge_lock "$common/pad-locks/merge")"
+fi
 
 # Infrastructure: the epic worktree must be on its branch with no uncommitted tracked change.
 [ "$(g symbolic-ref -q --short HEAD 2>/dev/null)" = "$branch" ] ||
@@ -272,27 +256,6 @@ run_gate() {
   return "$rc"
 }
 
-# True when the gate output names failing test files and every one is outside the task: not
-# changed between <base> and the task head, and importing none of the changed files.
-outside_only() {
-  local files changed f c stem
-  files="$(sed -n 's/^FAILED \([^ :]*\)::.*/\1/p' "$log" | sort -u)"
-  [ -n "$files" ] || return 1
-  changed="$(g diff --name-only "$base" "$head")"
-  for f in $files; do
-    printf '%s\n' "$changed" | grep -qxF "$f" && return 1
-    [ -f "$wt/$f" ] || return 1
-    for c in $changed; do
-      stem="$(basename "$c")"
-      [ -n "${stem%.*}" ] || continue
-      stem="$(printf '%s' "${stem%.*}" | sed 's/[][\.*^$+?(){}|/]/\\&/g')"
-      grep -E '(^|[^[:alnum:]_])(import|from|require|include|use)([^[:alnum:]_]|$)' "$wt/$f" |
-        grep -qE "(^|[^[:alnum:]_])${stem}([^[:alnum:]_]|$)" && return 1
-    done
-  done
-  return 0
-}
-
 # A running preview whose restart trigger this merge touches is stopped before setup, so it can't
 # lock files setup replaces; the exit trap starts it again. A preview that is not running stays so.
 changed_files="$(g diff --cached --name-only "$before")"
@@ -311,8 +274,7 @@ while IFS=$'\t' read -r surf triggers; do
 done <<<"$(bash "$bin/preview.sh" list --worktree "$wt" 2>/dev/null)"
 
 if [ -n "$setup" ]; then
-  manifests='^(.*/)?(package\.json|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb|requirements[^/]*\.txt|pyproject\.toml|poetry\.lock|uv\.lock|Pipfile|Pipfile\.lock|setup\.py|setup\.cfg|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|Gemfile|Gemfile\.lock|composer\.json|composer\.lock)$'
-  if g diff --cached --name-only "$before" | grep -Eq "$manifests"; then
+  if g diff --cached --name-only "$before" | grep -Eq "$MANIFESTS"; then
     step setup "$setup"
   fi
 fi
@@ -329,7 +291,15 @@ for c in ${rebuild[@]+"${rebuild[@]}"}; do
 done
 
 gate_cmd="$gate"
-if [ -n "$affected" ]; then
+if [ -n "$expect_tree" ]; then
+  # Already gated: the merged tree must be the one that was.
+  have="$(g write-tree 2>/dev/null)"
+  if [ "$have" != "$expect_tree" ]; then
+    abort
+    result "REJECTED $key: tree $have != $expect_tree"
+    exit 1
+  fi
+elif [ -n "$affected" ]; then
   pick="$(cd "$wt" && bash "$bin/affected-tests.sh" "$base" "$head" --test-paths "$paths" | tail -n 1)"
   case "$pick" in
     "TESTS "*) gate_cmd="${affected//\{tests\}/${pick#TESTS }}"
@@ -337,14 +307,16 @@ if [ -n "$affected" ]; then
     *) echo "gate: full (${pick#FULL })" ;;
   esac
 fi
-run_gate; code=$?
-if [ "$code" -ne 0 ] && outside_only; then
-  echo "gate failed only in test files outside $key; rerunning it once"
+if [ -z "$expect_tree" ]; then
   run_gate; code=$?
+  if [ "$code" -ne 0 ] && outside_only; then
+    echo "gate failed only in test files outside $key; rerunning it once"
+    run_gate; code=$?
+  fi
+  [ "$code" -eq 0 ] || reject_step gate "$code"
+  [ -z "$typecheck" ] || step typecheck "$typecheck"
+  step lint "$lint"
 fi
-[ "$code" -eq 0 ] || reject_step gate "$code"
-[ -z "$typecheck" ] || step typecheck "$typecheck"
-step lint "$lint"
 
 g commit -q --no-edit -m "Merge $key: $goal" >"$log" 2>&1 || {
   tail -n 40 "$log"; abort; infra "git commit failed"; }
@@ -363,6 +335,7 @@ if [ -n "$run" ]; then
     (cd "$wt" && bash "$bin/run-log.sh" "$run" "BOOKKEEPING FAIL $key: $1 (merge ${sha:0:7})") >/dev/null 2>&1
   }
   green="${gate_cmd} -> pass"
+  [ -z "$expect_tree" ] || green="$green (${batch_label:+$batch_label, }tree ${expect_tree:0:12})"
   [ -z "$typecheck" ] || green="$green; $typecheck -> pass"
   out="$(cd "$wt" && bash "$bin/render-evidence.sh" --run "$run" --key "$key" --red "$red"     --merge "$sha" --outcomes "${outcomes:--}" --red-result "red commit ${red:0:7} checked by task-submit.sh"     --green-result "$green" 2>&1)" && printf '%s
 ' "$out" || bk_fail "evidence: $(printf '%s' "$out" | tail -n 1)"
