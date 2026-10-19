@@ -238,7 +238,7 @@ yourself (`.claude/agents/owner.md`), landing it with `merge.sh --ready`, in the
 the current branch for quoted outcomes). Same gates, same bookkeeping.
 
 **e. Record each finished ticket.** A merged ticket is already recorded: the
-the merge that landed it wrote its evidence file, its run-log event and line, the
+the merge that landed it (`merge-task.sh --run`, called by the strategy) wrote its evidence file, its run-log event and line, the
 ticket's `done` status and its `board.md` row, and printed its PR-table row. Write none of
 those again. A `BOOKKEEPING FAIL` line in that merge's output is a write to make again before
 the PR (step 4). For `FAILED`, run `ledger.sh <KEY> comment "<the owner's reason>" --run <run id>`
