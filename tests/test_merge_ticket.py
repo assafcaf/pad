@@ -11,6 +11,7 @@ arguments, one per line, and runs nothing.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -124,7 +125,9 @@ def test_o3_landing_a_ticket_with_no_other_arguments_merges_it_and_writes_eviden
     sha = git("rev-parse", "HEAD", cwd=epic)
     assert sha != epic_head
     assert _last(r) == f"MERGED {sha}", out
-    assert git("log", "-1", "--format=%s", cwd=epic) == f"Merge {KEY}: {TITLE}"
+    raw = subprocess.run(["git", "log", "-1", "--format=%s"], cwd=str(epic),
+                         capture_output=True, check=True).stdout
+    assert raw.decode("utf-8").strip() == f"Merge {KEY}: {TITLE}"
     assert git("log", "-1", "--format=%P", cwd=epic).split() == [epic_head, head]
     assert "BOOKKEEPING FAIL" not in r.stdout
     run_dir = repo / ".work" / "runs" / RUN
