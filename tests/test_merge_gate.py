@@ -187,15 +187,16 @@ def test_failing_setup_is_gate_fail_and_the_gate_does_not_run(env):
     assert e.ran() == ["setup"]
 
 
-def test_gate_holds_a_merge_priority_suite_slot(env, tmp_path):
-    seen = tmp_path / "waiting.txt"
+def test_gate_runs_while_holding_a_suite_slot(env, tmp_path):
+    # The merge priority itself is suite-slot.sh's behaviour; here the gate must run under it.
+    seen = tmp_path / "slots.txt"
     e = env(
-        full='ls "$(git rev-parse --git-common-dir)/pad-locks/merge-waiting" > "%s"' % seen.as_posix()
+        full='cat "$(git rev-parse --git-common-dir)"/pad-locks/slots/*/pid > "%s"' % seen.as_posix()
     )
     e.commit({"src/impl.py": "X = 1\n"})
     r = e.gate()
     assert _last(r) == "GATE PASS", r.stdout + r.stderr
-    assert seen.read_text(encoding="utf-8").strip() != ""  # a merge-priority run was registered
+    assert seen.read_text(encoding="utf-8").strip() != ""  # a slot's pid file existed during the gate
 
 
 # A failure sitting only in test files the batch neither changed nor imports ------------------
