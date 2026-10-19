@@ -89,7 +89,7 @@ def _untouched(epic_wt: Path, epic_head: str, r) -> None:
     out = r.stdout + r.stderr
     assert git("rev-parse", "HEAD", cwd=epic_wt) == epic_head, out
     assert git("status", "--porcelain", cwd=epic_wt) == "", out
-    assert not (epic_wt / "src" / "impl.py").exists(), out
+    assert git("ls-files", "src/impl.py", cwd=epic_wt) == "", out
 
 
 # O9 ---------------------------------------------------------------------------------------------
@@ -107,7 +107,7 @@ def test_matching_tree_is_merged_without_running_the_gate(repo, worktree, tmp_pa
     assert git("log", "-1", "--format=%s", cwd=epic_wt) == f"Merge {KEY}: {GOAL}"
     assert git("log", "-1", "--format=%P", cwd=epic_wt).split() == [epic_head, head]
     assert _origin_epic(repo) == new_head
-    assert not ran.exists()
+    assert list(tmp_path.glob("gate-ran")) == []
 
 
 def test_matching_tree_with_run_records_the_gated_batch_and_tree_in_the_evidence(repo, worktree):
@@ -249,7 +249,7 @@ def test_merge_waits_for_a_held_lock_unless_its_pid_is_named(repo, worktree, hol
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline and proc.poll() is None:
             time.sleep(0.1)
-        assert proc.poll() is None and not ran.exists(), "merge did not wait for the held lock"
+        assert proc.poll() is None and list(tmp_path.glob("gate-ran")) == [], "merge did not wait for the held lock"
         shutil.rmtree(lock)
         out = _finish(proc, 60)
     finally:
