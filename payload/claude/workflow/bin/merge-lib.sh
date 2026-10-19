@@ -64,3 +64,38 @@ outside_only() {
   return 0
 }
 
+# Flake record: the tests that failed outside a change, per run, in the main checkout.
+# flake_file <run> <dir>: <main checkout>/.work/runs/<run>/flakes, resolved from any worktree.
+flake_file() {
+  local common
+  common="$(git -C "$2" rev-parse --git-common-dir 2>/dev/null)" &&
+    common="$(cd "$2" && cd "$common" && pwd)" || return 1
+  printf '%s' "$(cd "$common/.." && pwd)/.work/runs/$1/flakes"
+}
+# failed_tests: the test ids (`<file>::<test>`) the gate output in $log names.
+failed_tests() {
+  sed -n 's/^FAILED \([^ ]*::[^ ]*\).*/\1/p' "$log" | sort -u
+}
+# flake_count <file> <test>: how many times <test> is recorded.
+flake_count() {
+  [ -f "$1" ] || { echo 0; return; }
+  awk -v t="$2" '$1 == t { n++ } END { print n + 0 }' "$1"
+}
+# flake_record <file> <label>: append every failing test in $log as `<test> <label> <ts>`.
+flake_record() {
+  local t
+  mkdir -p "$(dirname "$1")" 2>/dev/null
+  for t in $(failed_tests); do
+    printf '%s %s %s\n' "$t" "$2" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$1"
+  done
+}
+# flake_known <file>: print the first failing test already recorded and its prior count; true if any.
+flake_known() {
+  local t n
+  for t in $(failed_tests); do
+    n="$(flake_count "$1" "$t")"
+    [ "$n" -gt 0 ] && { echo "$t $n"; return 0; }
+  done
+  return 1
+}
+
