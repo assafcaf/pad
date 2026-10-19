@@ -9,6 +9,10 @@
 # imports it when one line has an import keyword (import, from, require, include, use) and the
 # name as a word. That over-selects on common names, which costs time, never coverage.
 #
+# A test file also counts when it names a changed non-test file: the file name, or its last two
+# path components, bounded by anything but a letter, digit, `_` or `-` (a script it runs, a text
+# it reads). That over-selects (every test naming `SKILL.md`), never under-selects.
+#
 # The full suite is forced when the selection can't be trusted: a conftest.py, a dependency
 # manifest or lockfile, or a non-test file under the test paths (a helper or fixture) changed,
 # or nothing at all was selected.
@@ -82,6 +86,23 @@ if [ -n "$stems" ]; then
   done
   # shellcheck disable=SC2086
   for f in $(importers $paths); do
+    is_test "$f" && selected="$selected $f"
+  done
+fi
+
+# Name matches: tests naming a changed file by its name or its last two path components.
+name_alt=""
+for f in $changed; do
+  under_tests "$f" && continue
+  for n in "$(basename "$f")" "$(basename "$(dirname "$f")")/$(basename "$f")"; do
+    case "$n" in ./*|/*) continue ;; esac
+    e="$(printf '%s' "$n" | sed 's/[][\.*^$+?(){}|/]/\\&/g')"
+    name_alt="${name_alt:+$name_alt|}$e"
+  done
+done
+if [ -n "$name_alt" ]; then
+  # shellcheck disable=SC2086
+  for f in $(git grep -l -E -e "(^|[^[:alnum:]_-])(${name_alt})([^[:alnum:]_-]|$)" "$head" -- $paths 2>/dev/null | sed "s#^$head:##"); do
     is_test "$f" && selected="$selected $f"
   done
 fi

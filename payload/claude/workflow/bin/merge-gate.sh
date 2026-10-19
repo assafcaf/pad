@@ -15,6 +15,10 @@
 # neither changed nor imports is rerun once; a green rerun counts. --gate full is the configured
 # full suite, lint the configured lint command, anything else is run as the command itself.
 #
+# --gate affected runs the config's `Run named tests` command on affected-tests.sh's selection
+# between the epic head and the gated commit (`gate: affected (<files>)`), or the full suite when
+# the selector answers FULL (`gate: full (<reason>)`).
+#
 # --run <id> keeps the run's flake record (<main checkout>/.work/runs/<id>/flakes): the tests that
 # failed outside the batch are appended before the rerun, and one already recorded is
 # `GATE FLAKE <test>` (exit 1) with no rerun.
@@ -59,9 +63,15 @@ lint="$(cmd_of "Lint")"
 case "$gate_opt" in
   full) gate="$full" ;;
   lint) gate="$lint" ;;
+  affected) gate="$full" ;;
   *) gate="$gate_opt" ;;
 esac
 [ -n "$gate" ] || { echo "merge-gate.sh: no Full suite command in $cfg" >&2; exit 2; }
+if [ "$gate_opt" = affected ]; then
+  named="$(cmd_of "Run named tests")"
+  tpaths="$(cmd_of "Test paths")"; : "${tpaths:=tests/}"
+  [ -n "$named" ] || { echo "merge-gate.sh: no Run named tests command in $cfg" >&2; exit 2; }
+fi
 
 base="$(git rev-parse HEAD)"
 orig="$(g rev-parse HEAD)"
@@ -94,6 +104,15 @@ fail() {
 
 if [ -n "$setup" ] && g diff --name-only "$base" "$head" | grep -Eq "$MANIFESTS"; then
   run_cmd "$setup" || fail
+fi
+
+if [ "$gate_opt" = affected ]; then
+  pick="$(cd "$wt" && bash "$bin/affected-tests.sh" "$base" "$head" --test-paths "$tpaths" | tail -n 1)"
+  case "$pick" in
+    "TESTS "*) gate="${named//\{tests\}/${pick#TESTS }}"
+               echo "gate: affected (${pick#TESTS })" ;;
+    *) echo "gate: full (${pick#FULL })" ;;
+  esac
 fi
 
 run_cmd "$gate"; code=$?
