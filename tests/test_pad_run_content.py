@@ -119,25 +119,20 @@ def test_run_files_live_in_the_main_checkout(payload_text):
 # Landing a READY
 
 
-def test_ready_runs_one_background_merge_task_with_protected_ticket_and_run(payload_text):
+# ported-from: tests/test_pad_run_content.py::test_ready_runs_one_background_merge_task_with_protected_ticket_and_run
+def test_ready_runs_one_background_merge_with_the_run_and_the_shas(payload_text):
     row = report_row(payload_text(SKILL), "Owner `READY")
-    assert row.count("merge-task.sh") == 1, row
-    assert "bash .claude/workflow/bin/merge-task.sh" in row
+    assert row.count("merge.sh") == 1, row
+    assert "bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>" in row
     assert "in the background (`run_in_background`), and end your turn" in row
     assert "That is the whole hand-off: one turn" in row
-    assert "--protected \"<the config's Protected paths>\"" in row
-    assert "--ticket <ticket file>" in row
-    assert "--run <run id>" in row
-    assert "--typecheck" in row
+    assert "merge-task.sh" not in row
 
 
 def test_a_visual_ticket_merge_adds_capture_with_render_check(payload_text):
     row = report_row(payload_text(SKILL), "Owner `READY")
-    m = re.search(r"--capture \"([^\"]*)\"", row)
-    assert m, row
-    assert "bash .claude/workflow/bin/render-check.sh" in m.group(1)
-    assert "{out}" in m.group(1)
-    assert re.search(r"reference is a mock crop on a surface with a Render command", row)
+    assert "--capture" not in row, row
+    assert re.search(r"render capture[^|]*come from the config", row), row
 
 
 def test_orchestrator_never_reads_diffs_or_merge_output(payload_text):
@@ -146,7 +141,7 @@ def test_orchestrator_never_reads_diffs_or_merge_output(payload_text):
 
 
 def test_merged_needs_no_write_because_the_script_recorded_it(payload_text):
-    row = report_row(payload_text(SKILL), "`merge-task.sh` `MERGED")
+    row = report_row(payload_text(SKILL), "`merge.sh` `MERGED")
     assert "Nothing to write: the script recorded it" in row
 
 
