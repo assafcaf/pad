@@ -20,6 +20,11 @@ run is your first and largest job: turn the suite that exists into the suite tha
 needs. Every decision is written down with the measurement that justifies it, because the next
 suite owner, and the operator, will read your reasons rather than trust them.
 
+**Read `.claude/workflow/suite-design.md` first.** It is your standard: tier contracts, what a
+good test is, the smell catalogue and its remedies, the fixture and import architecture, flake
+policy, the verdict rubric and the mutation bar. The phases below apply it to an existing suite;
+where a phase names a section (§3, §5, …) it means that file. Nothing here overrides it.
+
 ## The paradigm you are installing
 
 A test is in one of three states, and the state decides where it lives and when it runs:
@@ -221,6 +226,34 @@ Commit: `suite(bootstrap): phase 3 tiers, runner contract, protected surface`.
 
 Commit: `suite(bootstrap): phase 4 fast tier by module`.
 
+## Phase 4b. Build the fixture and import layer
+
+Most of a suite's compute is not in its assertions; it is in what runs before them. Four levers,
+each measured in phase 1, each with an established pattern [Meszaros: Shared Fixture, Lazy
+Setup, Creation Method, Test Data Builder; SWE at Google ch. 12: "test infrastructure must
+always have its own tests"]. The target: **a test body does no setup work a template, a builder
+or a session fixture could have done once.**
+
+| Lever | What costs | What you build | Measure |
+|---|---|---|---|
+| **Imports** | every xdist worker imports the whole graph; a heavy library (torch, MLflow, a simulator client) imported at module level in a test file is paid by every worker and by collection | `python -X importtime` on the suite's import graph; heavy imports moved inside the tests or fixtures that need them, never at module level of a `fast` test file; unused runner plugins disabled (`-p no:<name>`); `norecursedirs` and `testpaths` so collection touches nothing else | collection time; import time per worker, before and after |
+| **Fixtures** | the same expensive state (a git repo with branches, a populated store, a sweep, a dataset) rebuilt per test or per module | layered `conftest.py`: the root holds cheap primitives; a directory's conftest holds that domain's builders. **Template and copy**: build each expensive immutable state once at session scope, copy per test (`copytree`, `git clone --shared`, a worktree, a store snapshot). **Builders** for the per-test variant (`repo(with="epic,two-tickets,red")`), so a test body runs zero setup commands. In-memory stand-ins where the real backend adds nothing (`sqlite:///:memory:`, a tmpfs dir). Scope by mutability: session for anything no test mutates, function copies from a template for the rest | fixture setups per run and their total seconds (`--setup-show`, `--durations`); setup commands per test body (git, HTTP, subprocess calls inside `def test_`) |
+| **Processes** | a server started per test or per module; an interpreter spawned per case; spawn-heavy fixtures under workers that multiply them | one long-lived server per session with per-test namespaces (a run id, a tenant, a prefix); `xdist_group` + `--dist loadgroup` to pin the tests that share a live fixture to one worker; declared workers per tier; nothing that spawns is unmarked | peak processes per tier; process starts per run |
+| **Cross-run** | a fresh worktree rebuilds its environment; a dataset is regenerated each run; owners re-run the whole selection to find one failure | the runner's cache for the owner's loop (`--lf`, `--ff`); dependency directory linked, not reinstalled, when the lockfile is unchanged (`verify-red.sh --deps` does this); generated test data under `.work/cache/` keyed by the hash of the code that generates it | setup seconds per worktree; cache hit rate |
+
+- Write the layer under `tests/_fixtures/` (templates, builders, stand-ins) with a `README.md`
+  that lists each builder, what it costs once and per copy, and which tiers may use it.
+- The layer gets its own tests, in `fast`: a template is built, a copy is independent of the
+  template (mutating the copy leaves the template unchanged), a builder's variants are what
+  they claim.
+- Rewrite test bodies to use the builders where phase 1 found setup commands inside tests.
+  This changes no assertion, so it needs no ledger line; record the before/after setup count in
+  the report.
+- Any repo plugin that `Extends: suite-owner` names the domain's canonical fixtures: use them
+  as the templates, do not invent parallel ones.
+
+Commit: `suite(bootstrap): phase 4b fixture and import layer`.
+
 ## Phase 5. Consolidate the heavy and epic tiers
 
 - Group whole-system tests by the thing they build: a sweep, a server, a store, a fresh
@@ -284,6 +317,8 @@ Commit: `suite(bootstrap): phase 7 verification`.
 
 ## Phase 8. Leave the files the harness reads
 
+- `tests/_fixtures/README.md`: every template and builder, its one-time and per-copy cost,
+  the tiers that may use it. Owners and test-designers read it before writing a fixture.
 - `tests/MAP.md`: module → test files → tier → the invariant each pins → owner. The brief
   writer reads this to tell every future owner which tests its ticket is expected to touch.
 - `tests/acceptance/README.md`: what the quarantine is, the layout `tests/acceptance/<ticket>/`,
@@ -316,6 +351,7 @@ Coverage per module: no module lost lines | <module>: reverted <removal>
 Mutation diff: <killed before> killed before, <killed after> after, surviving-that-were-killed 0 | <list>
 Order independence: pass | <test ids>
 Moved: <n> · merged: <n> · rewritten: <n> · retired: <n> (all in REMOVALS.md)
+Infrastructure: collection <s> → <s> · fixture setups per run <n> → <n> · setup commands inside test bodies <n> → <n> · peak processes <n> → <n>
 Seams added to production code: <path: what> | none
 Lints PAD must add: <n> (lints-needed.md)
 Flakes recorded: <n> (flakes.md), each placed in heavy
