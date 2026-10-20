@@ -405,3 +405,58 @@ def test_o2_config_example_table_is_checked_by_the_script(tmp_path, run_script):
     )
 
     assert_only_fails(result, *MOVES)
+
+
+# --- E3-T4 O18: the runner is denied to agents and pad-test.sh is the way, proven as a row ----------
+
+PAD_TEST_ROW = "bash .claude/workflow/bin/pad-test.sh --run <id> --ticket <id> --role owner --tier fast"
+PAD_TEST_ALLOW = "Bash(bash .claude/workflow/bin/pad-test.sh*)"
+ADAPTER = """#!/usr/bin/env bash
+case "$1" in
+  runner-names) echo fakecmd; echo "fakecmd --strict" ;;
+  protected-files) echo fakecfg.ini ;;
+  capabilities) echo "" ;;
+  acceptance-pattern) echo "*$2*" ;;
+esac
+exit 0
+"""
+
+
+def _regime_stack(root: Path, runner: str) -> Stack:
+    """A stack whose config has the `run-tests` row and a `## Test regime` naming `runner`."""
+    s = Stack(root)
+    s.config = write(root / "config.md", config_md({**MOVES, "run-tests": PAD_TEST_ROW})
+                     + f"\n## Test regime\n\n- **Runner:** `{runner}`\n")
+    write(root / ".claude" / "pad-plugins" / "runners" / "fake.sh", ADAPTER)
+    s.project["allow"].append(PAD_TEST_ALLOW)
+    return s
+
+
+def test_o18_a_runner_the_settings_do_not_deny_fails_the_run_tests_row(tmp_path, run_script):
+    s = _regime_stack(tmp_path, "fake")
+    s.project["deny"].append("Bash(fakecmd:*)")
+    assert_ok(s.run(run_script))
+    s.project["deny"].clear()
+    result = s.run(run_script)
+    assert result.returncode == 1, result.stdout + result.stderr
+    failed = [l for l in lines(result) if l.startswith("MOVES FAIL")]
+    assert failed and all("fakecmd" in l for l in failed), result.stdout
+
+
+def test_o18_every_runner_name_the_adapter_lists_must_be_denied(tmp_path, run_script):
+    s = _regime_stack(tmp_path, "fake")
+    s.project["deny"].append("Bash(fakecmd:*)")  # denies `fakecmd --strict` too, by prefix
+    assert_ok(s.run(run_script))
+    s.project["deny"][:] = ["Bash(fakecmd --strict)"]  # leaves bare `fakecmd` open
+    result = s.run(run_script)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert any(l.startswith("MOVES FAIL") and "fakecmd" in l for l in lines(result)), result.stdout
+
+
+def test_o18_a_shipped_adapter_is_found_without_a_repo_copy(tmp_path, run_script):
+    s = _regime_stack(tmp_path, "pytest")
+    s.project["deny"].append("Bash(pytest:*)")
+    result = s.run(run_script)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert any(l.startswith("MOVES FAIL") and "python -m pytest" in l for l in lines(result)), (
+        result.stdout)

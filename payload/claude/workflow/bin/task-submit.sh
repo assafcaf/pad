@@ -4,7 +4,9 @@
 #   task-submit.sh <epic head> <RED> <TASK_HEAD> [--test-paths "<pathspecs>"] [--ticket <path>]
 #
 # Rules, in order: not-a-commit, missing-epic-head, test-changed-after-red, red-after-code,
-# test-authoring, weakened-tests, ownership. A red commit is one whose subject ends in [red].
+# test-authoring, weakened-tests, needs-suite-owner (submit-surface.sh: only a suite ticket may
+# change the protected surface), repo-lint (each `rules.sh list repo-lint` check, run with
+# `<epic head> <task head>` over the whole diff), ownership. A red commit is one whose subject ends in [red].
 # Test paths default to tests/. test-authoring runs the check of every test-authoring rule
 # (`rules.sh list test-authoring`) over the lines the branch adds under the test paths.
 # ownership runs only with --ticket: every path changed between the epic head and TASK_HEAD
@@ -66,6 +68,20 @@ done <<<"$(bash "$bin/rules.sh" list test-authoring)"
 
 out="$(bash "$bin/weakened-tests.sh" "$epic" "$head")" ||
   fail weakened-tests "$(echo "$out" | tr '\n' ' ')"
+
+surface_args=()
+[ -z "$ticket" ] || surface_args=(--ticket "$ticket")
+out="$(bash "$bin/submit-surface.sh" "$epic" "$head" ${surface_args[@]+"${surface_args[@]}"})" ||
+  fail needs-suite-owner "$(echo "$out" | head -n 1 | sed 's/^needs-suite-owner: //')"
+
+# repo-lint rules: each check reads the whole diff itself (rules/optional/ is never listed).
+bad=""
+while IFS=$'\t' read -r rule check _; do
+  [ -n "$rule" ] || continue
+  out="$(bash "$check" "$epic" "$head" 2>&1)" ||
+    bad="$bad${bad:+; }$rule: $(echo "$out" | head -n 3 | tr '\n' ' ')"
+done <<<"$(bash "$bin/rules.sh" list repo-lint)"
+[ -z "$bad" ] || fail repo-lint "$bad"
 
 if [ -n "$ticket" ]; then
   list="$(bash "$bin/plan-check.sh" --list "$ticket")" || fail ownership "cannot read $ticket"

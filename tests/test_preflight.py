@@ -144,6 +144,8 @@ SECTIONS = {
 """,
     "Execution": """- **Parallelism:** at most `3` tasks at once.
 """,
+    "Test regime": """- **Tiers:** none
+""",
 }
 
 

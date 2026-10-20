@@ -2,6 +2,7 @@
 name: platform-neutral
 kind: test-authoring
 applies-to: test-designer, owner
+warrant: KAN-119: a POSIX-only kill test skipped on Windows left the behaviour untested there
 check: platform-neutral.sh
 ---
 

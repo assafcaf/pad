@@ -2,6 +2,7 @@
 name: requests-not-edits
 kind: practice
 applies-to: owner
+warrant: an edit outside a ticket file list is thrown away at merge, after the work is done
 ---
 
 You write only the files your ticket owns (`## Owns`) and add only to the shared files it

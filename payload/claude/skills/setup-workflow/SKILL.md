@@ -319,7 +319,8 @@ Execution bullet of `config.example.md` that the config lacks (0.3.0 added Comma
 and `Derived files`, Execution `Gate` and `Test workers`; 0.4.0 added `## Protected paths`, the
 Surfaces columns `Reference dir`, `Render command` and `Viewport` — `-` in each row unless the
 surface is seen as an image — the Review `Cadence` default `per-wave`, and the Git moves row
-`rebase-onto-epic-head`), with the example's default. Remove what the installed version
+`rebase-onto-epic-head`; 0.5.0 added `## Test regime`, which starts as `Tiers: none`, see 7g),
+with the example's default. Remove what the installed version
 dropped: 0.4.0 has no `### Tiers` subsection and no Execution `Mode` line, and its Agents table
 is `config.example.md`'s. The steps copying files cannot make are in the payload's
 `migrations/` notes (`/pad-update` runs them). Then set
@@ -327,6 +328,46 @@ the config's `PAD version:` line to the installed version in `.claude/workflow/V
 preflight again: the `version` check must pass. Each `commands` failure that names a workflow
 script also names the allow rule it needs: show the operator those lines for
 `.claude/settings.json` and add them once they agree; the settings are theirs.
+
+## 7g. The test regime
+
+Install the regime on this host, in this order. Each step stops at a failure and reports it.
+
+1. **The host.** Run `bash .claude/workflow/bin/host-setup.sh`. It writes
+   `.claude/workflow/host.md` (gitignored: OS, memory total, memory cap, containment) and runs
+   the containment self-test. When the self-test fails, setup stops with the reason it printed
+   (for example PowerShell locked down, so no job object can be made): there is no
+   `taskkill`-only mode by default. `preflight.sh` re-proves it on every run, and its `host`
+   check fails with the same reason. Ask the operator for a memory cap other than the default
+   85% only if they want one.
+2. **The runner.** Read the repo's runner from its test command and set `Runner:` under
+   `## Test regime`. When PAD ships an adapter for it (`runners/pytest.sh`, `runners/vitest.sh`),
+   use that. When PAD has no shipped adapter for it, write
+   `.claude/pad-plugins/runners/<name>.sh` from `runners/TEMPLATE.sh` and fill in each verb.
+   The adapter is accepted only after its self-test passes, against four fixture tests you
+   write: one that fails as an assertion, one that passes, one whose import fails (reported as
+   `error`, not `failure`), and `results` returns the failing test's id. Do not go on until
+   `bash .claude/workflow/bin/pad-test.sh --self-test` passes; it also records in `host.md`
+   which extras work (`contract-fast`, `contract-heavy`, `leak-check`, `mutation`).
+3. **Deny the runner.** Agents run tests through the wrapper, never the runner. Show the
+   operator the settings change and add it once they agree: deny each name the adapter's
+   `runner-names` prints (`Bash(<name>:*)`), and allow `Bash(bash .claude/workflow/bin/pad-test.sh*)`.
+   Add the Git moves row `run-tests` with `bash .claude/workflow/bin/pad-test.sh --run <id>
+   --ticket <id> --role owner --tier fast`, so `bash .claude/workflow/bin/check-moves.sh` proves
+   the pair: it fails the row when the allow is missing, or when any runner name is not denied.
+4. **The section.** `## Test regime` carries `Tiers: none` until the operator has a suite map
+   and tiers (step 6 offers it); the managed values (per-test kill 60/300/900 s, Repeat limit
+   3, Ticket run limit 12, Flaky quarantine 8 tests, 7 days) hold either way, and `preflight.sh`
+   fails a repo row that removes or relaxes one. The protected surface is managed; a repo
+   adds to it on the `Protected surface:` line.
+5. **Repo-lint rules.** PAD ships two opt-in `repo-lint` rules in
+   `.claude/workflow/rules/optional/`: `scope-docs-updated` and `layout-as-declared`. Describe
+   each, and copy the pair (`.md` and `.sh`) the operator picks to `.claude/workflow/rules/`.
+   Rules left in `rules/optional/` do nothing.
+6. **Offer `/suite-bootstrap`.** Ask whether to build the suite's map and tiers now with
+   `/suite-bootstrap`; if not, say it can be run later.
+7. **Report.** The pull request body lists every Adapter extras gap from `host.md` (an extra
+   the adapter lacks), and `preflight.sh` prints the same as one `PREFLIGHT NOTE` line.
 
 ## 8. Rehearsal
 

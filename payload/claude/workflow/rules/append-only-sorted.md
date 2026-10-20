@@ -2,6 +2,7 @@
 name: append-only-sorted
 kind: practice
 applies-to: owner, test-designer
+warrant: KAN-107: shared lists edited by several tasks conflicted on every merge after the first
 ---
 
 Where a shared list can't be avoided (`__all__`, a dependency list, an import block), put one

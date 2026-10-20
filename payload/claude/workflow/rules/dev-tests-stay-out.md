@@ -2,6 +2,7 @@
 name: dev-tests-stay-out
 kind: test-authoring
 applies-to: owner, test-designer, orchestrator
+warrant: scaffolding tests committed with a task become permanent and unreviewed oracles
 check: dev-tests-stay-out.sh
 ---
 

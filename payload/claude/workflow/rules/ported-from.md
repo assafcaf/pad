@@ -2,6 +2,7 @@
 name: ported-from
 kind: test-removal
 applies-to: test-designer, owner, orchestrator
+warrant: a test rewritten against a new interface lost its history and looked like a deletion
 check: ported-from.sh
 ---
 

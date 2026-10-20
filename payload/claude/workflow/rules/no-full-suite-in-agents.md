@@ -2,6 +2,7 @@
 name: no-full-suite-in-agents
 kind: practice
 applies-to: owner, test-designer
+warrant: KAN-107: ten parallel tasks each running a full suite pushed every gate to 36 minutes or more
 ---
 
 Agents run the task's named tests, the typecheck and lint, never the full suite. The full suite

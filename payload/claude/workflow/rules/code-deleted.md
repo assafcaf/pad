@@ -2,6 +2,7 @@
 name: code-deleted
 kind: test-removal
 applies-to: owner, orchestrator
+warrant: a deleted test file is legitimate only when the code it tested is deleted in the same diff
 check: code-deleted.sh
 ---
 

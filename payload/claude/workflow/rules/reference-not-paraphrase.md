@@ -2,6 +2,7 @@
 name: reference-not-paraphrase
 kind: practice
 applies-to: orchestrator
+warrant: a paraphrased reference drifted from its source and tickets built against the drift
 ---
 
 Point at a source of truth; never restate it. A brief, a ticket or a dispatch links the scope,
