@@ -32,9 +32,7 @@ bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -z "$map" ]; then
   cfg="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/workflow/config.md"
   if [ -f "$cfg" ]; then
-    map="$(tr -d '\r' <"$cfg" | awk '
-      /^## / { inreg = ($0 == "## Test regime") }
-      inreg && /Suite map:/ { s = $0; sub(/.*Suite map:[ ]*/, "", s); gsub(/`/, "", s); sub(/[ ]+$/, "", s); print s; exit }')"
+    map="$(bash "$bin/regime.sh" get 'Suite map' --config "$cfg")"
   fi
   [ -n "$map" ] || map="tests/MAP.md"
 fi

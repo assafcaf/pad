@@ -40,8 +40,9 @@ gate_opt=full
 if [ -f "$cfg" ] && tr -d '\r' <"$cfg" | grep -Fq -- '- **Gate:** `affected`'; then gate_opt=affected; fi
 # A `## Test regime` with tiers gates a candidate with the fast tier plus its tickets' acceptance tests.
 if [ -f "$cfg" ]; then
-  regime="$(tr -d '\r' <"$cfg" | awk '/^## /{ on = ($0 ~ /^## Test regime/); next } on')"
-  if printf '%s\n' "$regime" | grep -qE '^[-* ]*\**Runner:' && ! printf '%s\n' "$regime" | grep -qiE '^[-* ]*\**Tiers:\**[[:space:]]*`?none'; then
+  regime_sh="$real_bin/regime.sh"
+  regime="$(bash "$regime_sh" section --config "$cfg")"
+  if [ -n "$(bash "$regime_sh" get Runner --config "$cfg")" ] && ! printf '%s\n' "$regime" | grep -qiE '^[-* ]*\**Tiers:\**[[:space:]]*`?none'; then
     gate_opt=fast
   fi
 fi

@@ -90,9 +90,10 @@ lint="$(cmd_of "Lint")"
 [ -n "$lint" ] || { echo "merge-gate.sh: no Lint command in $cfg" >&2; exit 2; }
 
 # The test regime: tiers apply when it names a Runner and does not say `Tiers: none`.
-regime="$(tr -d '\r' < "$cfg" | awk '/^## /{ on = ($0 ~ /^## Test regime/); next } on')"
+regime_sh="$(dirname "${BASH_SOURCE[0]}")/regime.sh"
+regime="$(bash "$regime_sh" section --config "$cfg")"
 tiered=0
-if printf '%s\n' "$regime" | grep -qE '^[-* ]*\**Runner:'; then
+if [ -n "$(bash "$regime_sh" get Runner --config "$cfg")" ]; then
   printf '%s\n' "$regime" | grep -qiE '^[-* ]*\**Tiers:\**[[:space:]]*`?none' || tiered=1
 fi
 # tier_budget <tier>: the Budget cell (seconds) of the tier's row; empty when there is none.
