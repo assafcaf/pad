@@ -17,6 +17,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -385,3 +386,62 @@ def test_o52_a_fast_gate_leak_fails_even_when_the_adapter_declares_no_leak_check
     e.commit({"src/impl.py": "X = 1\n"})
     r = e.gate("--gate", "fast", "--tickets", T1, FAKE_LEAK="1", FAKE_CAPS="")
     _assert_leak_rejected(e, r, e.state / "leakpid")
+
+
+# --- K1: a leaked process is reported with the command it has at the end, and gone before FAIL --
+
+# The child starts as a bash (its command line when first listed) and execs `sleep 600` a moment
+# later; it also leaves a grandchild, `sleep 601`, that only a tree kill reaches.
+SHAPESHIFTER = (
+    "bash -c 'echo $$ > \"{pidfile}\"; sleep 601 </dev/null >/dev/null 2>&1 & "
+    "echo $! > \"{pidfile}.kid\"; sleep 1; exec sleep 600' </dev/null >/dev/null 2>&1 & sleep 3"
+)
+
+
+def _shapeshifter_gate(tenv, tmp_path):
+    pidfile = tmp_path / "shape.pid"
+    e = tenv(tiers_none=True, full=SHAPESHIFTER.format(pidfile=pidfile.as_posix()))
+    e.commit({"src/impl.py": "X = 1\n"})
+    r = e.gate("--gate", "full", "--tickets", T1)
+    return pidfile, r
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8").strip() if path.exists() else ""
+
+
+def _check_shapeshifter(pidfile, r):
+    pid, kid = _read(pidfile), _read(Path(str(pidfile) + ".kid"))
+    try:
+        assert pid and kid, "the leaking process never started"
+        assert _last(r) == "GATE FAIL", out(r)
+        leaks = re.findall(r"^LEAK (\d+) (.+)$", r.stdout, re.M)
+        mine = [c for p, c in leaks if p == pid]
+        assert mine, f"no LEAK line for pid {pid}: {out(r)}"
+        assert mine[0].strip() == "sleep 600", mine
+        # gone at the moment the gate reports, not eventually
+        assert not alive(pid), f"leaked process {pid} still alive at GATE FAIL"
+        assert not alive(kid), f"leaked process {pid}'s child {kid} still alive at GATE FAIL"
+    finally:
+        for p in (pid, kid):
+            if p:
+                kill(p)
+
+
+def test_k1_a_leaked_process_that_execs_is_reported_with_its_final_command_and_gone_at_gate_fail(
+        tenv, tmp_path):
+    pidfile, r = _shapeshifter_gate(tenv, tmp_path)
+    _check_shapeshifter(pidfile, r)
+
+
+@pytest.mark.slow
+def test_k1_the_same_holds_with_eight_busy_workers_running_at_once(tenv, tmp_path):
+    busy = [subprocess.Popen([sys.executable, "-c", "while True: pass"]) for _ in range(8)]
+    try:
+        pidfile, r = _shapeshifter_gate(tenv, tmp_path)
+        _check_shapeshifter(pidfile, r)
+    finally:
+        for b in busy:
+            b.kill()
+        for b in busy:
+            b.wait(timeout=30)
