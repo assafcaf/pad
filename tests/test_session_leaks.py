@@ -71,3 +71,29 @@ def test_l2_a_process_this_session_did_not_start_is_left_alone(pytester):
         other.kill()
         other.wait(timeout=30)
         other.stdout.close()
+
+
+TWO_TESTS = LEAKER + '''
+
+def test_bystander():
+    pass
+'''
+
+
+@pytest.mark.slow
+def test_k3_a_leak_line_names_the_node_id_of_the_test_that_started_the_process(pytester):
+    with_repo_conftest(pytester)
+    pidfile = pytester.path / "leaker.pid"
+    pytester.makepyfile(test_inner=TWO_TESTS.format(bash=BASH, pidfile=pidfile.as_posix()))
+    result = pytester.runpytest_subprocess()
+    pid = pidfile.read_text().strip() if pidfile.exists() else ""
+    try:
+        out = "\n".join(result.stdout.lines)
+        leaks = [ln for ln in result.stdout.lines if ln.startswith("LEAK ")]
+        assert len(leaks) == 1, out
+        assert "sleep 600" in leaks[0], out
+        assert "test_inner.py::test_leaker" in leaks[0], out
+        assert "test_bystander" not in leaks[0], out
+    finally:
+        if pid.isdigit():
+            kill_tree(int(pid))

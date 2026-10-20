@@ -142,8 +142,8 @@ lw_start() {
     seen=" "
     while kill -0 "$host" 2>/dev/null; do
       while read -r p q cmd; do
-        case "$seen" in *" $p "*) continue ;; esac
-        seen="$seen$p "
+        case "$seen" in *" $p|"$cmd" "*) continue ;; esac   # a command that changed (an exec) is recorded again
+        seen="$seen$p|$cmd "
         printf '%s %s %s\n' "$p" "$q" "$cmd" >> "$lw_dir/known"
       done <<LW
 $(lw_tree "$lw_root")
@@ -179,7 +179,7 @@ LW
 lw_stop() {
   [ -n "$lw_pid" ] || return 0
   kill -9 "$lw_pid" "$lw_pid2" 2>/dev/null; wait "$lw_pid" "$lw_pid2" 2>/dev/null
-  local p q cmd recorded i pending=""
+  local p q cmd now c2 recorded i pending=""
   # Recorded by the host and orphaned or alive: a leak. Alive and unrecorded: given the wrapper's
   # own helpers' time to end (one sample interval), then a leak.
   : > "$lw_dir/leaks"
@@ -202,11 +202,29 @@ lw_stop() {
     read -r -t 0.1 <> "$lw_dir/nap" 2>/dev/null || sleep 0.1
   done
   for p in $pending; do
-    printf '%s %s\n' "$p" "$(awk -v p="$p" '$1 == p { $1 = ""; $2 = ""; sub(/^ +/, ""); print; exit }' "$lw_dir/known")" >> "$lw_dir/leaks"
+    printf '%s %s\n' "$p" "$(awk -v p="$p" '$1 == p { $1 = ""; $2 = ""; sub(/^ +/, ""); c = $0 } END { print c }' "$lw_dir/known")" >> "$lw_dir/leaks"
   done
-  awk '!s[$1]++' "$lw_dir/leaks" > "$lw_dir/leaks.u"; mv "$lw_dir/leaks.u" "$lw_dir/leaks"
-  while read -r p cmd; do kill_tree "$p"; done < "$lw_dir/leaks"
-  cat "$lw_dir/leaks"
+  # one line a process, the last command seen for it
+  awk '{ l[$1] = $0; if (!($1 in k)) { k[$1] = 1; o[++n] = $1 } } END { for (i = 1; i <= n; i++) print l[o[i]] }' "$lw_dir/leaks" > "$lw_dir/leaks.u"; mv "$lw_dir/leaks.u" "$lw_dir/leaks"
+  # Report what each process is now (it may have exec'd since it was first listed), one listing
+  # for all of them, then kill its tree until it is gone: the verdict waits for that.
+  lw_list > "$lw_dir/now" 2>/dev/null
+  while read -r p cmd; do
+    now="$(awk -v p="$p" '$1 == p { $1 = ""; $2 = ""; sub(/^ +/, ""); print; exit }' "$lw_dir/now")"
+    # the full command line where /proc has it (a listing may show only the program)
+    [ -r "/proc/$p/cmdline" ] && c2="$(tr "\000" " " < "/proc/$p/cmdline" 2>/dev/null)" || c2=""
+    c2="${c2% }"
+    printf '%s %s
+' "$p" "${c2:-${now:-$cmd}}"
+  done < "$lw_dir/leaks" > "$lw_dir/leaks.n"
+  while read -r p cmd; do
+    for ((i = 0; i < 50; i++)); do
+      kill_tree "$p"
+      kill -0 "$p" 2>/dev/null || break
+      sleep 0.1
+    done
+  done < "$lw_dir/leaks"
+  cat "$lw_dir/leaks.n"
   rm -rf "$lw_dir"; lw_pid=""; lw_pid2=""; lw_dir=""
 }
 

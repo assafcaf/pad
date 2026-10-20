@@ -235,8 +235,11 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     if call.when == "setup":
         _running += 1
+        # every process the test body starts inherits its node id, so a leak names the test
+        os.environ["PAD_TEST_NODE"] = item.nodeid
     elif call.when == "teardown":
         _running -= 1
+        os.environ.pop("PAD_TEST_NODE", None)
     if call.when != "call":
         return
     try:
@@ -265,16 +268,31 @@ M="$1"
 for d in /proc/[0-9]*; do
   p=${d#/proc/}
   [ "$p" = "$$" ] && continue
+  hit=0; node=""
   while IFS= read -r -d '' kv; do
-    if [ "$kv" = "$M" ]; then echo "$p"; break; fi
+    if [ "$kv" = "$M" ]; then hit=1; fi
+    case "$kv" in PAD_TEST_NODE=*) node="${kv#PAD_TEST_NODE=}" ;; esac
   done < "$d/environ" 2>/dev/null
+  [ "$hit" -eq 1 ] && echo "$p $node"
 done
 """
 
 
-def _marked_pids(var: str | None = None, value: str | None = None) -> set[int]:
+def _marked(var: str | None = None, value: str | None = None) -> dict[int, str]:
+    """pid -> the node id of the test running when the process started ('' when unknown)."""
     out = _bash_run(_MARKED, f"{var or _MARK_VAR}={value or _MARK}")
-    return {int(x) for x in out.split() if x.isdigit()}
+    found = {}
+    for line in out.splitlines():
+        pid, _, node = line.strip().partition(" ")
+        if pid.isdigit():
+            found[int(pid)] = node.strip()
+    return found
+
+
+def _marked_pids(var: str | None = None, value: str | None = None) -> set[int]:
+    return set(_marked(var, value))
+
+
 
 
 def _leaks(config) -> list[tuple[int, str, str]]:
@@ -284,7 +302,8 @@ def _leaks(config) -> list[tuple[int, str, str]]:
     procs = _processes()
     me = os.getpid()
     by_pid = {pid: command for pid, _ppid, command in procs}
-    marked = {p for p in _marked_pids() if p in by_pid}
+    nodes = _marked()
+    marked = {p for p in nodes if p in by_pid}
     if os.name != "nt" and not Path("/proc").is_dir():  # no environ to read: use descent instead
         marked = _tree([me], procs) - {me}
     named = {p: by_pid[p] for p in marked if p != me and not _is_test_runner(by_pid[p])}
@@ -298,8 +317,8 @@ def _leaks(config) -> list[tuple[int, str, str]]:
     found = []
     for pid in sorted(tops):
         command = named[pid]
-        test = ""
-        if root is not None:
+        test = nodes.get(pid, "")
+        if not test and root is not None:
             for form in _forms(root):
                 m = re.search(re.escape(form) + r"/([^/\s]+)", command.replace("\\", "/").lower())
                 if m:
@@ -324,7 +343,7 @@ def pytest_sessionfinish(session, exitstatus):
     for pid, command, test in leaks:
         line = f"LEAK {pid} {' '.join(command.split())[:300]}"
         if test:
-            line += f"  [started by a test using {test}]"
+            line += f"  [started by {test}]" if "::" in test else f"  [started by a test using {test}]"
         if reporter is not None:
             reporter.write_line(line)
         else:
