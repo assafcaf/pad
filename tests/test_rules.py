@@ -44,8 +44,11 @@ def _rules_copy(tmp_path: Path, extra: dict[str, str] | None = None) -> Path:
     return d
 
 
-def _rule(name: str, kind: str, applies: str, check: str | None = None, body: str = "Do X.") -> str:
+def _rule(name: str, kind: str, applies: str, check: str | None = None, body: str = "Do X.",
+          warrant: str | None = "a fixture rule, for the tests") -> str:
     lines = ["---", f"name: {name}", f"kind: {kind}", f"applies-to: {applies}"]
+    if warrant:
+        lines.append(f"warrant: {warrant}")
     if check:
         lines.append(f"check: {check}")
     return "\n".join(lines + ["---", "", body, ""])
@@ -257,3 +260,75 @@ def test_test_authoring_rules_judge_the_added_test_lines(run_script, repo, workt
     else:
         assert r.returncode == 1, r.stdout
         assert last.startswith("SUBMIT FAIL") and verdict in last, r.stdout
+
+
+# --- E3-T4 O38: warrant and the regime's rule kinds -----------------------------------------------
+
+
+def _validate(run_script, repo, tmp_path, files: dict[str, str]):
+    d = tmp_path / "vr"
+    d.mkdir()
+    for name, text in files.items():
+        (d / name).write_text(text, encoding="utf-8")
+    return run_script("rules.sh", "validate", cwd=repo, env={"PAD_RULES_DIR": str(d)})
+
+
+@pytest.mark.slow
+def test_o38_a_rule_without_warrant_fails_validate_naming_the_rule(run_script, repo, tmp_path):
+    r = _validate(run_script, repo, tmp_path, {"x.md": _rule("x", "practice", "owner", warrant=None)})
+    assert r.returncode == 1, r.stdout
+    assert "RULES FAIL x: missing warrant" in r.stdout
+
+
+@pytest.mark.slow
+def test_o38_a_rule_with_an_empty_warrant_fails_validate(run_script, repo, tmp_path):
+    r = _validate(run_script, repo, tmp_path,
+                  {"x.md": "---\nname: x\nkind: practice\napplies-to: owner\nwarrant:\n---\n\nDo X.\n"})
+    assert r.returncode == 1, r.stdout
+    assert "RULES FAIL x: missing warrant" in r.stdout
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kind", ["tier-contract", "suite-structure", "acceptance"])
+def test_o38_the_regime_kinds_without_a_check_validate(run_script, repo, tmp_path, kind):
+    r = _validate(run_script, repo, tmp_path, {"x.md": _rule("x", kind, "owner")})
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.strip().splitlines()[-1].startswith("RULES OK")
+
+
+@pytest.mark.slow
+def test_o38_a_repo_lint_rule_with_its_check_validates(run_script, repo, tmp_path):
+    r = _validate(run_script, repo, tmp_path, {
+        "x.md": _rule("x", "repo-lint", "orchestrator", check="x.sh"),
+        "x.sh": "#!/usr/bin/env bash\nexit 0\n",
+    })
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.slow
+def test_o38_a_repo_lint_rule_without_a_check_fails_validate(run_script, repo, tmp_path):
+    r = _validate(run_script, repo, tmp_path,
+                  {"x.md": _rule("x", "repo-lint", "orchestrator")})
+    assert r.returncode == 1, r.stdout
+    assert "RULES FAIL x: repo-lint needs a check" in r.stdout
+
+
+@pytest.mark.slow
+def test_o38_an_unknown_kind_names_the_seven_kinds(run_script, repo, tmp_path):
+    r = _validate(run_script, repo, tmp_path, {"x.md": _rule("x", "vibes", "owner")})
+    assert r.returncode == 1
+    for kind in ("test-removal", "test-authoring", "practice", "tier-contract",
+                 "suite-structure", "acceptance", "repo-lint"):
+        assert kind in r.stdout, (kind, r.stdout)
+
+
+@pytest.mark.slow
+def test_o38_list_repo_lint_prints_name_check_and_claim_of_each(run_script, repo, tmp_path):
+    d = tmp_path / "lr"
+    d.mkdir()
+    (d / "x.md").write_text(_rule("x", "repo-lint", "orchestrator", check="x.sh"), encoding="utf-8")
+    (d / "x.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    r = run_script("rules.sh", "list", "repo-lint", cwd=repo, env={"PAD_RULES_DIR": str(d)})
+    assert r.returncode == 0, r.stderr
+    name, check, claim = r.stdout.strip().split("\t")
+    assert name == "x" and check.endswith("/x.sh") and claim == "required"

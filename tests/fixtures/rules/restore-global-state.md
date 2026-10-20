@@ -2,6 +2,7 @@
 name: restore-global-state
 kind: practice
 applies-to: owner
+warrant: KAN-107, a test that leaked process-global state failed unrelated tests
 ---
 
 A repo-defined rule, the example from Rollout-Collection's KAN-107: code that changes
