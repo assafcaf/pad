@@ -136,7 +136,7 @@ def test_o5_an_unavailable_memory_probe_refuses_with_exit_2_and_runs_nothing(rep
                        cwd=str(repo), env=env, capture_output=True, text=True, timeout=60)
     assert r.returncode == 2, (r.stdout, r.stderr)
     assert r.stderr.strip() != ""
-    assert not (tmp_path / "ran").exists()
+    assert "ran" not in [p.name for p in tmp_path.iterdir()]
 
 
 def test_o7_workers_that_would_exceed_cores_times_the_cap_share_wait(runs):
