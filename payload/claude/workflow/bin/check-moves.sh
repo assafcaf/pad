@@ -302,8 +302,7 @@ done
 has_run_tests=0
 for cap in "${caps[@]}"; do [ "$cap" = "run-tests" ] && has_run_tests=1; done
 if [ "$has_run_tests" -eq 1 ]; then
-  runner="$(tr -d '\r' <"$config" | awk '/^## /{ on = ($0 ~ /^## Test regime/); next } on' |
-    sed -n 's/^[-* ]*\**Runner:\**[[:space:]]*`\{0,1\}\([A-Za-z0-9._-][A-Za-z0-9._-]*\).*/\1/p' | head -n 1)"
+  runner="$(bash "$(dirname "${BASH_SOURCE[0]}")/regime.sh" get Runner --config "$config")"
   if [ -n "$runner" ]; then
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     adapter=""

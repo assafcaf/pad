@@ -69,11 +69,11 @@ cfg="$top/.claude/workflow/config.md"
 # regime_section: the lines of `## Test regime`.
 regime_section() {
   [ -f "$cfg" ] || return 0
-  tr -d '\r' < "$cfg" | awk '/^## /{ on = ($0 ~ /^## Test regime/) ; next } on'
+  bash "$here/regime.sh" section --config "$cfg"
 }
 
 runner_name() {
-  regime_section | sed -n 's/^[-* ]*\**Runner:\**[[:space:]]*`\{0,1\}\([A-Za-z0-9._-][A-Za-z0-9._-]*\).*/\1/p' | head -n 1
+  bash "$here/regime.sh" get Runner --config "$cfg"
 }
 
 # tier_row <name>: `<selector>|<kill>|<declared GB>|<workers>`; empty when the tier is unknown.

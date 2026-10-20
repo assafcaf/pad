@@ -134,9 +134,7 @@ case "$verb" in
     cfg="$top/.claude/workflow/config.md"
     runner=""
     if [ -f "$cfg" ]; then
-      runner="$(tr -d '\r' <"$cfg" | awk '
-        /^## / { inreg = ($0 == "## Test regime") }
-        inreg && /Runner:/ { s = $0; sub(/.*Runner:[ ]*/, "", s); gsub(/`/, "", s); sub(/[ ]+$/, "", s); print s; exit }')"
+      runner="$(bash "$here/regime.sh" get Runner --config "$cfg")"
     fi
     [ -n "$runner" ] || { echo "SUBMIT OK"; exit 0; }
     adapter="$top/.claude/pad-plugins/runners/$runner.sh"

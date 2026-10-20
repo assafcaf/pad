@@ -40,7 +40,7 @@ fi
 top="$(git rev-parse --show-toplevel 2>/dev/null)" || top="."
 cfg="$top/.claude/workflow/config.md"
 section=""
-[ -f "$cfg" ] && section="$(tr -d '\r' <"$cfg" | awk '/^## /{ on = ($0 ~ /^## Test regime/); next } on')"
+[ -f "$cfg" ] && section="$(bash "$here/regime.sh" section --config "$cfg")"
 
 # line_value <key>: the text after `**Key:**` on its line.
 line_value() {
@@ -58,7 +58,7 @@ while IFS= read -r g; do
   [ -n "$g" ] && globs+=("$g")
 done <<<"$(line_value 'Protected surface' | grep -o '`[^`]*`' | tr -d '`')"
 
-runner="$(line_value Runner | tr -d '`' | sed 's/[[:space:]].*//')"
+runner="$(bash "$here/regime.sh" get Runner --config "$cfg")"
 if [ -n "$runner" ]; then
   for a in "$top/.claude/pad-plugins/runners/$runner.sh" "$here/../runners/$runner.sh"; do
     if [ -f "$a" ]; then

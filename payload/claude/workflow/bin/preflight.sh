@@ -326,7 +326,7 @@ check_rules() {
 # regime_section: the lines of the last `## Test regime` section of the config.
 regime_section() {
   [ -f "$config" ] || return 0
-  tr -d '\r' <"$config" | awk '/^## /{ on = ($0 ~ /^## Test regime/); if (on) buf = ""; next } on { buf = buf $0 "\n" } END { printf "%s", buf }'
+  bash "$here/regime.sh" section --config "$config"
 }
 
 # check_regime: a repo's `## Test regime` may add to PAD's managed values and tighten them, never
