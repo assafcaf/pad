@@ -29,7 +29,7 @@ def test_template_has_the_ownership_headings_in_order_and_no_tier_files_or_inter
 
 def test_template_states_the_four_tests_and_spikes(payload_text):
     text = payload_text(TEMPLATE)
-    for name in ("**Ownable.**", "**Checkable.**", "**Finishable by one owner**", "**One owner, start to merged.**"):
+    for name in ("**Ownable.**", "**Checkable.**", "**One domain, one owner, end to end.**", "**One owner, start to merged.**"):
         assert name in text, name
     assert "**spike**" in text
     assert "never product code" in text
@@ -52,7 +52,7 @@ def test_tickets_drop_the_old_model(payload_text):
 def test_tickets_lint_with_plan_check_before_the_approval_table(payload_text):
     text = payload_text(TICKETS)
     lint = text.index("plan-check.sh .work/plans/<slug>.md")
-    table = text.index("| Wave | Ticket | Reference | Owns | Touches | Protected | Depends on | Tags |")
+    table = text.index("| Wave | Ticket | Domain | Reference | Owns | Touches | Protected | Depends on | Tags |")
     assert lint < table
     assert "`OVERLAPS`" in text and "`PROTECTED`" in text
 
