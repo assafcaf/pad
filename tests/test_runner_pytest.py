@@ -60,7 +60,7 @@ LEAK = '''\
 import os, subprocess, sys
 
 def test_leaves_a_child_running():
-    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+    p = subprocess.Popen([sys.executable, "-c", "import threading; threading.Event().wait()"])
     with open(os.environ["LEAK_PIDFILE"], "w") as f:
         f.write(str(p.pid))
 '''
