@@ -217,7 +217,7 @@ result line for every ticket it lands: `MERGED|REJECTED|CONFLICT|ERROR <KEY>`. N
 
 | Report | You |
 |---|---|
-| Owner `READY <KEY> <TASK_HEAD> <RED>` | Dispatch a `ci` agent named `<KEY>-ci` with the run id, the key and the two shas: it runs `bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>` in its own foreground and reports that script's last line unchanged. You never run a merge yourself. End your turn. That is the whole hand-off: one turn. The commands, derived files and a visual ticket's render capture come from the config and the ticket file |
+| Owner `READY <KEY> <TASK_HEAD> <RED>` | Dispatch a `ci` agent named `<KEY>-ci` with the run id and the report's three fields: it runs `bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>` in its own foreground and reports that script's last line unchanged. You never run a merge yourself. End your turn. That is the whole hand-off: one turn. The commands, derived files and a visual ticket's render capture come from the config and the ticket file |
 | `merge.sh` `QUEUED <KEY>` | Nothing: another call is draining the queue and lands the ticket in a later pass. Its result line arrives from that call |
 | `merge.sh` `MERGED <KEY> <sha>` | Nothing to write: the script recorded it (3e). If the owner's report listed `RESOURCE_PROBES`, run them (below). Fill the free slot (a). Under `dynamic`, consider a strategy switch |
 | `merge.sh` `CONFLICT …` or `REJECTED …` | `SendMessage` the owner that line unchanged. It rebases or fixes, re-gates and reports `READY` again. Under `dynamic`, consider a strategy switch |
