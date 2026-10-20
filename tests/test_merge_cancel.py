@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from conftest import BASH, BIN, git
+from conftest import BASH, BIN, git, kill_naming, kill_tree
 
 pytestmark = pytest.mark.slow
 
@@ -83,9 +83,13 @@ def drain(repo, tmp_path, run_script):
         if proc.poll() is None:
             proc.kill()
         proc.wait(timeout=60)
-        cp = sdir / "child.pid"
-        if cp.exists():
-            subprocess.run([BASH, "-c", f"kill -9 {cp.read_text().strip()} 2>/dev/null"])
+        # proc.kill() stops only Git's launcher: stop the drain, the strategy and the gate's
+        # child by tree, so nothing survives the test
+        for name in (run_dir / "merge-drain.pid", sdir / "child.pid"):
+            text = name.read_text().strip() if name.exists() else ""
+            if text.isdigit():
+                kill_tree(int(text))
+        kill_naming(sdir)
 
 
 def test_cancel_stops_the_drain_and_restores_the_epic_worktree(drain):

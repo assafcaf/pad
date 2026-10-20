@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import BASH, BIN, git
+from conftest import BASH, BIN, git, kill_tree
 
 pytestmark = pytest.mark.slow
 
@@ -186,6 +186,8 @@ def holder():
     p = subprocess.Popen([BASH, "-c", "echo $$; exec sleep 600"], stdout=subprocess.PIPE, text=True)
     pid = p.stdout.readline().strip()
     yield pid
+    if pid.isdigit():
+        kill_tree(int(pid))  # Git's bash.exe is a launcher: Popen.kill() alone leaves the sleep
     p.kill()
     p.wait(timeout=30)
     p.stdout.close()

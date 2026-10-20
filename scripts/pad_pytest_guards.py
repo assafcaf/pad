@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -147,6 +148,7 @@ class _Bg:
         full_env = dict(os.environ)
         if env:
             full_env.update(env)
+        full_env["PAD_BG_ID"] = ident = uuid.uuid4().hex  # what stop_all sweeps by
         fd, pidfile = tempfile.mkstemp(prefix="pad-bg-", suffix=".pid")
         os.close(fd)
         pidfile = Path(pidfile)
@@ -157,6 +159,7 @@ class _Bg:
             cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         handle = _Background(popen, pidfile)
+        handle.ident = ident
         self._started.append(handle)
         return handle
 
@@ -168,6 +171,13 @@ class _Bg:
                 roots.append(int(text))
         if roots:
             _kill_pids(_tree(roots, _processes()))
+        # a script killed mid-start may have spawned a child after the tree was read: whatever
+        # inherited this start's id is its descendant, however it was reparented
+        late = set()
+        for h in self._started:
+            late |= _marked_pids("PAD_BG_ID", h.ident)
+        if late:
+            _kill_pids(late)
         for h in self._started:
             if h.popen.poll() is None:
                 h.popen.kill()
@@ -210,6 +220,14 @@ _running = 0
 # A session in a process a test started (pytester's subprocess runs) knows it from its environment.
 _started_by_a_test = "PYTEST_CURRENT_TEST" in os.environ
 
+# Every process a test starts inherits this variable from the session, so the session-end check
+# finds them by it, not by what their command lines say. An xdist worker keeps the controller's
+# value; a session a test started gets its own, so it never sweeps its parent's processes.
+_MARK_VAR = "PAD_TEST_SESSION"
+if _started_by_a_test or not os.environ.get(_MARK_VAR):
+    os.environ[_MARK_VAR] = uuid.uuid4().hex
+_MARK = os.environ[_MARK_VAR]
+
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -240,30 +258,42 @@ def _is_test_runner(command: str) -> bool:
     return argv0.startswith(("python", "py.", "pytest")) or argv0 == "py"
 
 
+# Prints the pid of every process whose environment carries `$1` (a NAME=value line), listing
+# bash and its own children excepted. Needs /proc/<pid>/environ; prints nothing where it is absent.
+_MARKED = r"""
+M="$1"
+for d in /proc/[0-9]*; do
+  p=${d#/proc/}
+  [ "$p" = "$$" ] && continue
+  while IFS= read -r -d '' kv; do
+    if [ "$kv" = "$M" ]; then echo "$p"; break; fi
+  done < "$d/environ" 2>/dev/null
+done
+"""
+
+
+def _marked_pids(var: str | None = None, value: str | None = None) -> set[int]:
+    out = _bash_run(_MARKED, f"{var or _MARK_VAR}={value or _MARK}")
+    return {int(x) for x in out.split() if x.isdigit()}
+
+
 def _leaks(config) -> list[tuple[int, str, str]]:
-    """Processes naming this session's temp root (and, in the outermost session, this checkout's
-    payload/) that are still alive: (pid, command, the test dir that started it)."""
+    """Processes still alive that inherited this session's marker (so a test started them, however
+    their command line reads): (pid, command, the test dir that started it, when it names one).
+    Kills them and their trees."""
+    procs = _processes()
+    me = os.getpid()
+    by_pid = {pid: command for pid, _ppid, command in procs}
+    marked = {p for p in _marked_pids() if p in by_pid}
+    if os.name != "nt" and not Path("/proc").is_dir():  # no environ to read: use descent instead
+        marked = _tree([me], procs) - {me}
+    named = {p: by_pid[p] for p in marked if p != me and not _is_test_runner(by_pid[p])}
     root = None
     try:
         root = config._tmp_path_factory.getbasetemp()
     except Exception:
         pass
-    needles = set()
-    if root is not None:
-        needles |= _forms(root)
-    if not _started_by_a_test:  # a session a test started owns its temp root only
-        needles |= _forms(PAYLOAD)
-    if not needles:
-        return []
-    procs = _processes()
-    me = os.getpid()
-    named = {}
-    for pid, _ppid, command in procs:
-        text = command.replace("\\", "/").lower()
-        if pid == me or _is_test_runner(command) or not any(n in text for n in needles):
-            continue
-        named[pid] = command
-    # an own listing bash names nothing: the script carries no path
+    # report the tops of the trees: a listing child or a sleeping grandchild is part of its parent
     tops = {p for p in named if not any(q != p and p in _tree([q], procs) for q in named)}
     found = []
     for pid in sorted(tops):
