@@ -243,7 +243,8 @@ whole run, with the configured runner, at the merge sha, from a throwaway
 `merge.sh` is running, revert that merge in the epic worktree with the `revert-merge` move
 (`config.md`, `## Git moves`), run the full suite and lint there, push with `push-epic`, and
 send the owner `RESOURCE FAILED` with the output tail: it fixes and reports `READY` again. A
-serial-resource failure is the only reason a merge is ever reverted.
+serial-resource failure reverts its merge; the other revert is the triage of a red heavy run
+that isolates one ticket (below).
 
 **The heavy tier, under a test regime.** With `## Test regime` tiers, `merge.sh` gates a batch
 with the fast tier plus the batch's acceptance tests (`merge-gate.sh --gate fast`), as before
