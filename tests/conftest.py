@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import subprocess
 from pathlib import Path
 
@@ -180,3 +181,17 @@ def payload_text():
         return (PAYLOAD / relpath).read_text(encoding="utf-8")
 
     return read
+
+
+# The suite's own guards (fast-tier budget, leak sweep, background-script helper) live in
+# scripts/pad_pytest_guards.py; importing their names here registers the hooks and fixtures.
+sys.path.insert(0, str(ROOT / "scripts"))
+from pad_pytest_guards import (  # noqa: E402,F401
+    bg,
+    kill_naming,
+    kill_tree,
+    pytest_addoption,
+    pytest_runtest_makereport,
+    pytest_sessionfinish,
+    real_bash,
+)

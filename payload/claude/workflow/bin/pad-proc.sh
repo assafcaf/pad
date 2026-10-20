@@ -16,6 +16,7 @@
 #                         Windows: a job object through pad-proc.ps1 (peak memory included);
 #                         elsewhere: a process group. Peak GB lands in <n>.peak.
 #   kill <pids-file>      kills every process recorded there, and their descendants.
+#   victim                the held run cap-watch.sh would kill next (its record name), or nothing.
 #   peak <peak-file>      prints the peak GB a contained run recorded.
 #   sweep                 kills processes recorded under finished runs and prints
 #                         `SWEPT <n> processes, <GB>` when it killed any.
@@ -135,41 +136,112 @@ pp_mem_in_use() {
 
 pp_alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
 
-# pp_pairs: `pid ppid` lines of every process.
+# pp_pairs: `pid ppid` lines of every process, from one `ps` call. (Git for Windows' `ps -eo`
+# fails; its plain `ps` has the pid in column 1 and the parent in column 2.)
 pp_pairs() {
-  if ps -eo pid=,ppid= >/dev/null 2>&1; then ps -eo pid=,ppid=; else ps 2>/dev/null | awk 'NR > 1 { print $1, $2 }'; fi
+  if pp_win; then
+    ps 2>/dev/null | awk 'NR > 1 { print $1, $2 }'
+  elif ! ps -eo pid=,ppid= 2>/dev/null; then
+    ps 2>/dev/null | awk 'NR > 1 { print $1, $2 }'
+  fi
 }
 
-# pp_descendants <pid>: every descendant pid, one per line.
+# pp_starter: call it first thing in a script, before anything slow. Sets pp_starter_pid to the
+# process that started it (empty when there is none this shell can see: parent pid 1, as on
+# Windows when a native program started it) and pp_starter_dead to 1 when that process is already
+# gone, so the script ends at once instead of outliving it.
+pp_starter() {
+  pp_starter_pid=""; pp_starter_dead=0
+  case "$PPID" in ''|*[!0-9]*|0|1) return 0 ;; esac
+  if pp_alive "$PPID"; then pp_starter_pid="$PPID"; else pp_starter_dead=1; fi
+}
+
+# pp_descendants <pid>...: every descendant pid of the given pids, one per line (one listing).
 pp_descendants() {
-  pp_pairs | awk -v root="$1" '
+  [ $# -gt 0 ] || return 0
+  pp_pairs | awk -v roots="$*" '
     { kid[$2] = kid[$2] " " $1 }
-    END { n = 1; q[1] = root
-          for (i = 1; i <= n; i++) { m = split(kid[q[i]], a, " ")
-            for (j = 1; j <= m; j++) if (!(a[j] in seen) && a[j] != root) { seen[a[j]] = 1; q[++n] = a[j]; print a[j] } } }'
+    END { n = split(roots, r, " "); for (k = 1; k <= n; k++) isroot[r[k]] = 1
+          for (k = 1; k <= n; k++) { m = 1; q[1] = r[k]
+            for (i = 1; i <= m; i++) { c = split(kid[q[i]], a, " ")
+              for (j = 1; j <= c; j++) if (!(a[j] in seen) && !(a[j] in isroot)) { seen[a[j]] = 1; q[++m] = a[j]; print a[j] } } } }'
 }
 
-# pp_kill_tree <pid>...: kill each pid and its descendants; prints the number killed.
+# pp_kill_tree <pid>...: kill each pid and its descendants (one process listing for all of them);
+# prints the number killed.
 pp_kill_tree() {
-  local p all="" n=0 k
+  local p all="" n=0 k live=""
   for p in "$@"; do
-    pp_alive "$p" || continue
-    all="$all $p $(pp_descendants "$p" | tr '\n' ' ')"
+    pp_alive "$p" && live="$live $p"
   done
+  [ -n "$live" ] || { echo 0; return 0; }
+  all="$live $(pp_descendants $live | tr '\n' ' ')"
   for k in $all; do
     if pp_alive "$k"; then kill -9 "$k" 2>/dev/null; n=$((n + 1)); fi
   done
   echo "$n"
 }
 
+# pp_pidfile_pids <file>: the distinct pids in a pid file (no process started).
+pp_pidfile_pids() {
+  local line out=" "
+  [ -f "$1" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in ''|*[!0-9]*) continue ;; esac
+    case "$out" in *" $line "*) ;; *) out="$out$line " ;; esac
+  done < "$1"
+  echo $out
+}
+
 pp_kill_pidfile() {
-  local f="$1" pids p total=0 n
+  local f="$1" pids p
   [ -f "$f" ] || return 0
-  pids="$(sort -u "$f" | tr -d '\r')"
+  pids="$(pp_pidfile_pids "$f")"
   for p in $pids; do kill -9 -- "-$p" 2>/dev/null; done
-  n="$(pp_kill_tree $pids)"
-  total=$((total + n))
-  echo "$total"
+  pp_kill_tree $pids
+}
+
+# --- the victim ------------------------------------------------------------------------------
+
+# pp_rank <role>: kill order of a role (0 first); empty for a role that is never killed.
+pp_rank() {
+  case "$1" in
+    agent|owner|test-designer) echo 0 ;;
+    suite-owner) echo 1 ;;
+    gate) echo 2 ;;
+    *) echo "" ;;
+  esac
+}
+
+# pp_victim_base [main]: the record (path without extension) cap-watch.sh would kill: a held run,
+# lowest role rank first, then the newest start; empty when nothing is killable. Starts nothing.
+pp_victim_base() {
+  local main="${1:-}" meta base role="" start="" root r best="" bestr=0 beststart=0 line
+  [ -n "$main" ] || main="$(pp_main)" || return 1
+  for meta in "$main"/.work/runs/*/pad-test/*.meta; do
+    [ -f "$meta" ] || continue
+    base="${meta%.meta}"
+    [ -f "$base.done" ] && continue
+    [ -f "$base.killed" ] && continue
+    role=""; start=""
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line%$'\r'}"
+      case "$line" in role=*) role="${line#role=}" ;; start=*) start="${line#start=}" ;; esac
+    done < "$meta"
+    r="$(pp_rank "$role")"
+    [ -n "$r" ] || continue
+    root=""
+    read -r root < "$base.pids" 2>/dev/null
+    root="${root%$'\r'}"
+    pp_alive "$root" || continue
+    # integers: nanoseconds fit in 64 bits
+    start="${start//[!0-9]/}"; : "${start:=0}"
+    if [ -z "$best" ] || [ "$r" -lt "$bestr" ] || { [ "$r" -eq "$bestr" ] && [ "$start" -gt "$beststart" ]; }; then
+      best="$base"; bestr="$r"; beststart="$start"
+    fi
+  done
+  echo "$best"
 }
 
 # --- containment -----------------------------------------------------------------------------
@@ -179,7 +251,7 @@ pp_job_object() { pp_win && command -v powershell.exe >/dev/null 2>&1 && [ "${PA
 pp_contain_mode() { if pp_job_object; then echo job-object; else echo process-group; fi; }
 
 pp_contain() {
-  local run="" role="" name="" peakfile="" main dir pid sampler code gb base start
+  local run="" role="" name="" peakfile="" main dir pid sampler code gb base start host
   while [ $# -gt 0 ]; do
     case "$1" in
       --run) run="${2:-}"; shift 2 ;;
@@ -219,10 +291,12 @@ pp_contain() {
   fi
   echo "$pid" >> "$dir/$name.pids"
 
+  host=$$
   # Sampler: records the run's descendants (the sweep's input) and a sampled peak.
   (
     peak=0
     while sleep "${PAD_SAMPLE_INTERVAL:-2}"; do
+      pp_alive "$host" || exit 0
       pp_descendants "$pid" >> "$dir/$name.pids"
       cur="$(pp_mem_in_use 2>/dev/null)" || continue
       peak="$(awk -v p="$peak" -v c="$cur" 'BEGIN { print (c > p ? c : p) }')"
@@ -268,7 +342,7 @@ pp_sweep() {
     [ -f "$f" ] || continue
     base="${f%.pids}"
     [ -f "$base.done" ] || continue
-    pids="$(sort -u "$f" | tr -d '\r')"
+    pids="$(pp_pidfile_pids "$f")"
     for p in $pids; do kill -9 -- "-$p" 2>/dev/null; done
     k="$(pp_kill_tree $pids)"
     n=$((n + k))
@@ -337,7 +411,8 @@ pp_main_verbs() {
     peak) pp_peak "${1:-}" ;;
     sweep) pp_sweep ;;
     self-test) pp_self_test ;;
-    *) echo "usage: pad-proc.sh mem-in-use|cap|total|cores|contain|kill|peak|sweep|self-test ..." >&2; return 64 ;;
+    victim) local v; v="$(pp_victim_base)" || return 2; [ -z "$v" ] || echo "${v##*/}" ;;
+    *) echo "usage: pad-proc.sh mem-in-use|cap|total|cores|contain|kill|victim|peak|sweep|self-test ..." >&2; return 64 ;;
   esac
 }
 

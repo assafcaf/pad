@@ -118,6 +118,7 @@ def _locks(repo: Path) -> set[str]:
     return {str(p.relative_to(root)) for p in root.rglob("*")} if root.exists() else set()
 
 
+@pytest.mark.slow
 def test_suite_slot_exits_with_the_commands_exit_code_and_passes_its_output(repo, run_script):
     r = run_script(SCRIPT, "--", "bash", "-c", "echo out-7c1; exit 3", cwd=repo)
     assert r.returncode == 3, r.stdout + r.stderr
@@ -241,3 +242,44 @@ def test_merge_task_gate_waits_for_a_suite_slot(repo, worktree, tmp_path):
         assert gate_ran.exists(), out
     finally:
         s.finish()
+
+
+# --- R7: a run waiting for a slot does not outlive its starter -------------------------------
+
+@pytest.mark.slow
+def test_r7_a_run_waiting_for_a_slot_exits_when_the_process_that_started_it_is_gone(repo, tmp_path):
+    from test_pad_proc import alive, kill, wait_for
+    env = _env("1")
+    stop = tmp_path / "stop"
+    slot_pid = repo / ".git" / "pad-locks" / "slots" / "1" / "pid"
+    holder = subprocess.Popen(
+        [BASH, (BIN / SCRIPT).as_posix(), "--", "bash", "-c",
+         f"while [ ! -f '{stop.as_posix()}' ]; do sleep 0.1; done"],
+        cwd=str(repo), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    wp, sp = tmp_path / "wrapper.pid", tmp_path / "waiter.pid"
+    wrapper = None
+    waiter = ""
+    try:
+        assert wait_for(lambda: slot_pid.exists() and slot_pid.read_text().strip() != "")
+        wrapper = subprocess.Popen(
+            [BASH, "-c", f"bash {(BIN / SCRIPT).as_posix()} -- true & echo $! > '{sp.as_posix()}'; "
+                         f"echo $$ > '{wp.as_posix()}'; wait"],
+            cwd=str(repo), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        assert wait_for(lambda: wp.exists() and sp.exists()
+                        and wp.read_text().strip() != "" and sp.read_text().strip() != "")
+        waiter = sp.read_text().strip()
+        assert alive(waiter), "the second run should be waiting for the one slot"
+        kill(wp.read_text().strip())
+        assert wait_for(lambda: not alive(waiter)), "the waiting run outlived its starter"
+    finally:
+        stop.write_text("stop", encoding="utf-8")
+        if waiter:
+            kill(waiter)
+        if wrapper:
+            wrapper.kill()
+            wrapper.wait()
+        try:
+            holder.wait(timeout=60)
+        finally:
+            if holder.poll() is None:
+                holder.kill()

@@ -24,6 +24,11 @@ dispatch-skills = "dispatch_skills.cli:main"
 testpaths = ["tests"]
 # The default run skips `slow` (see tests/conftest.py). Everything: `python -m pytest -m ""`.
 addopts = "-m 'not slow'"
+# Seconds the call phase of a test not marked `slow` may take; over it the test fails with
+# `FAST BUDGET <test id> <seconds>s` (tests/conftest.py). This repo's setting, set above the
+# slowest unmarked test outside the host domain measured under `-n 8` (52 s: the merge strategies'
+# and install tests). Lower it as those are re-tiered; never raise it.
+fast_test_budget = "90"
 markers = [
     "slow: a script's long-tail end-to-end test (seconds each on Windows); skipped by default",
 ]

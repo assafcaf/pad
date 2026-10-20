@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import subprocess
 
+import pytest
+
 from conftest import BASH, BIN, git
 from test_pad_proc import clean_env, posix
 
@@ -57,6 +59,7 @@ def test_o1_host_md_is_gitignored(repo):
     assert ".claude/workflow/host.md" not in git("diff", "--cached", "--name-only", cwd=repo)
 
 
+@pytest.mark.slow
 def test_o1_running_setup_twice_does_not_duplicate_the_gitignore_entry(repo):
     assert setup(repo).returncode == 0
     assert setup(repo).returncode == 0
