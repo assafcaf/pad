@@ -158,3 +158,16 @@ def test_r8_a_background_payload_script_is_gone_with_its_whole_tree_when_the_tes
     finally:
         if child:
             subprocess.run([BASH, "-c", f"kill -9 {int(child)} 2>/dev/null; true"])
+
+
+@pytest.mark.slow
+def test_r6_a_session_started_by_a_test_never_kills_a_process_it_did_not_start(pytester, repo, bg):
+    p = bg.start("suite-slot.sh", "--", "bash", "-c", "exec sleep 300",
+                 cwd=repo, env={"PAD_SUITE_SLOTS": "1"})
+    assert wait_for(lambda: alive(str(p.pid))), "the outer script never started"
+    with_repo_conftest(pytester, budget="30")
+    pytester.makepyfile(test_inner="def test_trivial():\n    pass\n")
+    result = pytester.runpytest()
+    result.assert_outcomes(passed=1)
+    assert not [ln for ln in result.stdout.lines if ln.startswith("LEAK ")]
+    assert alive(str(p.pid)), "an inner session killed a process it did not start"
