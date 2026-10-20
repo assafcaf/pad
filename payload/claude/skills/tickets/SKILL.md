@@ -61,23 +61,26 @@ first waves only, and `/pad-run` writes later tickets once the first ones have l
   name, a behaviour, data. Sharing a file is never a reason.
 - **Tag resources.** Mark outcomes that need a serial resource from the config, by its tag. A
   device-only check is not a ticket: attach it to the ticket it verifies as a resource probe.
-- **Size to one owner:** about 45 minutes of one agent's work. Larger splits by surface or
-  module. There is no outcome or file cap: the ownership tests decide.
+- **One domain, one owner, end to end.** The spec's `## Domains` are binding: every ticket has a
+  `## Domain` naming one, and each domain is one ticket. A domain splits into several tickets only
+  with a `## Split` on each, naming `independent-surface`, `parallel-by-interface`,
+  `split-after-failures` or `operator` (the operator's words quoted). There is no size, outcome or
+  file cap: the ownership tests decide.
 
 ## 2. Lint, then show the list
 
 Write the tickets to the plan file (section 3) as drafts, then run
 `bash .claude/workflow/bin/plan-check.sh .work/plans/<slug>.md`. Fix every `OVERLAPS`,
-`PROTECTED` and `DEPENDS` line before you show anything: each is a planning error, and the
+`PROTECTED`, `DEPENDS` and `DOMAIN` line, and every `SPLIT <name>: <n> tickets` line before you show anything: each is a planning error, and the
 script ends `PLAN FAIL` until they are gone. Read `HOTSPOTS` and `SWEEPS` as questions: a hot
 `Touches` file shared by many tickets may want a foundation ticket; a sweep wants splitting.
 
 Then present one table and stop for approval:
 
-| Wave | Ticket | Reference | Owns | Touches | Protected | Depends on | Tags |
-|---|---|---|---|---|---|---|---|
+| Wave | Ticket | Domain | Reference | Owns | Touches | Protected | Depends on | Tags |
+|---|---|---|---|---|---|---|---|---|
 
-Below it: the script's `CRITICAL-PATH`, its `HOTSPOTS` and `SWEEPS` with what you did about
+Below it: each valid `SPLIT <name>: <keys> (<reason>)` line the script printed, for the operator to approve, the script's `CRITICAL-PATH`, its `HOTSPOTS` and `SWEEPS` with what you did about
 each, any spec outcome or area with no ticket (there should be none), the spikes, and any
 decision you made that the spec didn't state.
 

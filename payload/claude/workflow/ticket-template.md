@@ -12,6 +12,9 @@ What is true when this is done — one or two sentences, observable.
 Path or link the result is judged against: a mock crop and its viewport | spec outcome ids |
 a repro test | a baseline file. A spike ticket says `spike: produces <what>`.
 
+## Domain
+The spec domain this ticket belongs to, by its name in the spec's `## Domains`. One name.
+
 ## Owns
 - path/or/dir/            (the files this ticket may write; a directory covers everything below it)
 
@@ -29,6 +32,11 @@ Sharing a file is never a reason.
 ## Out of scope
 What a reasonable owner might add but must not.
 
+## Split
+Optional. Only when the domain has more than one ticket, and on every ticket of that domain: one
+reason from `independent-surface`, `parallel-by-interface`, `split-after-failures`, or
+`operator` (with the operator's words quoted: `operator "<their words>"`).
+
 ## Spec
 Path to the scope (spec) and its decision record, if one exists.
 ```
@@ -42,15 +50,15 @@ When the reference is tests, add the outcomes the tests must state, after `## Re
 
 ## The four tests
 
-A ticket is valid only if it passes all four. `plan-check.sh` checks the mechanical half.
+A ticket is valid only if it passes all four. The split rule: one domain, one owner, end to end. `plan-check.sh` checks the mechanical half.
 
 1. **Ownable.** Its `Owns` is disjoint from every other ticket's (`OVERLAPS` is a planning
    error), and its shared files are in `Touches`, append-only. A write outside
    `Owns ∪ Touches` is a request to that file's owner; `task-submit.sh --ticket` rejects it.
 2. **Checkable.** It names its reference. No reference means it is a **spike**: it produces the
    reference (a mock crop, a repro, a baseline, a decision) and never product code.
-3. **Finishable by one owner** in one session (about 45 minutes on the critical path). Larger
-   splits by surface or module, never by concern.
+3. **One domain, one owner, end to end.** A spec domain is one ticket and one owner. It splits
+   only for a reason listed in `## Split`, never because it looks long.
 4. **One owner, start to merged.** Others may advise it, answer it or ask it for changes;
    nobody else writes its files.
 

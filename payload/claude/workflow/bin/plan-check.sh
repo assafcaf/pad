@@ -29,6 +29,15 @@
 # HOTSPOTS and SWEEPS are warnings. Last line: PLAN OK, or PLAN FAIL <n>, where n counts the
 # OVERLAPS, PROTECTED and DEPENDS lines.
 #
+# Spec domains (plan files only): a `Spec: <path>` line before the first ticket names the spec;
+# its `## Domains` bullets (`- name: ...` or `- **name**: ...`) are the domains. Each ticket names
+# one in `## Domain`; a domain with more than one ticket needs a `## Split` on each of them, naming
+# `independent-surface`, `parallel-by-interface`, `split-after-failures` or `operator "<words>"`.
+#   DOMAIN <K>: unknown <name>   DOMAIN <name>: no ticket   SPLIT <name>: <n> tickets
+#   SPLIT <name>: <K1> <K2> (<reason>)   a valid split, printed for the approval table
+#   DOMAIN skipped: <why>        no Spec: line, or the spec has no ## Domains (not a failure)
+# The first three count toward PLAN FAIL.
+#
 # --list prints one ticket's paths, `OWNS <path>` then `TOUCHES <path>`, one per line; it is
 # how task-submit.sh reads a ticket, so both read paths the same way.
 #
@@ -82,6 +91,10 @@ parse() {
     function start() { if (!started && cur != "") { print "T\t" cur; started = 1 } }
     BEGIN { cur = (mode == "file") ? key : ""; fm = 0; fence = 0 }
     { sub(/\r$/, "") }
+    mode == "plan" && cur == "" && /^Spec:[ \t]*/ && !specseen {
+      s = $0; sub(/^Spec:[ \t]*/, "", s); gsub(/[`"\047]/, "", s); sub(/[ \t]+$/, "", s)
+      print "X\t-\t" s; specseen = 1; next
+    }
     mode == "file" && FNR == 1 && /^---[ \t]*$/ { fm = 1; next }
     fm == 1 {
       if (/^---[ \t]*$/) { fm = 2; next }
@@ -98,7 +111,17 @@ parse() {
     /^#+ / {
       h = tolower($0); sub(/^#+[ \t]+/, "", h); sub(/[ \t]+$/, "", h)
       sec = (h == "owns") ? "O" : (h == "touches") ? "H" : (h == "protected") ? "P" \
+          : (h == "domain") ? "M" : (h == "split") ? "S" \
           : (h == "depends on" || h == "blocked by") ? "D" : ""
+      done = 0
+      next
+    }
+    sec == "M" || sec == "S" {
+      if (NF && !done) {
+        v = $0; sub(/^[ \t]*[-*+][ \t]+/, "", v); sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+        if (sec == "M") { gsub(/[`*_]/, "", v); sub(/[ \t].*$/, "", v) }
+        out(sec, v); done = 1
+      }
       next
     }
     sec == "O" || sec == "H" {
@@ -271,10 +294,59 @@ if [ "${#globs[@]}" -gt 0 ]; then
   done
 fi
 
-for part in overlaps hotspots protected depends critical sweeps; do
+# Domains: the spec's domains bind the ticket split.
+specpath="$(awk -F '\t' '$1 == "X" { print $3; exit }' "$recs")"
+if [ -z "$specpath" ]; then
+  echo "DOMAIN skipped: no Spec: line in the plan" >"$tmp/domains-info"
+elif [ ! -f "$specpath" ]; then
+  echo "DOMAIN skipped: spec $specpath not found" >"$tmp/domains-info"
+else
+  awk '
+    { sub(/\r$/, "") }
+    /^## / { on = ($0 ~ /^## Domains[ \t]*$/); next }
+    on && /^[ \t]*[-*+][ \t]+/ {
+      s = $0; sub(/^[ \t]*[-*+][ \t]+/, "", s); gsub(/[`*_]/, "", s); sub(/[ \t]*[:(].*$/, "", s)
+      sub(/[ \t]+.*$/, "", s); if (s != "") print s
+    }' "$specpath" >"$tmp/specdomains"
+  if [ ! -s "$tmp/specdomains" ]; then
+    echo "DOMAIN skipped: spec $specpath has no ## Domains" >"$tmp/domains-info"
+  else
+    awk -F '\t' -v dir="$tmp" '
+      FILENAME == ARGV[1] { dom[$0] = 1; order[++nd] = $0; next }
+      $1 == "T" { if (!($2 in kn)) { kn[$2] = 1; keys[++nk] = $2 } next }
+      $1 == "M" { mine[$2] = $3; next }
+      $1 == "S" { spl[$2] = $3; next }
+      END {
+        for (i = 1; i <= nk; i++) {
+          k = keys[i]
+          if (!(k in mine) || !(mine[k] in dom)) {
+            print "DOMAIN " k ": unknown " ((k in mine) ? mine[k] : "(no ## Domain section)") > (dir "/domains")
+            continue
+          }
+          d = mine[k]; cnt[d]++; members[d] = members[d] " " k
+        }
+        for (i = 1; i <= nd; i++) {
+          d = order[i]
+          if (!cnt[d]) { print "DOMAIN " d ": no ticket" > (dir "/domains"); continue }
+          if (cnt[d] < 2) continue
+          n = split(substr(members[d], 2), m, " "); ok = 1; reason = ""
+          for (j = 1; j <= n; j++) {
+            s = spl[m[j]]; r = s; sub(/[ \t].*$/, "", r)
+            if (r == "operator") { if (s !~ /"[^"]+"/) ok = 0 }
+            else if (r != "independent-surface" && r != "parallel-by-interface" && r != "split-after-failures") ok = 0
+            if (j == 1) reason = r
+          }
+          if (ok) print "SPLIT " d ": " substr(members[d], 2) " (" reason ")" > (dir "/splits")
+          else print "SPLIT " d ": " cnt[d] " tickets" > (dir "/domains")
+        }
+      }' "$tmp/specdomains" "$recs"
+  fi
+fi
+
+for part in overlaps hotspots protected depends domains-info domains splits critical sweeps; do
   [ -f "$tmp/$part" ] && cat "$tmp/$part"
 done
-bad="$(cat "$tmp/overlaps" "$tmp/protected" "$tmp/depends" 2>/dev/null | grep -c .)"
+bad="$(cat "$tmp/overlaps" "$tmp/protected" "$tmp/depends" "$tmp/domains" 2>/dev/null | grep -c .)"
 if [ "$bad" -gt 0 ]; then
   echo "PLAN FAIL $bad"
   exit 1
