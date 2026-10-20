@@ -37,6 +37,7 @@ while [ $# -gt 0 ]; do
     --priority) [ "${2:-}" = merge ] || usage; priority=merge; shift 2 ;;
     --estimate-gb) estimate="${2:-}"; case "$estimate" in ''|*[!0-9.]*) usage ;; esac; shift 2 ;;
     --workers) workers="${2:-}"; case "$workers" in ''|*[!0-9]*) usage ;; esac; shift 2 ;;
+    --decide) echo "suite-slot.sh: --decide is not implemented" >&2; exit 70 ;;
     --) shift; break ;;
     *) usage ;;
   esac

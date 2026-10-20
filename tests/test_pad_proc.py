@@ -176,3 +176,82 @@ def test_o8_sweep_counts_only_processes_it_killed(repo):
         assert wait_for(lambda: not alive(pid))
     finally:
         kill(pid)
+
+
+# --- R1, R2: what a check or a tick costs ----------------------------------------------------
+
+def counting_shims(tmp: Path, names: tuple[str, ...]) -> tuple[Path, Path]:
+    """A directory of wrappers, one per name, to put first on PATH; returns (dir, call log).
+
+    Each wrapper appends `<name> <lines in tmp/probe.log>` to the call log (bash builtins only, so
+    the wrapper itself starts nothing) and runs the real command. A name the host lacks is still
+    shimmed, so a call to it is counted and fails with 127.
+    """
+    import shutil
+    d = tmp / "shims"
+    d.mkdir()
+    log = tmp / "calls.log"
+    probe_log = posix(tmp / "probe.log")
+    for name in names:
+        real = shutil.which(name)
+        run = f'exec "{Path(real).as_posix()}" "$@"' if real else "exit 127"
+        (d / name).write_text(
+            f'#!/usr/bin/env bash\n{{ mapfile -t _l < "{probe_log}"; }} 2>/dev/null\n'
+            f'echo "{name} ${{#_l[@]}}" >> "{posix(log)}"\n{run}\n',
+            encoding="utf-8", newline="\n")
+    return d, log
+
+
+def calls(log: Path) -> list[tuple[str, int]]:
+    if not log.exists():
+        return []
+    return [(n, int(c)) for n, c in (ln.split() for ln in log.read_text().splitlines() if ln.strip())]
+
+
+@pytest.mark.slow
+def test_r2_a_sampler_tick_lists_processes_at_most_once_and_starts_no_powershell(repo, tmp_path):
+    write_host(repo, total="16 GB", cap="10GB")
+    shims, log = counting_shims(tmp_path, ("ps", "powershell.exe"))
+    stop = tmp_path / "stop"
+    env = shimmed(clean_env(
+        PAD_MEMORY_PROBE=probe(tmp_path, f"echo x >> '{posix(tmp_path)}/probe.log'; echo 1\n"),
+        PAD_SAMPLE_INTERVAL="0.2", PAD_CONTAIN="group"), shims)
+    p = subprocess.Popen(
+        [real_bash(), PROC, "contain", "--run", "r2", "--role", "agent", "--", "bash", "-c",
+         f"while [ ! -f '{posix(stop)}' ]; do sleep 0.1; done"],
+        cwd=str(repo), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    probes = tmp_path / "probe.log"
+    try:
+        assert wait_for(lambda: probes.exists() and len(probes.read_text().split()) >= 5)
+    finally:
+        stop.write_text("stop", encoding="utf-8")
+        try:
+            p.wait(timeout=60)
+        finally:
+            if p.poll() is None:
+                p.kill()
+    made = calls(log)
+    assert [n for n, _ in made if n.startswith("powershell")] == []
+    ps_by_tick: dict[int, int] = {}
+    for name, tick in made:
+        if name == "ps":
+            ps_by_tick[tick] = ps_by_tick.get(tick, 0) + 1
+    last = len(probes.read_text().split())
+    ticks = {t: n for t, n in ps_by_tick.items() if t < last}  # the final kill's lookups come after
+    assert ticks, f"the sampler never listed processes: {made}"
+    assert max(ticks.values()) <= 1, f"ps calls per tick (keyed by probes so far): {ticks}"
+
+
+def real_bash() -> str:
+    """The bash to run a script with when PATH carries shims: on Windows Git's usr/bin/bash.exe,
+    because the bin/bash.exe launcher puts /usr/bin first and so ignores a shim directory."""
+    real = Path(BASH).parent.parent / "usr" / "bin" / "bash.exe"
+    return str(real) if os.name == "nt" and real.is_file() else BASH
+
+
+def shimmed(env, shims):
+    """env with `shims` first on PATH, whatever case this OS spells the variable in."""
+    key = next((k for k in env if k.upper() == "PATH"), "PATH")
+    out = {k: v for k, v in env.items() if k.upper() != "PATH"}
+    out[key] = str(shims) + os.pathsep + env.get(key, "")
+    return out

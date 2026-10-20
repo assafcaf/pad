@@ -180,3 +180,14 @@ def payload_text():
         return (PAYLOAD / relpath).read_text(encoding="utf-8")
 
     return read
+
+
+@pytest.fixture
+def bg():
+    """Starts payload scripts in the background and stops their whole process trees at teardown.
+
+    `bg.start(name, *args, cwd, env=None)` runs `payload/.../bin/<name>` under the real bash (not
+    Git's launcher) and returns an object with `.pid`, the script's own bash pid. Teardown, on
+    pass, fail or timeout, kills every process started through it, descendants included.
+    """
+    raise NotImplementedError("bg: the background-script helper is not written yet")

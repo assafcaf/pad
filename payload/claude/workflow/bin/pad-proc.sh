@@ -337,6 +337,7 @@ pp_main_verbs() {
     peak) pp_peak "${1:-}" ;;
     sweep) pp_sweep ;;
     self-test) pp_self_test ;;
+    victim) echo "pad-proc: victim is not implemented" >&2; return 70 ;;
     *) echo "usage: pad-proc.sh mem-in-use|cap|total|cores|contain|kill|peak|sweep|self-test ..." >&2; return 64 ;;
   esac
 }

@@ -160,3 +160,39 @@ def test_o7_workers_within_the_budget_run_side_by_side(runs):
     assert b.wait(timeout=60) == 0, r.err("b")
     assert r.inside("b") and "CAP WAIT" not in r.err("b")
     r.release("a")
+
+
+# --- R4: the admission decision, asked for directly -------------------------------------------
+
+def decide(tmp_path, **kv) -> str:
+    """`suite-slot.sh --decide`: prints `admit` or `wait`; starts no run and needs no repo."""
+    args = {"used": "0", "cap": "10", "total": "16", "cores": "8", "estimate": "0", "workers": "0",
+            "held": "0", "held-workers": "0", **{k.replace("_", "-"): str(v) for k, v in kv.items()}}
+    argv = [a for k, v in args.items() for a in (f"--{k}", v)]
+    r = subprocess.run([BASH, SLOT, "--decide", *argv], cwd=str(tmp_path), env=clean_env(),
+                       capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    return r.stdout.strip()
+
+
+def test_r4_an_estimate_that_exactly_fills_the_cap_is_admitted(tmp_path):
+    assert decide(tmp_path, used=6, estimate=4) == "admit"
+
+
+def test_r4_an_estimate_that_does_not_fit_waits(tmp_path):
+    assert decide(tmp_path, used=6, estimate=4.5) == "wait"
+
+
+def test_r4_an_estimate_above_the_whole_cap_is_admitted_only_when_no_run_is_held(tmp_path):
+    assert decide(tmp_path, used=6, estimate=12, held=0) == "admit"
+    assert decide(tmp_path, used=6, estimate=12, held=1) == "wait"
+
+
+def test_r4_workers_beyond_cores_times_the_cap_share_wait_while_a_run_is_held(tmp_path):
+    # budget = 8 cores x 10 / 16 = 5 workers
+    assert decide(tmp_path, estimate=1, workers=3, held=1, held_workers=3) == "wait"
+    assert decide(tmp_path, estimate=1, workers=2, held=1, held_workers=3) == "admit"
+
+
+def test_r4_workers_above_the_whole_budget_are_admitted_when_no_run_is_held(tmp_path):
+    assert decide(tmp_path, estimate=1, workers=9, held=0) == "admit"
