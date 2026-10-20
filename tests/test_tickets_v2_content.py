@@ -18,7 +18,8 @@ def _headings(text: str) -> list[str]:
 
 
 def test_template_has_the_ownership_headings_in_order_and_no_tier_files_or_interfaces(payload_text):
-    assert _headings(payload_text(TEMPLATE)) == [
+    # Domain and Split are checked in test_planning_domains_content.py
+    assert [h for h in _headings(payload_text(TEMPLATE)) if h not in ("Domain", "Split")] == [
         "Outcome", "Reference", "Owns", "Touches", "Protected", "Depends on", "Out of scope", "Spec",
     ]
     text = payload_text(TEMPLATE)
