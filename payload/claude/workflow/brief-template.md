@@ -32,6 +32,10 @@ components, fixtures, test harnesses, the render command. One line each.>
 |---|---|---|---|---|
 | <KEY> | <paths> | <paths> | yes/no | <KEY>-owner <agent id, filled at dispatch> |
 
+Under each ticket's row, the two lines `bash .claude/workflow/bin/brief-tests.sh <ticket file>`
+prints from the suite map (the config's `Suite map:`, default `tests/MAP.md`):
+`Expected to touch: <test files>` and `Before READY: <the pad-test forms to run>`.
+
 Message an owner by its agent id (the second word of its Owner cell) for anything in its files. Post interface decisions, renames
 in shared files and discoveries with
 `bash .claude/workflow/bin/channel.sh post <epic> <KEY> "<line>"`; read the channel on start

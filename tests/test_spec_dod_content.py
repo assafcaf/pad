@@ -131,7 +131,7 @@ def test_dod_lists_the_shared_merge_gate(payload_text):
 
 def test_dod_drops_tiers_and_the_universal_two_agent_split(payload_text):
     text = payload_text(DOD).lower()
-    assert "tier" not in text
+    assert not re.search(r"ticket tier|tier [0-9]|tiers? of ticket", text)
     assert "code-writer" not in text
     assert "small task" not in text
 

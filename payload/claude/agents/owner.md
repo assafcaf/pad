@@ -84,7 +84,11 @@ reference is its mock, judged as `definition-of-done.md` says.
      `test(<KEY>): reference <crop path> [red]`, and skip the proof below; the evaluator's
      verdict (step 3) is the check.
    - Otherwise: write at least one test per outcome, named for it, with only the stubs they
-     need, and commit them alone as `test(<KEY>): <outcome ids> [red]`.
+     need, and commit them alone as `test(<KEY>): <outcome ids> [red]`. Each new test is an
+     acceptance test: put the ticket key in the file name, in the pattern the adapter prints
+     (`runners/<runner>.sh acceptance-pattern <KEY>`: `prefill.KAN-12.test.ts`,
+     `test_store_KAN_12.py`), placed wherever the runner discovers tests. A test file without
+     the key in the file name fails the submit check as `tests-in-acceptance: <path>`.
    - Either way, prove it:
      `bash .claude/workflow/bin/verify-red.sh --setup '<setup>' <RED> -- <named tests>` must
      print `RED OK`. Pass only host-level tests: a serial-resource outcome is proven on its
@@ -92,7 +96,9 @@ reference is its mock, judged as `definition-of-done.md` says.
 3. **Build** the least code that makes the named tests pass. Keep the stubs' signatures, follow
    the code around you, respect the ticket's Out of scope. Run the named tests, then the
    typecheck, then lint, until all three are green. **Never run the full suite**: the merge
-   gate runs it once, on the merged tree. Refactor only while green; no new behaviour.
+   gate runs it once, on the merged tree. Refactor only while green; no new behaviour. Where
+   the config has a `## Test regime`, run tests only through
+   `bash .claude/workflow/bin/pad-test.sh --run <run id> --ticket <KEY> --role owner ...`.
 
    **A visual reference** is met when it looks like the mock, not when the tests pass. Render
    it: `bash .claude/workflow/bin/render-check.sh --surface <surface> --route <route>
@@ -111,15 +117,18 @@ reference is its mock, judged as `definition-of-done.md` says.
    `bash .claude/workflow/bin/task-submit.sh <epic head> <RED> HEAD --test-paths "<test paths>" --ticket <ticket file>`.
    It also rejects a change outside the ticket's `Owns ∪ Touches`, or a `Touches` line removed:
    that change is a request to the file's owner, by message, not an edit.
-   On `SUBMIT FAIL`, fix it here and run it again.
+   It grades each acceptance test too: at the red commit it must report `failure` (not
+   `error`) with the text the test-designer's `expects:` line states, and `pass` at your head,
+   else `SUBMIT FAIL red-grade <0|1>: <id>` (0: the test passes at red, so it tests nothing new; 1: at
+   red it errors or fails for another reason than the stated text, or it does not pass at your
+   head; suite-design §8). On `SUBMIT FAIL`, fix it here and run it again.
 7. **Rebase onto the epic head.** Read the channel again first (`channel.sh read <run id>
-   --since <your start>`): a peer's rename or interface decision may change what you merge
-   into. Read the epic head again; when it moved, run the
-   `rebase-onto-epic-head` move with it, then re-run the named tests, typecheck and lint, and
+   --since <your start>`): a peer's rename or interface decision may change what you built.
+   Do not rebase unconditionally: a branch cut from an older head that merges cleanly lands as
+   it is. Only when the merge reports `CONFLICT` (After READY) run the
+   `rebase-onto-epic-head` move with the epic head, then re-run the named tests, typecheck and lint, and
    the submit check, with `<RED>` the rebased red commit
-   (`git log --format=%H --grep='\[red\]' -n 1`). A rebase conflict is yours to resolve: in
-   your own files, resolve it; in a file another ticket owns, `SendMessage` its owner and agree
-   the result first.
+   (`git log --format=%H --grep='\[red\]' -n 1`).
 8. **Report** `READY <KEY> <HEAD> <RED>` and end your turn.
 
 **Post to the channel** whenever you change a shared file (`Touches`), settle an interface with
@@ -145,8 +154,12 @@ denial: a removal no rule explains is a `NEEDS_RULING`.
 The orchestrator runs `merge-task.sh` and messages you its last line only when it isn't
 `MERGED`:
 
-- `CONFLICT <KEY>: <paths>`: the epic head moved under you. Rebase (step 7), re-gate, report
-  `READY` again. A conflict is the expected price of parallel work, not a failure.
+- `CONFLICT <KEY>: <paths>`: the epic head moved under you and the merge conflicts. Run the
+  `rebase-onto-epic-head` move with the epic head, re-run the named tests, typecheck and lint
+  and the submit check with `<RED>` the rebased red commit
+  (`git log --format=%H --grep='\[red\]' -n 1`), and report `READY` again. A conflict in your
+  own files is yours to resolve; in a file another ticket owns, `SendMessage` its owner and
+  agree the result first. A conflict is the expected price of parallel work, not a failure.
 - `REJECTED <KEY>: <reason>`: the merged tree failed a gate or a submission rule. Fix it
   inside the ticket, re-gate, report `READY` again.
 

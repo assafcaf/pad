@@ -52,6 +52,21 @@ A test here exists to prove one outcome from the ticket, and to fail when that o
   `dev-tests-stay-out` rule rejects a branch that commits a dev test, so none reaches the epic
   branch and no removal rule is ever needed for one.
 
+## Three states
+
+Every test is in one of three states, and the state says where it lives and who may change it.
+
+| State | Where | Written by | Decided by |
+|---|---|---|---|
+| **acceptance** | anywhere the runner discovers tests; the ticket key in the file name, in the adapter's acceptance pattern (`runners/<runner>.sh acceptance-pattern <KEY>`: `prefill.KAN-12.test.ts`, `test_store_KAN_12.py`) | the ticket's test-designer or owner | the suite owner, after the wave: `VERDICT <KEY> <id> promote\|rewrite\|retire <tier> — §<n> <why>` |
+| **CI** | by module, tagged with a tier (fast, heavy, epic) | the suite owner only | the suite owner |
+| **dev** | the config's dev path | the owner | the owner; never committed |
+
+An acceptance test is graded at submit: at the red commit it reports `failure` (not `error`)
+with the text its `expects:` line states, and `pass` at the ticket head. Run tests only through
+`bash .claude/workflow/bin/pad-test.sh` (`--role <role>`, `--ids`, `--failed`,
+`--acceptance <KEY>`), never the runner itself; a whole file is not an id.
+
 ## Red, then green
 
 1. Write the tests for the task's outcomes, and nothing else.

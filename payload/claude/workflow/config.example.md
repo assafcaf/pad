@@ -38,6 +38,7 @@ in the agent file.
 | Tracker | `tracker` | `haiku` | The only agent with tracker tools: reads, creates, links. Status writes go through `bin/ledger.sh` |
 | Ownership | `owner` | `sonnet` | One per ticket, its own worktree, start to merged: writes the code (and the tests unless protected), proves red, gates, rebases, reports one line |
 | Tests | `test-designer` | `sonnet` | Its own worktree, a blocking child of an owner whose ticket is protected. Writes the failing tests and stubs |
+| Suite | `suite-owner` | `sonnet` | Its own worktree; owns the test suite as a repo asset. One suite ticket per wave that landed acceptance tests (verdicts, flaky quarantine, suite map, tiers); `/suite-bootstrap` runs it on `opus`, once per phase |
 | Visual judge | `evaluator` | `sonnet` | Fresh context, dispatched by an owner on a visual ticket: compares the render with the reference and returns a verdict. Never sees the owner's reasoning |
 | Knowledge scan | `knowledge-scanner` | `sonnet` | Read-only. Several at once, and only during `/knowledge-layer` |
 | Memory curation | `memory-curator` | `sonnet` | Once per epic, at the end. Keeps the agents' memory clean; never adds a lesson |
