@@ -38,6 +38,13 @@ gate_dir="$wt"
 cfg="$gate_dir/.claude/workflow/config.md"
 gate_opt=full
 if [ -f "$cfg" ] && tr -d '\r' <"$cfg" | grep -Fq -- '- **Gate:** `affected`'; then gate_opt=affected; fi
+# A `## Test regime` with tiers gates a candidate with the fast tier plus its tickets' acceptance tests.
+if [ -f "$cfg" ]; then
+  regime="$(tr -d '\r' <"$cfg" | awk '/^## /{ on = ($0 ~ /^## Test regime/); next } on')"
+  if printf '%s\n' "$regime" | grep -qE '^[-* ]*\**Runner:' && ! printf '%s\n' "$regime" | grep -qiE '^[-* ]*\**Tiers:\**[[:space:]]*`?none'; then
+    gate_opt=fast
+  fi
+fi
 deps=""
 if [ -f "$cfg" ]; then
   cell="$(tr -d '\r' <"$cfg" | grep -m1 -F '| Dependency directory |' | sed 's/^| *Dependency directory *| *//')"
@@ -71,9 +78,12 @@ cleanup() { [ -z "$cand" ] || bash "$bin/merge-candidate.sh" --remove "$cand" >/
 trap cleanup EXIT
 
 gate_out=""
-# gate_at <commit>: 0 green, 1 red, 3 known flake (gate_out holds the output).
+# gate_at <commit> <count>: gate the candidate at <commit>, which carries the first <count> tickets
+# of the chunk. 0 green, 1 red, 3 known flake (gate_out holds the output).
 gate_at() {
-  gate_out="$(cd "$gate_dir" && bash "$bin/merge-gate.sh" --candidate "$cand" --at "$1" --gate "$gate_opt" --run "$run" 2>&1 </dev/null | tr -d '\r')"
+  local tk
+  tk="$(printf '%s,' "${pk[@]:0:$2}")"
+  gate_out="$(cd "$gate_dir" && bash "$bin/merge-gate.sh" --candidate "$cand" --at "$1" --gate "$gate_opt" --tickets "${tk%,}" --run "$run" 2>&1 </dev/null | tr -d '\r')"
   case "$gate_out" in
     *"GATE FLAKE "*) return 3 ;;
     *"GATE PASS"*) return 0 ;;
@@ -120,14 +130,14 @@ EOT
   n="${#pk[@]}"
   if [ "$n" -eq 0 ]; then cleanup; pos="$end"; continue; fi
 
-  gate_at "${pc[$((n - 1))]}"; rc=$?
+  gate_at "${pc[$((n - 1))]}" "$n"; rc=$?
   lo="$n"; reason=""
   if [ "$rc" -eq 1 ]; then
     reason="$gate_out"
     lo=0; hi="$n"
     while [ $((hi - lo)) -gt 1 ]; do
       mid=$(((lo + hi) / 2))
-      gate_at "${pc[$((mid - 1))]}"; rc=$?
+      gate_at "${pc[$((mid - 1))]}" "$mid"; rc=$?
       if [ "$rc" -eq 0 ]; then lo="$mid"
       elif [ "$rc" -eq 1 ]; then hi="$mid"; reason="$gate_out"
       else break; fi

@@ -78,13 +78,19 @@ def test_o13_o19_no_revert_of_a_revert_and_no_retired_merger_replies(payload_tex
     assert "SUBMITTED" not in text
 
 
-def test_o13_every_revert_in_skill_and_owner_is_for_a_serial_resource(payload_text):
+# ported-from: tests/test_owner_merge_content.py::test_o13_every_revert_in_skill_and_owner_is_for_a_serial_resource
+def test_o13_every_revert_in_skill_and_owner_is_for_a_serial_resource_or_a_triaged_heavy(payload_text):
     for rel in (SKILL, OWNER):
         stray = [
             b for b in blocks_matching(payload_text(rel), r"revert")
-            if not re.search(r"resource", b, re.I)
+            if not re.search(r"resource|triage\.sh", b, re.I)
         ]
-        assert stray == [], f"{rel}: revert outside a serial-resource failure: {stray}"
+        assert stray == [], f"{rel}: revert outside a serial-resource failure or a triaged heavy: {stray}"
+
+
+def test_o23_the_skill_no_longer_says_a_serial_resource_is_the_only_reason_to_revert(payload_text):
+    text = " ".join(payload_text(SKILL).split())
+    assert "only reason a merge is ever reverted" not in text
 
 
 def test_o13_resource_failure_reverts_with_the_revert_merge_capability(payload_text):
