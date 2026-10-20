@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import subprocess
 from pathlib import Path
 
@@ -182,22 +183,15 @@ def payload_text():
     return read
 
 
-@pytest.fixture
-def bg():
-    """Starts payload scripts in the background and stops their whole process trees at teardown.
-
-    `bg.start(name, *args, cwd, env=None)` runs `payload/.../bin/<name>` under the real bash (not
-    Git's launcher) and returns an object with `.pid`, the script's own bash pid. Teardown, on
-    pass, fail or timeout, kills every process started through it, descendants included.
-    """
-    raise NotImplementedError("bg: the background-script helper is not written yet")
-
-
-def kill_tree(pid: int) -> None:
-    """Kill the process pid and its descendants, in the real bash's pid space."""
-    raise NotImplementedError("kill_tree")
-
-
-def kill_naming(root) -> None:
-    """Kill every process whose command line names root."""
-    raise NotImplementedError("kill_naming")
+# The suite's own guards (fast-tier budget, leak sweep, background-script helper) live in
+# scripts/pad_pytest_guards.py; importing their names here registers the hooks and fixtures.
+sys.path.insert(0, str(ROOT / "scripts"))
+from pad_pytest_guards import (  # noqa: E402,F401
+    bg,
+    kill_naming,
+    kill_tree,
+    pytest_addoption,
+    pytest_runtest_makereport,
+    pytest_sessionfinish,
+    real_bash,
+)
