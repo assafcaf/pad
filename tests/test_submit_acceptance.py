@@ -7,8 +7,10 @@
 Each verb ends on `SUBMIT OK` / `SUBMIT FAIL <rule>: <detail>` (files, grade; exit 0 or 1) or
 `VERDICT OK` / `VERDICT FAIL <why>` (verdicts). `grade` reads what the adapter's `results` verb
 prints (`pass|failure|error|skipped <id> [<message>]`) for the red commit and for the ticket head,
-and the test-designer's OUTCOMES lines `- <O>: <id>[, <id>] | expects: <text>`. `red-grade 0` means
-the red commit did not report `failure` with the text; `red-grade 1` means the head did not pass.
+and the test-designer's OUTCOMES lines `- <O>: <id>[, <id>] | expects: <text>`. Grades follow suite-design.md §8:
+`red-grade 0` = the test passes at the red commit (it tests nothing new); `red-grade 1` = at red it
+is an `error`, did not run, or is a `failure` without the stated text (imprecise reason), or it
+does not pass at the head.
 No test here runs a test runner: the verbs decide from files and git.
 """
 from __future__ import annotations
@@ -144,18 +146,18 @@ def test_o29_failure_with_the_expected_text_then_pass_is_ok(tmp_path, run_script
     assert _last(r) == "SUBMIT OK"
 
 
-def test_o29_error_at_red_is_red_grade_0(tmp_path, run_script):
+def test_o29_error_at_red_is_red_grade_1(tmp_path, run_script):
     r = _grade(run_script, tmp_path, OUTCOMES,
                f"error {ID} ImportError: prefilled name\n", f"pass {ID}\n")
     assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r) == f"SUBMIT FAIL red-grade 0: {ID}"
+    assert _last(r) == f"SUBMIT FAIL red-grade 1: {ID}"
 
 
-def test_o29_failure_without_the_expected_text_is_red_grade_0(tmp_path, run_script):
+def test_o29_failure_without_the_expected_text_is_red_grade_1(tmp_path, run_script):
     r = _grade(run_script, tmp_path, OUTCOMES,
                f"failure {ID} AssertionError: something else\n", f"pass {ID}\n")
     assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r) == f"SUBMIT FAIL red-grade 0: {ID}"
+    assert _last(r) == f"SUBMIT FAIL red-grade 1: {ID}"
 
 
 def test_o29_a_test_that_already_passes_at_red_is_red_grade_0(tmp_path, run_script):
@@ -164,10 +166,10 @@ def test_o29_a_test_that_already_passes_at_red_is_red_grade_0(tmp_path, run_scri
     assert _last(r) == f"SUBMIT FAIL red-grade 0: {ID}"
 
 
-def test_o29_a_test_that_did_not_run_at_red_is_red_grade_0(tmp_path, run_script):
+def test_o29_a_test_that_did_not_run_at_red_is_red_grade_1(tmp_path, run_script):
     r = _grade(run_script, tmp_path, OUTCOMES, "", f"pass {ID}\n")
     assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r) == f"SUBMIT FAIL red-grade 0: {ID}"
+    assert _last(r) == f"SUBMIT FAIL red-grade 1: {ID}"
 
 
 def test_o29_not_passing_at_the_head_is_red_grade_1(tmp_path, run_script):
@@ -186,7 +188,7 @@ def test_o29_each_id_of_an_outcomes_line_is_graded_with_the_lines_text(tmp_path,
         f"pass {ID}\npass {other}\n",
     )
     assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r) == f"SUBMIT FAIL red-grade 0: {other}"
+    assert _last(r) == f"SUBMIT FAIL red-grade 1: {other}"
 
 
 # --- O31, O50: the VERDICT line --------------------------------------------------------------
@@ -315,13 +317,13 @@ def _submit_through_task_submit(repo, tmp_path, run_script, red_results: str, he
 
 
 @pytest.mark.slow
-def test_o29_task_submit_fails_red_grade_0_when_the_acceptance_test_errors_at_red(repo, tmp_path, run_script):
+def test_o29_task_submit_fails_red_grade_1_when_the_acceptance_test_errors_at_red(repo, tmp_path, run_script):
     h, r = _submit_through_task_submit(
         repo, tmp_path, run_script,
         f"error {TID} ImportError: prefilled name\n", f"pass {TID}\n",
     )
     assert r.returncode == 1, r.stdout + r.stderr
-    assert _last(r) == f"SUBMIT FAIL red-grade 0: {TID}"
+    assert _last(r) == f"SUBMIT FAIL red-grade 1: {TID}"
 
 
 @pytest.mark.slow
