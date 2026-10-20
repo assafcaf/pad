@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from conftest import BASH, BIN
+from conftest import BASH, BIN, kill_tree
 from test_pad_proc import PROC, alive, clean_env, kill, posix, probe, wait_for, write_host
 
 WATCH = (BIN / "cap-watch.sh").as_posix()
@@ -66,6 +66,15 @@ class Fleet:
                 p.kill()
             p.wait()
             out.close()
+        # the launcher is gone; the real bash it started (the watchdog, each contained run's
+        # host) is not: stop each by tree
+        mains = [self.repo / ".work" / "runs"]
+        for f in list(mains[0].glob("*/cap-watch.pid")) + list(mains[0].glob("*/pad-test/*.meta")):
+            text = f.read_text(encoding="utf-8").strip()
+            pid = text if f.suffix == ".pid" else next(
+                (ln[5:] for ln in text.splitlines() if ln.startswith("host=")), "")
+            if pid.isdigit():
+                kill_tree(int(pid))
         for run in {p.name[:-4] for p in self.tmp.glob("*.pid")}:
             pid = self.pid(run)
             if pid:
@@ -86,6 +95,7 @@ def fleet(repo, tmp_path):
         f.finish()
 
 
+@pytest.mark.slow
 def test_o6_the_agent_run_is_killed_first_even_when_a_gate_run_is_newer(fleet):
     f = fleet("agent1")
     agent = f.hold("agent1", "agent")
@@ -96,6 +106,7 @@ def test_o6_the_agent_run_is_killed_first_even_when_a_gate_run_is_newer(fleet):
     assert alive(f.pid("owner1")) and alive(f.pid("gate1")) and gate.poll() is None
 
 
+@pytest.mark.slow
 def test_o6_the_suite_owner_run_is_killed_before_a_gate_run(fleet):
     f = fleet("owner1")
     owner = f.hold("owner1", "suite-owner")
@@ -105,6 +116,7 @@ def test_o6_the_suite_owner_run_is_killed_before_a_gate_run(fleet):
     assert alive(f.pid("gate1")) and gate.poll() is None
 
 
+@pytest.mark.slow
 def test_o6_within_a_role_the_newest_run_is_killed(fleet):
     f = fleet("agent2")
     older = f.hold("agent1", "agent")
@@ -114,6 +126,7 @@ def test_o6_within_a_role_the_newest_run_is_killed(fleet):
     assert alive(f.pid("agent1")) and older.poll() is None
 
 
+@pytest.mark.slow
 def test_o6_a_killed_run_says_cap_killed_with_the_memory_it_was_killed_at(fleet):
     f = fleet("agent1")
     agent = f.hold("agent1", "agent")
@@ -122,6 +135,7 @@ def test_o6_a_killed_run_says_cap_killed_with_the_memory_it_was_killed_at(fleet)
     assert re.search(r"CAP KILLED agent1 at 20(?:\.0+)?\b", f.out("agent1")), f.out("agent1")
 
 
+@pytest.mark.slow
 def test_o6_the_kill_is_appended_to_the_run_log(fleet, repo):
     f = fleet("agent1")
     agent = f.hold("agent1", "agent")
@@ -132,6 +146,7 @@ def test_o6_the_kill_is_appended_to_the_run_log(fleet, repo):
     assert re.search(r"CAP KILLED agent1 at 20", log.read_text(encoding="utf-8"))
 
 
+@pytest.mark.slow
 def test_o6_nothing_is_killed_while_memory_is_within_the_cap(fleet, tmp_path):
     f = fleet("nobody")  # never started: memory reads 1 GB throughout
     agent = f.hold("agent1", "agent")

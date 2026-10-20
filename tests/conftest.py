@@ -191,3 +191,13 @@ def bg():
     pass, fail or timeout, kills every process started through it, descendants included.
     """
     raise NotImplementedError("bg: the background-script helper is not written yet")
+
+
+def kill_tree(pid: int) -> None:
+    """Kill the process pid and its descendants, in the real bash's pid space."""
+    raise NotImplementedError("kill_tree")
+
+
+def kill_naming(root) -> None:
+    """Kill every process whose command line names root."""
+    raise NotImplementedError("kill_naming")

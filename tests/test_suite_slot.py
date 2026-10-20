@@ -118,6 +118,7 @@ def _locks(repo: Path) -> set[str]:
     return {str(p.relative_to(root)) for p in root.rglob("*")} if root.exists() else set()
 
 
+@pytest.mark.slow
 def test_suite_slot_exits_with_the_commands_exit_code_and_passes_its_output(repo, run_script):
     r = run_script(SCRIPT, "--", "bash", "-c", "echo out-7c1; exit 3", cwd=repo)
     assert r.returncode == 3, r.stdout + r.stderr

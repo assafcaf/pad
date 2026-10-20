@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from conftest import BASH, BIN
+from conftest import BASH, BIN, kill_naming
 from test_pad_proc import clean_env, posix, probe, wait_for, write_host
 
 SLOT = (BIN / "suite-slot.sh").as_posix()
@@ -56,6 +56,7 @@ class Runs:
                 p.kill()
             p.wait()
             err.close()
+        kill_naming(self.tmp)
 
 
 @pytest.fixture
@@ -81,6 +82,7 @@ def cap_wait(used: int, cap: int) -> str:
     return rf"CAP WAIT {used}(?:\.0+)?/{cap}(?:\.0+)?"
 
 
+@pytest.mark.slow
 def test_o5_a_run_that_does_not_fit_waits_prints_cap_wait_and_starts_when_it_fits(runs, tmp_path):
     r = runs(cap="10GB", used="8")
     p = r.start("a", "--estimate-gb", "4")
@@ -91,6 +93,7 @@ def test_o5_a_run_that_does_not_fit_waits_prints_cap_wait_and_starts_when_it_fit
     assert p.wait(timeout=30) == 0
 
 
+@pytest.mark.slow
 def test_o5_an_estimate_that_exactly_fills_the_cap_starts_at_once(runs):
     r = runs(cap="10GB", used="6")
     p = r.start("a", "--estimate-gb", "4")
@@ -99,6 +102,7 @@ def test_o5_an_estimate_that_exactly_fills_the_cap_starts_at_once(runs):
     assert "CAP WAIT" not in r.err("a")
 
 
+@pytest.mark.slow
 def test_o5_cap_wait_is_printed_once_per_interval_not_once_per_check(runs):
     r = runs(cap="10GB", used="9")
     r.start("a", "--estimate-gb", "4")
@@ -108,6 +112,7 @@ def test_o5_cap_wait_is_printed_once_per_interval_not_once_per_check(runs):
     assert r.err("a").count("CAP WAIT") == 1, r.err("a")
 
 
+@pytest.mark.slow
 def test_o5_an_estimate_above_the_whole_cap_waits_while_another_run_is_held(runs):
     r = runs(cap="10GB", used="1")
     r.start("a", "--estimate-gb", "1", hold=True)
@@ -120,6 +125,7 @@ def test_o5_an_estimate_above_the_whole_cap_waits_while_another_run_is_held(runs
     assert big.wait(timeout=30) == 0
 
 
+@pytest.mark.slow
 def test_o5_an_estimate_above_the_whole_cap_starts_when_no_other_run_is_held(runs):
     r = runs(cap="10GB", used="1")
     big = r.start("big", "--estimate-gb", "12")
@@ -127,6 +133,7 @@ def test_o5_an_estimate_above_the_whole_cap_starts_when_no_other_run_is_held(run
     assert r.inside("big")
 
 
+@pytest.mark.slow
 def test_o5_an_unavailable_memory_probe_refuses_with_exit_2_and_runs_nothing(repo, tmp_path):
     write_host(repo, cap="10GB")
     env = clean_env(PAD_SUITE_SLOTS="2", PAD_HOST_SLOTS_DIR=posix(tmp_path / "hostslots"),
@@ -139,6 +146,7 @@ def test_o5_an_unavailable_memory_probe_refuses_with_exit_2_and_runs_nothing(rep
     assert "ran" not in [p.name for p in tmp_path.iterdir()]
 
 
+@pytest.mark.slow
 def test_o7_workers_that_would_exceed_cores_times_the_cap_share_wait(runs):
     # 4 cores x 50% cap share = 2 workers; memory is not the constraint (8 GB cap, 1 in use).
     r = runs(cap="50%", total="16 GB", used="1", cores="4")
@@ -152,6 +160,7 @@ def test_o7_workers_that_would_exceed_cores_times_the_cap_share_wait(runs):
     assert b.wait(timeout=30) == 0
 
 
+@pytest.mark.slow
 def test_o7_workers_within_the_budget_run_side_by_side(runs):
     r = runs(cap="50%", total="16 GB", used="1", cores="4")
     r.start("a", "--estimate-gb", "1", "--workers", "1", hold=True)

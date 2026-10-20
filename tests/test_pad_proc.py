@@ -139,6 +139,7 @@ def record(repo: Path, run: str, pid: str, done: bool) -> None:
         (d / "slot1.done").write_text("0\n", encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_o8_sweep_kills_a_process_left_under_a_finished_run_and_reports_it(repo):
     pid = leftover()
     try:
@@ -163,6 +164,7 @@ def test_o8_sweep_leaves_a_process_of_a_run_that_has_not_ended(repo):
         kill(pid)
 
 
+@pytest.mark.slow
 def test_o8_sweep_counts_only_processes_it_killed(repo):
     gone = leftover()
     kill(gone)
