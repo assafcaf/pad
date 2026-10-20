@@ -204,9 +204,21 @@ def pytest_addoption(parser):
                   "seconds the call phase of a test not marked slow may take", default="")
 
 
+# Tests running right now in this process (setup to teardown). A session that ends while this is
+# above 0 was started by a test, in this process.
+_running = 0
+# A session in a process a test started (pytester's subprocess runs) knows it from its environment.
+_started_by_a_test = "PYTEST_CURRENT_TEST" in os.environ
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
+    global _running
     outcome = yield
+    if call.when == "setup":
+        _running += 1
+    elif call.when == "teardown":
+        _running -= 1
     if call.when != "call":
         return
     try:
@@ -239,7 +251,7 @@ def _leaks(config) -> list[tuple[int, str, str]]:
     needles = set()
     if root is not None:
         needles |= _forms(root)
-    if "PYTEST_CURRENT_TEST" not in os.environ:  # a session a test started owns its temp root only
+    if not _started_by_a_test:  # a session a test started owns its temp root only
         needles |= _forms(PAYLOAD)
     if not needles:
         return []
@@ -272,6 +284,8 @@ def _leaks(config) -> list[tuple[int, str, str]]:
 def pytest_sessionfinish(session, exitstatus):
     config = session.config
     if hasattr(config, "workerinput"):  # an xdist worker: the controller sweeps once all are done
+        return
+    if _running > 0:  # started by a test in this process: it owns nothing the outer session runs
         return
     leaks = _leaks(config)
     if not leaks:
