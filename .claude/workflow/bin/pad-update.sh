@@ -27,6 +27,8 @@
 #   DELETE    deleted upstream, mine is old          -> removed
 #   GONE      shipped at the base, removed here      -> stays removed
 #
+# writing-for-readers is optional: a project without its SKILL.md gets none of its files.
+#
 # Files already equal to new print nothing. The project's own files are never touched:
 # config.md, settings.json, agents/tracker.md, docs/decisions/. Line endings are compared and
 # written as LF.
@@ -87,11 +89,15 @@ project="$(cd "$project" && pwd)"
 lock="$project/.claude/workflow/pad.lock"
 
 # The payload files that track upstream at a commit, as project-relative paths. tracker.md is
-# written per project and settings.example.json is merged by hand, so neither is listed.
+# written per project and settings.example.json is merged by hand, so neither is listed. The
+# optional skill is listed only where the project has it: the installer asked, and a project
+# that said no must not get it back as an ADD.
+optional=".claude/skills/writing-for-readers/"
 tracked() { # tracked <commit>
   p ls-tree -r --name-only "$1" -- payload/claude 2>/dev/null | tr -d '\r' |
     sed -n 's|^payload/claude/|.claude/|p' |
-    grep -v -x -e '.claude/agents/tracker.md' -e '.claude/settings.example.json'
+    grep -v -x -e '.claude/agents/tracker.md' -e '.claude/settings.example.json' |
+    if [ -f "$project/${optional}SKILL.md" ]; then cat; else grep -v -F "$optional"; fi
 }
 
 lock_field() { # lock_field <name>

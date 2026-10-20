@@ -20,7 +20,8 @@ Packages table there and the `<package>/PROJECT.md` module map of each package t
 touches.
 
 Every tracker read and write goes through the `tracker` agent, which owns the tracker's tools
-and its adapter. You never call the tracker directly.
+and its adapter. You never call the tracker directly. Dispatch it as `<epic key>-tracker`
+(`<spec slug>-tracker` before the epic has a key).
 
 An epic key means: ask `tracker` to `read-epic` and `read-task` its children, read the linked
 spec, and plan only what's missing.

@@ -252,7 +252,7 @@ The config's `## Surfaces` rows come from a scan, not from guesswork: the operat
 for what a scan cannot know. The scan's `SURFACES:` section gives one line
 `<surface> | <entry path> | <how invoked>` per candidate.
 
-Dispatch one `knowledge-scanner` agent over the repo root, put each entry path in the Entry
+Dispatch one `knowledge-scanner` agent, named `scan-root`, over the repo root, put each entry path in the Entry
 point column, and ask the operator for the other columns. This runs even when knowledge mode is
 off: the rows belong to the config, not to the knowledge layer. Then run `knowledge-paths.sh`,
 which fails on an entry point that does not resolve.

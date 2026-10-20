@@ -54,6 +54,18 @@ that matches one `Protected: yes`, `plan-check.sh` fails a ticket that matches b
 
 - `payload/claude/workflow/bin/merge*.sh`
 - `payload/claude/workflow/merge-strategies/**`
+- `payload/claude/workflow/bin/pad-test*.sh`
+- `payload/claude/workflow/bin/pad-proc*`
+- `payload/claude/workflow/bin/cap-watch.sh`
+- `payload/claude/workflow/bin/triage.sh`
+- `payload/claude/workflow/bin/task-submit.sh`
+- `payload/claude/workflow/bin/submit-*.sh`
+- `payload/claude/workflow/bin/verify-red.sh`
+- `payload/claude/workflow/bin/weakened-tests.sh`
+- `payload/claude/workflow/bin/rules.sh`
+- `payload/claude/workflow/bin/suite-slot.sh`
+- `payload/claude/workflow/runners/**`
+- `payload/claude/workflow/bin/plan-check.sh`
 
 ## Tracker updates during a run
 

@@ -1,5 +1,5 @@
 # The PAD commit this project's harness came from. Written by the installer and /pad-update; commit it.
 source: https://github.com/assafcaf/pad.git
-commit: aaf7adb3d52136ab6693cddc20c5297e7ba536f0
+commit: 4abdd7ec24b4fbba3c0d6315e996b9be58d1c6ae
 version: 0.4.0
 migration: 0003

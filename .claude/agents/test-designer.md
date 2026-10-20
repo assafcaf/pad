@@ -68,7 +68,9 @@ It runs elsewhere, so it doesn't have to fail here.
 
 ## Follow-up messages
 
-Your owner may message you after your report. Answer from the same worktree and branch:
+Your owner may message you after your report. Answer from the same worktree and branch.
+Your owner's address is the Owner cell of your ticket's row in the brief's ownership map:
+`SendMessage` it there if you need to reach it first.
 
 - **A test your owner says is wrong, or red that wasn't proven:** fix only your own tests
   and stubs in a new commit on top, `test(<KEY>): fix <outcome ids> [red]` — never amend or
