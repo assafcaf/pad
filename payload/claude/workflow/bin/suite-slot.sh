@@ -23,13 +23,32 @@
 # is admitted. Admitted runs are marked by an `admitted` file (estimate, workers) in their slot
 # dir, which the others count. An unreadable memory probe exits 2 with the reason.
 #
+# A run that is waiting (for a slot, or for admission) ends when the process that started it is
+# gone: no PAD loop outlives its starter.
+#
+#   suite-slot.sh --decide --used <GB> --cap <GB> --total <GB> --cores <n> --estimate <GB>
+#                 --workers <n> --held <n> --held-workers <n>
+#
+# prints `admit` or `wait` by the admission rule above and runs nothing: `--held` runs are already
+# admitted with `--held-workers` workers between them. Needs no repository.
+#
 # Exits with <cmd>'s exit code; 64 on usage, 2 outside a git repo.
 
 set -uo pipefail
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=pad-proc.sh
+. "$here/pad-proc.sh"
+# The starter, taken first: a waiting run ends when it is gone.
+pp_starter
+starter="$pp_starter_pid"
+[ "$pp_starter_dead" -eq 0 ] || exit 143
+
 usage() { echo "usage: suite-slot.sh [--priority merge] [--estimate-gb <n>] [--workers <n>] -- <cmd...>" >&2; exit 64; }
 
 priority=task
+decide_mode=0
+d_used=0; d_cap=0; d_total=0; d_cores=1; d_held=0; d_hw=0
 estimate=""
 workers=""
 while [ $# -gt 0 ]; do
@@ -37,11 +56,38 @@ while [ $# -gt 0 ]; do
     --priority) [ "${2:-}" = merge ] || usage; priority=merge; shift 2 ;;
     --estimate-gb) estimate="${2:-}"; case "$estimate" in ''|*[!0-9.]*) usage ;; esac; shift 2 ;;
     --workers) workers="${2:-}"; case "$workers" in ''|*[!0-9]*) usage ;; esac; shift 2 ;;
-    --decide) echo "suite-slot.sh: --decide is not implemented" >&2; exit 70 ;;
+    --decide) decide_mode=1; shift ;;
+    --used) d_used="${2:-}"; shift 2 ;;
+    --cap) d_cap="${2:-}"; shift 2 ;;
+    --total) d_total="${2:-}"; shift 2 ;;
+    --cores) d_cores="${2:-}"; shift 2 ;;
+    --estimate) estimate="${2:-}"; shift 2 ;;
+    --held) d_held="${2:-}"; shift 2 ;;
+    --held-workers) d_hw="${2:-}"; shift 2 ;;
     --) shift; break ;;
     *) usage ;;
   esac
 done
+
+# decide <used> <cap> <total> <cores> <estimate> <workers> <held runs> <held workers>: admit or
+# wait. Memory: used + estimate within the cap (an estimate above the whole cap passes only when no
+# run is held). Workers: held workers + these within cores x cap / total (none held: always).
+decide() {
+  local used="$1" cap="$2" total="$3" cores="$4" est="${5:-0}" wk="${6:-0}" n="${7:-0}" owk="${8:-0}" budget ok=1
+  budget="$(awk -v c="$cores" -v k="$cap" -v t="$total" 'BEGIN { print (t > 0 ? c * k / t : c) }')"
+  if ! pp_le "$(awk -v u="$used" -v e="$est" 'BEGIN { print u + e }')" "$cap"; then
+    if pp_le "$est" "$cap" || [ "$n" -gt 0 ]; then ok=0; fi
+  fi
+  if [ "$wk" -gt 0 ] && [ "$n" -gt 0 ] &&
+     ! pp_le "$(awk -v a="$owk" -v b="$wk" 'BEGIN { print a + b }')" "$budget"; then
+    ok=0
+  fi
+  if [ "$ok" -eq 1 ]; then echo admit; else echo wait; fi
+}
+if [ "$decide_mode" -eq 1 ]; then
+  decide "$d_used" "$d_cap" "$d_total" "$d_cores" "${estimate:-0}" "${workers:-0}" "$d_held" "$d_hw"
+  exit 0
+fi
 [ $# -gt 0 ] || usage
 
 common="$(git rev-parse --git-common-dir 2>/dev/null)" &&
@@ -79,6 +125,7 @@ cleanup() {
   [ -n "$held" ] && rm -rf "$held"
   [ -n "$hheld" ] && rm -rf "$hheld"
 }
+starter_gone() { [ -n "$starter" ] && ! kill -0 "$starter" 2>/dev/null; }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -124,6 +171,7 @@ acquire() {
     if [ "$priority" = merge ] || ! merge_waiting "$3"; then
       got="$(take "$1" "$2")" && { echo "$got"; return 0; }
     fi
+    starter_gone && return 1
     sleep 0.1
   done
 }
@@ -132,7 +180,7 @@ if [ "$priority" = merge ]; then
   marker="$waiting/$$"
   echo $$ > "$marker"
 fi
-held="$(acquire "$locks/slots" "$slots" "$waiting")"
+held="$(acquire "$locks/slots" "$slots" "$waiting")" || exit 143
 if [ -n "$marker" ]; then rm -f "$marker"; marker=""; fi
 
 if [ "$hslots" -ge 1 ]; then
@@ -140,14 +188,12 @@ if [ "$hslots" -ge 1 ]; then
     hmarker="$hostdir/merge-waiting/$$"
     echo $$ > "$hmarker"
   fi
-  hheld="$(acquire "$hostdir" "$hslots" "$hostdir/merge-waiting")"
+  hheld="$(acquire "$hostdir" "$hslots" "$hostdir/merge-waiting")" || exit 143
   if [ -n "$hmarker" ]; then rm -f "$hmarker"; hmarker=""; fi
 fi
 
 # admit: wait until the cap and the worker budget have room, then mark this run admitted.
 admit() {
-  # shellcheck source=pad-proc.sh
-  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pad-proc.sh"
   local cap total cores budget est wk interval last=0 now used n owk ok d p w lock="$locks/admit.lock"
   cap="$(pp_cap)" || exit 2
   total="$(pp_total_gb)" || exit 2
@@ -158,6 +204,7 @@ admit() {
   while :; do
     until mkdir "$lock" 2>/dev/null; do
       reap "$lock"
+      starter_gone && exit 143
       sleep 0.05
     done
     echo $$ > "$lock/pid"
@@ -171,14 +218,8 @@ admit() {
       w="$(awk 'NR == 2' "${d}admitted")"
       n=$((n + 1)); owk=$((owk + ${w:-0}))
     done
-    ok=1
-    if ! pp_le "$(awk -v u="$used" -v e="$est" 'BEGIN { print u + e }')" "$cap"; then
-      if pp_le "$est" "$cap" || [ "$n" -gt 0 ]; then ok=0; fi
-    fi
-    if [ "$wk" -gt 0 ] && [ "$n" -gt 0 ] &&
-       ! pp_le "$(awk -v a="$owk" -v b="$wk" 'BEGIN { print a + b }')" "$budget"; then
-      ok=0
-    fi
+    ok=0
+    [ "$(decide "$used" "$cap" "$total" "$cores" "$est" "$wk" "$n" "$owk")" = admit ] && ok=1
     if [ "$ok" -eq 1 ]; then
       printf '%s\n%s\n' "$est" "$wk" > "$held/admitted"
       rm -rf "$lock"
@@ -190,6 +231,7 @@ admit() {
       echo "CAP WAIT $used/$cap" >&2
       last="$now"
     fi
+    starter_gone && exit 143
     sleep 0.5
   done
 }
