@@ -216,8 +216,8 @@ def _one_check(repo, tmp_path, records: int, tag: str):
         ), "the check never killed a run"
     finally:
         pf = repo / ".work" / "runs" / tag / "cap-watch.pid"
-        if pf.exists():
-            kill(pf.read_text().strip())
+        if pf.exists() and pf.read_text().strip().isdigit():
+            kill_tree(int(pf.read_text().strip()))  # the watcher's own `sleep` goes with it
         w.kill()
         w.wait()
         for p in pids:
