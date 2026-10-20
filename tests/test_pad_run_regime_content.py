@@ -76,3 +76,7 @@ def test_a_pause_and_the_end_stop_nothing_and_start_no_watchdog(payload_text):
     assert not re.search(r"watchdog|cap-watch", para, re.I), para
     end = flat(section(payload_text(SKILL), "4. Finish the epic"))
     assert not re.search(r"watchdog|cap-watch|preview", end, re.I), end
+
+
+def test_o53_what_was_swept_is_logged_as_swept_n_processes(payload_text):
+    assert "SWEPT <n> processes" in flat(payload_text(SKILL))
