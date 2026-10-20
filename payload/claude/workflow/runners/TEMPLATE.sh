@@ -40,14 +40,14 @@ case "$verb" in
   run)
     rd="${1:?report dir}"; shift
     mkdir -p "$rd"
-    # TODO: start the runner with the selection and write its report into "$rd".
+    # FILL IN: start the runner with the selection and write its report into "$rd".
     echo "TEMPLATE.sh: fill in the run verb" >&2
     exit 2 ;;
   results)
-    # TODO: read "${1}" and print `pass|failure|error|skipped <id> [<message>]` lines.
+    # FILL IN: read "${1}" and print `pass|failure|error|skipped <id> [<message>]` lines.
     exit 0 ;;
-  runner-names) echo "TODO-runner" ;;
-  protected-files) echo "TODO-config-file" ;;
+  runner-names) echo "your-runner" ;;
+  protected-files) echo "your-runner.config" ;;
   acceptance-pattern) echo "**/*${1:?key}*" ;;
   capabilities) echo "" ;;
   *) echo "adapter: unknown verb '$verb'" >&2; exit 64 ;;
