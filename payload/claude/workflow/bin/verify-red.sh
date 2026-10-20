@@ -10,6 +10,9 @@
 # checkout is linked into the worktree (junction on Windows, symlink elsewhere) and --setup is
 # skipped. A changed lockfile runs --setup as usual.
 #
+# --expect-text '<text>': the red must also say so: RED OK needs the exit code and the text in
+# the run's output (a failure for another reason is NOT RED).
+#
 # Exit 0: red as expected. Exit 1: not red (passed, or failed the wrong way). Exit 64: usage.
 # The last 40 lines of the test output are printed either way, so the caller can quote them.
 
@@ -17,6 +20,7 @@ set -uo pipefail
 
 setup=""
 expect="1"
+expect_text=""
 deps=""
 lockfile=""
 base=""
@@ -24,6 +28,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --setup) setup="$2"; shift 2 ;;
     --expect) expect="$2"; shift 2 ;;
+    --expect-text) expect_text="$2"; shift 2 ;;
     --deps) deps="$2"; shift 2 ;;
     --lockfile) lockfile="$2"; shift 2 ;;
     --base) base="$2"; shift 2 ;;
@@ -96,6 +101,10 @@ case "$code" in
   97|98) echo "verify-red: setup failed at ${sha:0:8} (exit $code)"; exit 1 ;;
 esac
 if [[ ",$expect," == *",$code,"* ]]; then
+  if [ -n "$expect_text" ] && ! grep -qF -- "$expect_text" "$out"; then
+    echo "NOT RED: exit $code at ${sha:0:8} but the output lacks the expected text: $expect_text"
+    exit 1
+  fi
   echo "RED OK: exit $code at ${sha:0:8}"
   exit 0
 fi

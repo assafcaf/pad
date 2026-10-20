@@ -37,24 +37,37 @@ summary before it, no recap after it. Every sentence you write is time the next 
 2. **Write one or more tests per outcome.** The test name says the outcome. Cover the
    boundary the outcome names, plus the failure paths it implies (empty, malformed, missing,
    already-exists), so passing them means the outcome really holds.
+   **Name the test file for acceptance:** its name carries the ticket key, in the pattern the
+   adapter prints for `bash .claude/workflow/runners/<runner>.sh acceptance-pattern <KEY>`
+   (`prefill.KAN-12.test.ts`, `test_store_KAN_12.py`), placed wherever the runner discovers
+   tests; with the key in the file name, `task-submit.sh` (`tests-in-acceptance`) accepts it,
+   and the suite owner later finds it. For each outcome, write down the words the failing
+   assertion will say (its `expects:` text).
 3. **Add only the stubs the tests need to run**: a module, a signature, a function raising
    `NotImplementedError`. Use the exact names the ticket and its reference give; where they
    are silent, choose names that match the surrounding code and report them.
-4. **Run the new tests.** They must fail on an assertion — the configured red exit code
-   (`config.md`). A collection or import error is not red: add the missing stub and run again.
+4. **Run the new tests**, only through `bash .claude/workflow/bin/pad-test.sh --run <run id>
+   --ticket <KEY> --role test-designer --ids <id>...` (never the runner itself; a whole file
+   is not an id). They must fail on an assertion: the configured red exit code (`config.md`)
+   and the adapter's `failure` outcome, not `error`. A collection or import error is `error`,
+   not red: add the missing stub and run again, so the test fails for the stated reason, in
+   the words its `expects:` text names.
    A test that passes now is testing something that already exists — replace it. Iterate
    with the named tests only.
 5. **Run the typecheck and the named tests,** when the new tests are red for the right reason
    (the typecheck command is in `config.md`; skip it if none is configured).
    Never run the full suite: the merge gate runs it. Your stubs must not break an existing test. If one breaks, your stub is wrong, or the
    ticket conflicts with existing behavior: report `BLOCKED`.
-6. **Commit once:** `test(<KEY>): <outcome ids> [red]`, with the trailer line
+6. **Commit once:** `test(<KEY>): <outcome ids> [red]`, with the report's OUTCOMES lines
+   (`- O1: <ids> | expects: <text>`) in the message body, which is where the submit check grades
+   them from, and the trailer line
    `PAD-Role: test-designer` at the end of the message (and on every red fix commit too):
    `merge-task.sh` accepts a protected ticket's red only with it. Tests and stubs only,
    nothing else.
 7. **Prove your red commit.** Run
-   `bash .claude/workflow/bin/verify-red.sh --setup '<setup>' <RED_COMMIT> -- <named tests>`
-   on your red commit. Report only after it prints `RED OK`; on anything else, fix the tests
+   `bash .claude/workflow/bin/verify-red.sh --setup '<setup>' --expect-text '<expects text>' <RED_COMMIT> -- <named tests>`
+   on your red commit (`--expect-text` makes `RED OK` need the stated text in the failure, so
+   a test that fails for another reason is `NOT RED`). Report only after it prints `RED OK`; on anything else, fix the tests
    and stubs in a new commit on top and run it again.
 
 ## Stay inside the task
@@ -98,7 +111,7 @@ KEY: <task key>
 BRANCH: <git branch --show-current>
 RED_COMMIT: <full sha>
 OUTCOMES:
-- O1: <test node id>[, <test node id>]
+- O1: <test node id>[, <test node id>] | expects: <the text the failing assertion shows at red>
 RED: <command> -> <one-line result, including the exit code>
 STUBS: <exact signatures you created, file:name>
 NOTES: <at most 3 lines: naming choices, what an implementer must know, or what blocks you>

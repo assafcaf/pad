@@ -68,7 +68,11 @@ check off.
 ## An epic is done when
 
 1. Every ticket is done, and the operator has reviewed every wave.
-2. The full suite and lint pass at the epic branch head.
+2. The full suite and lint pass at the epic branch head, and the epic tier is green: with
+   `## Test regime` tiers, fast, heavy and epic all ran through `pad-test.sh` at that head.
+   At the epic's end no acceptance-named file remains (a test file whose name carries a
+   ticket key in the adapter's acceptance pattern), and every acceptance test has a VERDICT line
+   (`VERDICT <KEY> <id> promote|rewrite|retire <tier> — §<n> <why>`) from the suite owner.
 3. The development record (`docs/decisions/`) has an Outcome section for this epic: what was
    built, what changed from the scope, and why.
 4. The epic branch is pushed and a draft PR is open, linking the epic.

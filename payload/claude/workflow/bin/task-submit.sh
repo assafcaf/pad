@@ -83,6 +83,8 @@ while IFS=$'\t' read -r rule check _; do
 done <<<"$(bash "$bin/rules.sh" list repo-lint)"
 [ -z "$bad" ] || fail repo-lint "$bad"
 
+out="$(bash "$bin/submit-acceptance.sh" submit --test-paths "$paths" ${ticket:+--ticket "$ticket"} "$epic" "$red" "$head")" || { echo "$out" | tail -n 1; exit 1; }
+
 if [ -n "$ticket" ]; then
   list="$(bash "$bin/plan-check.sh" --list "$ticket")" || fail ownership "cannot read $ticket"
   owns=(); touches=()
