@@ -44,7 +44,7 @@ main="$(cd "$top" && cd "$(git rev-parse --git-common-dir)/.." && pwd)" || fail 
 log="$main/.work/runs/$run/progress.md"
 [ -f "$log" ] || fail "no progress log at $log"
 
-awk -v run="$run" '
+stats="$(awk -v run="$run" '
   # Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant).
   function days(y, m, d,   era, yoe, mp, doy, doe) {
     y -= (m <= 2)
@@ -123,4 +123,34 @@ awk -v run="$run" '
       if (ready[k] > 1) printf "STAT rework.%s %d\n", k, ready[k] - 1
     }
     printf "STATS %s %d tickets\n", run, nk
-  }' "$log"
+  }' "$log")"
+
+# The run's gates.jsonl (pad-test.sh's record), summed per role: `ROLE <role> runs= wall_s= peak_gb=
+# refusals= flakes= cap_kills=`, sorted by role, before the final STATS line. A refusal is outcome
+# `refused`, a flake `flaky`, a cap kill exit 75; peak_gb is the highest peak of the role's runs.
+gates="$main/.work/runs/$run/gates.jsonl"
+printf '%s\n' "$stats" | sed '$d'
+if [ -f "$gates" ]; then
+  tr -d '\r' < "$gates" | awk '
+    function field(line, key,   re, v) {
+      re = "\"" key "\"[ ]*:[ ]*(\"[^\"]*\"|[-0-9.eE+]+)"
+      if (!match(line, re)) return ""
+      v = substr(line, RSTART, RLENGTH)
+      sub(/^"[^"]*"[ ]*:[ ]*/, "", v)
+      gsub(/^"|"$/, "", v)
+      return v
+    }
+    NF == 0 { next }
+    {
+      r = field($0, "role"); if (r == "") next
+      runs[r]++
+      wall[r] += field($0, "wall_s") + 0
+      p = field($0, "peak_gb") + 0; if (p > peak[r]) peak[r] = p
+      o = field($0, "outcome"); x = field($0, "exit") + 0
+      if (o == "refused") refusals[r]++
+      if (o == "flaky") flakes[r]++
+      if (x == 75) kills[r]++
+    }
+    END { for (r in runs) printf "ROLE %s runs=%d wall_s=%g peak_gb=%g refusals=%d flakes=%d cap_kills=%d\n", r, runs[r], wall[r], peak[r], refusals[r], flakes[r], kills[r] }' | sort
+fi
+printf '%s\n' "$stats" | tail -n 1

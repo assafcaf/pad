@@ -126,3 +126,57 @@ def test_missing_progress_fails(repo, run_script):
 def test_usage(repo, run_script, args):
     r = run_script("run-stats.sh", *args, cwd=repo)
     assert r.returncode == 64
+
+
+# --- E3-T2 O17: the run's gates.jsonl, summed per role ---------------------------------------
+#
+# With <main>/.work/runs/<id>/gates.jsonl present, run-stats.sh also prints one line per role,
+# sorted by role: `ROLE <role> runs=<n> wall_s=<n> peak_gb=<n> refusals=<n> flakes=<n>
+# cap_kills=<n>`. A refusal is outcome `refused`, a flake outcome `flaky`, a cap kill exit 75.
+
+def _gate(role, wall, peak, exit_code, outcome):
+    import json
+    return json.dumps({"role": role, "ticket": "E7-T1", "selection": "fast", "tree": "abc",
+                       "selected": 4, "workers": 2, "wall_s": wall, "peak_gb": peak,
+                       "exit": exit_code, "outcome": outcome})
+
+
+def _write_gates(main: Path, *lines: str) -> None:
+    d = main / ".work" / "runs" / RUN
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "gates.jsonl").write_text("".join(x + "\n" for x in lines), encoding="utf-8", newline="\n")
+
+
+def _roles(r) -> dict[str, dict[str, float]]:
+    got = {}
+    for line in r.stdout.splitlines():
+        if line.startswith("ROLE "):
+            _, role, *rest = line.split()
+            got[role] = {k: float(v) for k, v in (kv.split("=") for kv in rest)}
+    return got
+
+
+def test_o17_gates_jsonl_is_summed_per_role(repo, run_script):
+    _write(repo, LOG)
+    _write_gates(
+        repo,
+        _gate("owner", 10, 1.5, 0, "pass"),
+        _gate("owner", 20, 0, 1, "fail"),
+        _gate("owner", 0, 0, 65, "refused"),
+        _gate("owner", 5, 0, 1, "flaky"),
+        _gate("test-designer", 7, 0, 0, "pass"),
+        _gate("gate", 30, 2.5, 75, "cap killed"),
+        _gate("gate", 12, 0, 0, "pass"),
+    )
+
+    r = run_script("run-stats.sh", "--run", RUN, cwd=repo)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    roles = _roles(r)
+    assert set(roles) == {"owner", "test-designer", "gate"}, r.stdout
+    assert roles["owner"] == {"runs": 4, "wall_s": 35, "peak_gb": 1.5, "refusals": 1, "flakes": 1, "cap_kills": 0}
+    assert roles["test-designer"] == {"runs": 1, "wall_s": 7, "peak_gb": 0, "refusals": 0, "flakes": 0, "cap_kills": 0}
+    assert roles["gate"] == {"runs": 2, "wall_s": 42, "peak_gb": 2.5, "refusals": 0, "flakes": 0, "cap_kills": 1}
+    assert _last(r) == f"STATS {RUN} 3 tickets"
+    assert _stats(r)["merged"] == "2"                       # the progress lines still count
+
