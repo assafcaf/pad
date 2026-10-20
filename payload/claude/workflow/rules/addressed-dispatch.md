@@ -2,6 +2,7 @@
 name: addressed-dispatch
 kind: practice
 applies-to: orchestrator, owner
+warrant: an agent with no fixed name or recorded id cannot be messaged by a peer or the operator
 ---
 
 Every agent you dispatch gets a fixed name, its dispatch description, built from what it works

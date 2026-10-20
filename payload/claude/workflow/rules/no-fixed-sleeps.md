@@ -2,6 +2,7 @@
 name: no-fixed-sleeps
 kind: test-authoring
 applies-to: test-designer, owner
+warrant: KAN-107: a sleep(2.0) failed under xdist load and rejected a merge twice
 check: no-fixed-sleeps.sh
 ---
 

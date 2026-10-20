@@ -2,6 +2,7 @@
 name: no-pinned-aggregates
 kind: test-authoring
 applies-to: test-designer, owner
+warrant: KAN-107: a pinned suite count made 9 of 9 later merges conflict
 ---
 
 No test pins a number that every task changes: a suite's test count in the README, the number

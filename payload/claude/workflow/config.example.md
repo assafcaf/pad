@@ -243,3 +243,31 @@ surface without one — a CLI, a backend — has no visual class; nothing in PAD
   review over the finished epic branch before the PR.
 - **Publishing:** `merge-task.sh` pushes the epic branch to `origin` after each merge, so tracker comments cite
   fetchable commits. Open the epic PR as a draft. Never merge it.
+
+## Test regime
+
+How tests run on this repo, through `bin/pad-test.sh` and the runner's adapter. `/setup-workflow`
+step 7g fills it in. `bin/preflight.sh` checks it (`regime`): a repo may add to PAD's managed
+values and tighten them, never remove or relax one.
+
+- **Tiers:** none. Today's gates and no cost tiers. Replace this line with a tiers table (below)
+  once the repo has a suite map; the managed values below hold either way.
+- **Runner:** `none`. The adapter name: `runners/<name>.sh`, PAD's own (`pytest`, `vitest`) or
+  the repo's, in `.claude/pad-plugins/runners/`.
+- **Repeat limit:** `3`. Runs of one selection on unchanged code (a classifying rerun excluded).
+- **Ticket run limit:** `12`. Runs per ticket on changed code.
+- **Flaky quarantine:** `8 tests, 7 days`. At most this many tests, for at most this long;
+  quarantined tests run and do not gate.
+- **Suite map:** `tests/MAP.md`. Only a suite ticket may change it.
+- **Protected surface:** none. PAD manages `.claude/workflow/**`, `.claude/settings.json`, CI
+  workflow files, `.pre-commit-config.yaml`, the suite map and the adapter's `protected-files`;
+  list a repo's additions here as backticked globs. Only a suite ticket may change them
+  (`task-submit.sh`: `needs-suite-owner: <path>`).
+
+The tiers table, when there is one:
+
+| Tier | Adapter selector | Per-test kill | Budget | Declared GB | Workers |
+|---|---|---|---|---|---|
+| fast | `<selector>` | 60 | 5 min | 0.5 | 4 |
+| heavy | `<selector>` | 300 | 20 min | 2 | 2 |
+| epic | `<selector>` | 900 | 60 min | 4 | 1 |

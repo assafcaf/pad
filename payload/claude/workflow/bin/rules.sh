@@ -9,7 +9,9 @@
 #
 # A rule file starts with frontmatter between two `---` lines:
 #   name:        the file's name without .md
-#   kind:        test-removal | test-authoring | practice
+#   kind:        test-removal | test-authoring | practice | tier-contract | suite-structure |
+#                acceptance | repo-lint
+#   warrant:     required: one line naming the failure that earned the rule
 #   applies-to:  comma-separated agents (`orchestrator` is /pad-run itself)
 #   check:       optional; a script in the rules folder. Required for test-removal, not
 #                allowed for practice
@@ -17,8 +19,10 @@
 #                rule's removals need no REMOVALS line in the owner's READY block
 # The body is the guidance the named agents follow.
 #
-# Each kind is enforced at one point: test-removal by weakened-tests.sh, test-authoring by
-# task-submit.sh, practice by the agents reading it. PAD_RULES_DIR overrides the folder.
+# Each kind is enforced at one point: test-removal by weakened-tests.sh, test-authoring and
+# repo-lint by task-submit.sh (repo-lint over the whole diff; rules/optional/ is never read),
+# practice by the agents reading it, tier-contract and suite-structure by the suite owner and
+# the test-designer, acceptance by the acceptance grade. PAD_RULES_DIR overrides the folder.
 #
 # Exit 0, or 1 when validate finds a problem. Exit 64: usage.
 
@@ -27,7 +31,7 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 dir="${PAD_RULES_DIR:-$here/../rules}"
 agents_dir="${PAD_AGENTS_DIR:-$here/../../agents}"
-kinds="test-removal test-authoring practice"
+kinds="test-removal test-authoring practice tier-contract suite-structure acceptance repo-lint"
 
 usage() { echo "usage: rules.sh for <agent> | list <kind> | validate" >&2; exit 64; }
 
@@ -98,7 +102,7 @@ case "${1:-}" in
       [ -n "$f" ] || continue
       count=$((count + 1))
       id="$(basename "$f" .md)"
-      for k in name kind applies-to; do
+      for k in name kind applies-to warrant; do
         [ -n "$(field "$f" "$k")" ] || bad "$id" "missing $k"
       done
       nm="$(field "$f" name)"
@@ -117,6 +121,8 @@ case "${1:-}" in
         [ -f "$dir/$c" ] || bad "$id" "check $c does not exist in $dir"
       elif [ "$kind" = test-removal ]; then
         bad "$id" "test-removal needs a check"
+      elif [ "$kind" = repo-lint ]; then
+        bad "$id" "repo-lint needs a check"
       fi
       claim="$(field "$f" claim)"
       case "$claim" in ''|required|optional) ;; *) bad "$id" "claim must be required or optional" ;; esac

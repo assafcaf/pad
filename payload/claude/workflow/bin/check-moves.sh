@@ -296,5 +296,35 @@ for req in "${REQUIRED[@]}"; do
   fi
 done
 
+# When the table has a `run-tests` row (tests run through pad-test.sh) and `## Test regime` names
+# a Runner, agents must not run the runner directly: every runner-names entry of its adapter
+# (the repo's .claude/pad-plugins/runners/<name>.sh, else the one PAD ships) must be denied.
+has_run_tests=0
+for cap in "${caps[@]}"; do [ "$cap" = "run-tests" ] && has_run_tests=1; done
+if [ "$has_run_tests" -eq 1 ]; then
+  runner="$(tr -d '\r' <"$config" | awk '/^## /{ on = ($0 ~ /^## Test regime/); next } on' |
+    sed -n 's/^[-* ]*\**Runner:\**[[:space:]]*`\{0,1\}\([A-Za-z0-9._-][A-Za-z0-9._-]*\).*/\1/p' | head -n 1)"
+  if [ -n "$runner" ]; then
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    adapter=""
+    for a in ".claude/pad-plugins/runners/$runner.sh" "$(dirname "$config")/../pad-plugins/runners/$runner.sh" \
+             "$here/../runners/$runner.sh"; do
+      [ -f "$a" ] && { adapter="$a"; break; }
+    done
+    if [ -z "$adapter" ]; then
+      printf 'MOVES FAIL run-tests: no runner adapter runners/%s.sh to read runner-names from\n' "$runner"
+      failed=1
+    else
+      while IFS= read -r name; do
+        name="$(printf '%s' "$name" | tr -d '\r')"
+        [ -n "$name" ] || continue
+        any_match "$name" ${deny[@]+"${deny[@]}"} && continue
+        printf 'MOVES FAIL run-tests: %s is not denied — add "Bash(%s:*)" to permissions.deny\n' "$name" "$name"
+        failed=1
+      done <<<"$(bash "$adapter" runner-names 2>/dev/null)"
+    fi
+  fi
+fi
+
 [ "$failed" -eq 0 ] || exit 1
 echo "MOVES OK"

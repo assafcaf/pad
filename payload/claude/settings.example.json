@@ -47,6 +47,7 @@
       "Bash(bash .claude/workflow/bin/merge-strategies.sh *)",
       "Bash(bash .claude/workflow/bin/merge-ticket.sh *)",
       "Bash(bash .claude/workflow/bin/merge.sh *)",
+      "Bash(bash .claude/workflow/bin/pad-test.sh*)",
       "Bash(bash .claude/workflow/bin/suite-slot.sh *)",
       "Bash(bash .claude/workflow/bin/cleanup-run.sh *)"
     ],

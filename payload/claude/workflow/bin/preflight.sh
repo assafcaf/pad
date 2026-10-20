@@ -30,6 +30,10 @@
 #   gitignore             .gitignore covers .work/ and .claude/worktrees/
 #   line-endings          core.autocrlf and .gitattributes agree: not autocrlf=true with
 #                         `eol=lf`, nor autocrlf false/input with `eol=crlf`
+#   regime                `## Test regime` keeps PAD's managed values: no tier removed, no
+#                         Per-test kill, Repeat limit, Ticket run limit or Flaky quarantine relaxed
+#   host                  when host.md exists, the containment self-test still passes; adapter
+#                         extras that do not work are one `PREFLIGHT NOTE` line, not a failure
 #   render                every Surfaces row with a Render command renders once: render-check.sh
 #                         --surface <name> --route / --viewport <the row's Viewport> to a temp
 #                         file must print RENDER OK. render-check.sh reads the worktree's own
@@ -319,6 +323,72 @@ check_rules() {
   done <<<"$(PAD_RULES_DIR=.claude/workflow/rules PAD_AGENTS_DIR=.claude/agents bash "$here/rules.sh" validate 2>&1)"
 }
 
+# regime_section: the lines of the last `## Test regime` section of the config.
+regime_section() {
+  [ -f "$config" ] || return 0
+  tr -d '\r' <"$config" | awk '/^## /{ on = ($0 ~ /^## Test regime/); if (on) buf = ""; next } on { buf = buf $0 "\n" } END { printf "%s", buf }'
+}
+
+# check_regime: a repo's `## Test regime` may add to PAD's managed values and tighten them, never
+# remove or relax one: Per-test kill (fast 60, heavy 300, epic 900 s), Repeat limit 3, Ticket run
+# limit 12, Flaky quarantine 8 tests, 7 days. `Tiers: none` replaces the tiers table.
+check_regime() {
+  local sec v n d t k rows
+  sec="$(regime_section)"
+  [ -n "$sec" ] || return 0
+  # kv <key>: the text after `**Key:**` on its line.
+  kv() { printf '%s\n' "$sec" | sed -n "s/^[-* ]*\**$1:\**[[:space:]]*//p" | head -n 1; }
+  v="$(kv 'Repeat limit' | tr -d '`' | sed 's/[^0-9].*//')"
+  [ -z "$v" ] || [ "$v" -le 3 ] || fail regime "Repeat limit $v exceeds PAD's managed 3"
+  v="$(kv 'Ticket run limit' | tr -d '`' | sed 's/[^0-9].*//')"
+  [ -z "$v" ] || [ "$v" -le 12 ] || fail regime "Ticket run limit $v exceeds PAD's managed 12"
+  v="$(kv 'Flaky quarantine' | tr -d '`')"
+  if [ -n "$v" ]; then
+    n="$(printf '%s' "$v" | sed -n 's/^[^0-9]*\([0-9][0-9]*\) *tests.*/\1/p')"
+    d="$(printf '%s' "$v" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) *days.*/\1/p')"
+    { [ -z "$n" ] || [ "$n" -le 8 ]; } || fail regime "Flaky quarantine of $n tests exceeds PAD's managed 8 tests"
+    { [ -z "$d" ] || [ "$d" -le 7 ]; } || fail regime "Flaky quarantine of $d days exceeds PAD's managed 7 days"
+  fi
+  printf '%s\n' "$sec" | grep -Eq '^[-* ]*\**Tiers:\**[[:space:]]*`?none' && return 0
+  rows="$(printf '%s\n' "$sec" | awk -F'|' '
+    function trim(s) { gsub(/^[ \t`]+|[ \t`]+$/, "", s); return s }
+    /^[ \t]*\|/ {
+      if (!hdr) { for (i = 2; i < NF; i++) col[trim($i)] = i; hdr = 1; next }
+      if ($0 ~ /^[ \t]*\|[ \t:]*-/) next
+      k = trim($(col["Per-test kill"])); sub(/[^0-9].*/, "", k)
+      print trim($(col["Tier"])) "\t" k
+    }')"
+  [ -n "$rows" ] || return 0
+  for t in fast:60 heavy:300 epic:900; do
+    k="$(printf '%s\n' "$rows" | awk -F'\t' -v t="${t%%:*}" '$1 == t { print $2; found = 1; exit } END { if (!found) print "missing" }')"
+    if [ "$k" = missing ]; then
+      fail regime "the managed tier ${t%%:*} is removed"
+    elif [ -n "$k" ] && [ "$k" -gt "${t##*:}" ]; then
+      fail regime "Per-test kill of tier ${t%%:*} is $k s, above PAD's managed ${t##*:}"
+    fi
+  done
+}
+
+# check_host: when the host step has written host.md, containment still works here
+# (PAD_SELF_TEST_CMD, else pad-proc.sh self-test), and the adapter extras that do not work are
+# noted, not failed.
+check_host() {
+  local hm=".claude/workflow/host.md" out extras missing="" e
+  [ -f "$hm" ] || return 0
+  if [ -n "${PAD_SELF_TEST_CMD:-}" ]; then
+    out="$(bash -c "$PAD_SELF_TEST_CMD" 2>&1)"
+  else
+    out="$(bash "$here/pad-proc.sh" self-test 2>&1)"
+  fi || fail host "containment self-test failed: $(printf '%s' "$out" | tr '\r\n' '  ' | cut -c1-300)"
+  extras="$(sed -n 's/^Adapter extras:[[:space:]]*//p' "$hm" | tr -d '\r' | head -n 1)"
+  if [ -n "$extras" ]; then
+    for e in contract-fast contract-heavy leak-check mutation; do
+      [[ " $extras " == *" $e "* ]] || missing="${missing:+$missing, }$e"
+    done
+    [ -z "$missing" ] || echo "PREFLIGHT NOTE adapter extras missing: $missing"
+  fi
+}
+
 check_render() {
   local n r v name cmd vp out last
   while IFS="$US" read -r n r v; do
@@ -378,8 +448,10 @@ if [ -f "$config" ]; then
   check_lockfile
   check_models
   check_plugins
+  check_regime
   check_render
 fi
+check_host
 check_rules
 check_merge_strategy
 check_executable

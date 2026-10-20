@@ -2,6 +2,7 @@
 name: register-by-file
 kind: practice
 applies-to: owner, test-designer
+warrant: a hand-edited central list made every task that added an entry conflict on the same lines
 ---
 
 A new entry (a command, a plugin, a task family, a route) goes in a file of its own that the

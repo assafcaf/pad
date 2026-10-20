@@ -2,6 +2,7 @@
 name: read-channel-first
 kind: practice
 applies-to: owner, test-designer
+warrant: building against a name a peer had already changed caused avoidable merge conflicts
 ---
 
 Read the run's channel before you write anything and again before every rebase:
