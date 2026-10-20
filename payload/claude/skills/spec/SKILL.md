@@ -87,7 +87,7 @@ Who needs what, and why now. Three sentences at most.
   storage, sync, auth, migrations, data model. Start from the config's protected paths.
 
 ## Domains
-- <domain>: one line on what it covers. Bullets that orient the ticket split, not tasks.
+- <domain>: what it covers and what it Owns (files, scripts, skills). Binding: `/tickets` gives each domain one ticket and one owner, end to end, and `plan-check.sh` fails a plan that disagrees.
 
 ## Outcomes
 Only for areas whose reference is tests.
