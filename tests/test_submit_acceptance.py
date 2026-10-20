@@ -255,3 +255,81 @@ def test_o50_a_section_number_with_more_digits_is_cited(tmp_path, run_script):
     r = _verdicts(run_script, tmp_path, _line(V1, why="§10 per wave"), V1)
     assert r.returncode == 0, r.stdout + r.stderr
     assert _last(r) == "VERDICT OK"
+
+
+# --- O29 through task-submit.sh: the grade runs the acceptance ids at the red commit and at the head ---
+
+import sys  # noqa: E402
+
+import pytest  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "fixtures" / "runners"))
+from harness import Harness  # noqa: E402
+
+# An adapter double whose results depend on the commit under test: the worktree holds
+# src/impl.py at the head and not at the red commit.
+COMMIT_KEYED_ADAPTER = """#!/usr/bin/env bash
+verb="${1:-}"
+[ $# -gt 0 ] && shift
+echo "$verb $*" >> "${FAKE_LOG:?}"
+case "$verb" in
+  run)
+    rd="${1:-}"; mkdir -p "$rd"
+    which=red; [ -f src/impl.py ] && which=head
+    cp "${FAKE_STATE:?}/results.$which" "$rd/results"
+    grep -qE '^(failure|error) ' "$rd/results" && exit 1
+    exit 0 ;;
+  results) cat "${1:?}/results" ;;
+  runner-names) echo fake ;;
+  protected-files) echo 'conftest.fake' ;;
+  acceptance-pattern) echo "**/test_*$(printf '%s' "${1:-}" | tr '-' '_')*.py" ;;
+  capabilities) echo "contract-fast leak-check shuffle" ;;
+  *) exit 64 ;;
+esac
+"""
+TKEY = "E9-T1"
+TID = "tests/test_acc_E9_T1.py::test_x"
+TICKET_BODY = "## Outcome\nx\n\n## Domain\nsuite\n\n## Owns\n- src/impl.py\n\n## Touches\nnone\n\n## Protected\nno\n"
+
+
+def _submit_through_task_submit(repo, tmp_path, run_script, red_results: str, head_results: str):
+    h = Harness(repo, tmp_path)
+    (repo / ".claude/pad-plugins/runners/fake.sh").write_bytes(COMMIT_KEYED_ADAPTER.encode("utf-8"))
+    git("add", "-A", cwd=repo)
+    git("commit", "-q", "-m", "keyed adapter", cwd=repo)
+    epic = git("rev-parse", "HEAD", cwd=repo)
+    (h.state / "results.red").write_text(red_results, encoding="utf-8")
+    (h.state / "results.head").write_text(head_results, encoding="utf-8")
+    red = _commit(
+        repo, {"tests/test_acc_E9_T1.py": "def test_x():\n    assert False\n"},
+        f"test({TKEY}): O1 [red]\n\nOUTCOMES:\n- O1: {TID} | expects: prefilled name",
+    )
+    head = _commit(repo, {"src/impl.py": "X = 1\n"}, f"feat({TKEY}): impl")
+    ticket = tmp_path / f"{TKEY}.md"
+    ticket.write_text(TICKET_BODY, encoding="utf-8")
+    r = run_script(
+        "task-submit.sh", epic, red, head, "--test-paths", "tests/", "--ticket", ticket.as_posix(),
+        cwd=repo, env=h.env(),
+    )
+    return h, r
+
+
+@pytest.mark.slow
+def test_o29_task_submit_fails_red_grade_0_when_the_acceptance_test_errors_at_red(repo, tmp_path, run_script):
+    h, r = _submit_through_task_submit(
+        repo, tmp_path, run_script,
+        f"error {TID} ImportError: prefilled name\n", f"pass {TID}\n",
+    )
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert _last(r) == f"SUBMIT FAIL red-grade 0: {TID}"
+
+
+@pytest.mark.slow
+def test_o29_task_submit_grades_failure_at_red_and_pass_at_head_by_running_both_commits(repo, tmp_path, run_script):
+    h, r = _submit_through_task_submit(
+        repo, tmp_path, run_script,
+        f"failure {TID} AssertionError: prefilled name missing\n", f"pass {TID}\n",
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _last(r) == "SUBMIT OK"
+    assert len(h.calls("run")) >= 2, h.verbs()
