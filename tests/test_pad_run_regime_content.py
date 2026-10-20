@@ -60,26 +60,19 @@ def test_o30_a_wave_with_no_acceptance_tests_dispatches_nothing(payload_text):
         "the skill does not say a wave with no acceptance tests dispatches nothing"
 
 
-# --- O53: a pause or the end stops the watchdog and sweeps -----------------------------------
+# --- C1 (E4): no watchdog, no sweep loop, no previews in /pad-run -----------------------------
 
-def test_o53_the_run_starts_the_watchdog(payload_text):
-    flat_text = flat(payload_text(SKILL))
-    assert re.search(r"cap-watch\.sh <run id>|cap-watch\.sh --run|start[^.]*cap-watch\.sh", flat_text), \
-        "the skill never starts cap-watch.sh"
-
-
-def test_o53_a_pause_stops_the_watchdog_and_sweeps(payload_text):
-    para = _pause_paragraph(payload_text(SKILL))
-    assert "cap-watch" in para, para
-    assert re.search(r"\bsweep", para), para
-
-
-def test_o53_the_end_of_the_run_stops_the_watchdog_and_sweeps(payload_text):
+# ported-from: tests/test_pad_run_regime_content.py::test_o53_the_run_starts_the_watchdog
+# ported-from: tests/test_pad_run_regime_content.py::test_o53_a_pause_stops_the_watchdog_and_sweeps
+# ported-from: tests/test_pad_run_regime_content.py::test_o53_the_end_of_the_run_stops_the_watchdog_and_sweeps
+def test_the_skill_names_no_watchdog_or_preview(payload_text):
     text = payload_text(SKILL)
-    end = flat(section(text, "4. Finish the epic"))
-    assert "cap-watch" in end, end
-    assert re.search(r"\bsweep", end), end
+    for word in ("cap-watch", "watchdog", "preview"):
+        assert not re.search(word, text, re.I), f"the skill still names {word}"
 
 
-def test_o53_what_was_swept_is_logged_as_swept_n_processes(payload_text):
-    assert "SWEPT <n> processes" in flat(payload_text(SKILL))
+def test_a_pause_and_the_end_stop_nothing_and_start_no_watchdog(payload_text):
+    para = _pause_paragraph(payload_text(SKILL))
+    assert not re.search(r"watchdog|cap-watch", para, re.I), para
+    end = flat(section(payload_text(SKILL), "4. Finish the epic"))
+    assert not re.search(r"watchdog|cap-watch|preview", end, re.I), end

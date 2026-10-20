@@ -31,12 +31,14 @@ def test_o17_merge_flag_is_accepted_and_written_to_the_run_file_at_start(payload
     assert any(".work/runs/<run id>/merge-strategy" in flat(text) for _ in hits)
 
 
-def test_o17_ready_row_runs_merge_sh_in_the_background(payload_text):
+# ported-from: tests/test_pad_run_merge_content.py::test_o17_ready_row_runs_merge_sh_in_the_background
+def test_o17_ready_row_hands_merge_sh_to_a_ci_agent_in_the_foreground(payload_text):
     rows = [l for l in payload_text(SKILL).splitlines() if l.lstrip().startswith("| Owner `READY")]
     assert len(rows) == 1
     row = rows[0]
     assert "merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>" in row
-    assert "run_in_background" in row
+    assert "<KEY>-ci" in row
+    assert "run_in_background" not in row
 
 
 def test_o17_each_result_line_is_acted_on(payload_text):
