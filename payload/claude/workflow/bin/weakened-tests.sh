@@ -14,8 +14,9 @@
 # removal whose rules all have `claim: required` must be claimed, naming one of the rules that
 # explains it, and every claim must name a removal. Each difference prints `MISMATCH ...`.
 #
-# Patterns default to pytest; override for another stack:
-#   WEAK_ADDED   ERE matched against added lines   (default: skip/xfail markers, pytest.skip()
+# Patterns default to the common skip and definition forms; a runner's adapter or the repo
+# overrides them for its stack:
+#   WEAK_ADDED   ERE matched against added lines   (default: mark.skip/mark.xfail, .skip()
 #   WEAK_TODO    ERE for an added TODO             (default: TODO; empty turns it off)
 #   TEST_DEF     sed ERE capturing a test name in \2 (default: python `def test_*`)
 #
@@ -38,7 +39,7 @@ if [ "${#pos[@]}" -ne 2 ]; then
 fi
 base="${pos[0]}"
 head="${pos[1]}"
-added_re="${WEAK_ADDED:-(pytest\.mark\.(skip|xfail)|pytest\.skip\()}"
+added_re="${WEAK_ADDED:-(mark\.(skip|xfail)|\.skip\()}"
 todo_re="${WEAK_TODO-TODO}"
 def_re="${TEST_DEF:-[[:space:]]*(async )?def (test_[A-Za-z0-9_]+)}"
 bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
