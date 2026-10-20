@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run a full-suite command holding one of N suite slots, so parallel tasks can't overload the host.
 #
-#   suite-slot.sh [--priority merge] -- <cmd...>
+#   suite-slot.sh [--priority merge] [--estimate-gb <n>] [--workers <n>] -- <cmd...>
 #
 # Slots are directories `<git common dir>/pad-locks/slots/<i>` (mkdir is atomic everywhere; Git
 # Bash has no flock), each holding the owner's pid, so a slot whose owner died is reclaimed.
@@ -14,16 +14,29 @@
 # PAD_HOST_SLOTS_DIR, else ~/.pad/slots, are taken after the repo slot and released with it, and
 # follow the same reclaim and merge-priority rules.
 #
+# Admission (only when --estimate-gb or --workers is given; a bare run keeps the slots alone): once
+# it holds its slots the run waits until machine memory in use (pad-proc.sh mem-in-use) plus its
+# estimate is within the cap (pad-proc.sh cap), and the admitted runs' workers plus its own are
+# within cores x the cap's share of total memory. It prints `CAP WAIT <in use>/<cap>` on stderr at
+# once and then every PAD_CAP_WAIT_INTERVAL seconds (60), re-checking every half second. An
+# estimate above the whole cap, or workers above the whole budget, start only when no other run
+# is admitted. Admitted runs are marked by an `admitted` file (estimate, workers) in their slot
+# dir, which the others count. An unreadable memory probe exits 2 with the reason.
+#
 # Exits with <cmd>'s exit code; 64 on usage, 2 outside a git repo.
 
 set -uo pipefail
 
-usage() { echo "usage: suite-slot.sh [--priority merge] -- <cmd...>" >&2; exit 64; }
+usage() { echo "usage: suite-slot.sh [--priority merge] [--estimate-gb <n>] [--workers <n>] -- <cmd...>" >&2; exit 64; }
 
 priority=task
+estimate=""
+workers=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --priority) [ "${2:-}" = merge ] || usage; priority=merge; shift 2 ;;
+    --estimate-gb) estimate="${2:-}"; case "$estimate" in ''|*[!0-9.]*) usage ;; esac; shift 2 ;;
+    --workers) workers="${2:-}"; case "$workers" in ''|*[!0-9]*) usage ;; esac; shift 2 ;;
     --) shift; break ;;
     *) usage ;;
   esac
@@ -129,6 +142,57 @@ if [ "$hslots" -ge 1 ]; then
   hheld="$(acquire "$hostdir" "$hslots" "$hostdir/merge-waiting")"
   if [ -n "$hmarker" ]; then rm -f "$hmarker"; hmarker=""; fi
 fi
+
+# admit: wait until the cap and the worker budget have room, then mark this run admitted.
+admit() {
+  # shellcheck source=pad-proc.sh
+  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pad-proc.sh"
+  local cap total cores budget est wk interval last=0 now used n owk ok d p w lock="$locks/admit.lock"
+  cap="$(pp_cap)" || exit 2
+  total="$(pp_total_gb)" || exit 2
+  cores="$(pp_cores)"
+  budget="$(awk -v c="$cores" -v k="$cap" -v t="$total" 'BEGIN { print (t > 0 ? c * k / t : c) }')"
+  est="${estimate:-0}"; wk="${workers:-0}"
+  interval="${PAD_CAP_WAIT_INTERVAL:-60}"
+  while :; do
+    until mkdir "$lock" 2>/dev/null; do
+      reap "$lock"
+      sleep 0.05
+    done
+    echo $$ > "$lock/pid"
+    used="$(pp_mem_in_use)" || { rm -rf "$lock"; exit 2; }
+    # the other admitted runs, once each (a run holds a repo slot and maybe a host slot)
+    n=0; owk=0
+    for d in "$locks"/slots/*/; do
+      [ -f "${d}admitted" ] || continue
+      p="$(cat "${d}pid" 2>/dev/null)"
+      [ -n "$p" ] && [ "$p" != "$$" ] && kill -0 "$p" 2>/dev/null || continue
+      w="$(awk 'NR == 2' "${d}admitted")"
+      n=$((n + 1)); owk=$((owk + ${w:-0}))
+    done
+    ok=1
+    if ! pp_le "$(awk -v u="$used" -v e="$est" 'BEGIN { print u + e }')" "$cap"; then
+      if pp_le "$est" "$cap" || [ "$n" -gt 0 ]; then ok=0; fi
+    fi
+    if [ "$wk" -gt 0 ] && [ "$n" -gt 0 ] &&
+       ! pp_le "$(awk -v a="$owk" -v b="$wk" 'BEGIN { print a + b }')" "$budget"; then
+      ok=0
+    fi
+    if [ "$ok" -eq 1 ]; then
+      printf '%s\n%s\n' "$est" "$wk" > "$held/admitted"
+      rm -rf "$lock"
+      return 0
+    fi
+    rm -rf "$lock"
+    now="$(date +%s)"
+    if [ "$last" -eq 0 ] || [ $((now - last)) -ge "$interval" ]; then
+      echo "CAP WAIT $used/$cap" >&2
+      last="$now"
+    fi
+    sleep 0.5
+  done
+}
+if [ -n "$estimate" ] || [ -n "$workers" ]; then admit; fi
 
 "$@"
 code=$?
