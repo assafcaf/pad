@@ -102,6 +102,7 @@ tier_budget() {
     /^\|/ { if (trim($2) == t) { print trim($5); exit } }'
 }
 
+[ "$tiered" -eq 0 ] || failed_legacy=0   # under tiers, failures come from the adapter alone
 tier=""
 case "$gate_opt" in
   fast) if [ "$tiered" -eq 1 ]; then tier=fast; gate_opt=tiered; else gate_opt=full; fi ;;

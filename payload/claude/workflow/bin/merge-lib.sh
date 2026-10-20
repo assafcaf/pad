@@ -74,9 +74,14 @@ flake_file() {
 }
 # failed_ids: the ids of the failing tests the gate output in $log names. A failure is a line of
 # the adapter's results vocabulary (`failure <id> ...`, `error <id> ...`, which pad-test.sh prints
-# for a tier run); `FAILED <id> ...` is read for the gates whose command is the repo's own.
+# for a tier run). Fallback, only while failed_legacy is 1 (the default: the `Tiers: none` gates,
+# whose command is the repo's own): `FAILED <id> ...` lines are read too. merge-gate.sh sets
+# failed_legacy=0 under a regime with tiers, where failures come from the adapter alone.
+failed_legacy=1
 failed_ids() {
-  sed -n -E 's/^(failure|error|FAILED) ([^ ]+).*/\2/p' "$log" | sort -u
+  local words='failure|error'
+  [ "$failed_legacy" -eq 0 ] || words='failure|error|FAILED'
+  sed -n -E "s/^($words) ([^ ]+).*/\\2/p" "$log" | sort -u
 }
 # failed_tests: the failing ids that name one test (`<file>::<test>`).
 failed_tests() {
@@ -128,13 +133,14 @@ lw_tree() {
 lw_pid=""; lw_pid2=""; lw_dir=""; lw_root=""
 lw_start() {
   lw_root="$1"
+  local host=$$   # the loops end with their starter, even when it is killed
   lw_dir="$(mktemp -d)" || return 0
   : > "$lw_dir/known"; : > "$lw_dir/orphans"
   mkfifo "$lw_dir/nap" 2>/dev/null
   # The ticker: one listing a tick, the new processes appended to `known`.
   (
     seen=" "
-    while :; do
+    while kill -0 "$host" 2>/dev/null; do
       while read -r p q cmd; do
         case "$seen" in *" $p "*) continue ;; esac
         seen="$seen$p "
@@ -142,7 +148,7 @@ lw_start() {
       done <<LW
 $(lw_tree "$lw_root")
 LW
-      sleep 0.2
+      read -r -t 0.2 <> "$lw_dir/nap" 2>/dev/null || sleep 0.2
     done
   ) >/dev/null 2>&1 &
   lw_pid=$!
@@ -151,7 +157,7 @@ LW
     nap=0
     if [ -p "$lw_dir/nap" ] && exec 9<>"$lw_dir/nap"; then nap=1; fi
     kp=(); kq=(); done_n=0
-    while :; do
+    while kill -0 "$host" 2>/dev/null; do
       n=0
       while read -r p q _; do
         n=$((n + 1))
