@@ -119,14 +119,20 @@ def test_run_files_live_in_the_main_checkout(payload_text):
 # Landing a READY
 
 
-# ported-from: tests/test_pad_run_content.py::test_ready_runs_one_background_merge_task_with_protected_ticket_and_run
-def test_ready_runs_one_background_merge_with_the_run_and_the_shas(payload_text):
+# ported-from: tests/test_pad_run_content.py::test_ready_runs_one_background_merge_with_the_run_and_the_shas
+def test_ready_dispatches_a_ci_agent_named_key_ci_never_a_background_merge(payload_text):
     row = report_row(payload_text(SKILL), "Owner `READY")
-    assert row.count("merge.sh") == 1, row
-    assert "bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>" in row
-    assert "in the background (`run_in_background`), and end your turn" in row
-    assert "That is the whole hand-off: one turn" in row
+    assert "<KEY>-ci" in row, row
+    assert "`ci` agent" in row, row
+    assert "merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>" in row
+    assert "run_in_background" not in row, row
     assert "merge-task.sh" not in row
+
+
+def test_the_skill_never_runs_a_merge_with_run_in_background(payload_text):
+    for para in re.split(r"\n\s*\n", payload_text(SKILL)):
+        if "merge" in para and "run_in_background" in para:
+            assert re.search(r"never[^.]*run_in_background", flat(para)), flat(para)
 
 
 def test_a_visual_ticket_merge_adds_capture_with_render_check(payload_text):

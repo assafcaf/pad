@@ -22,7 +22,7 @@ them. The strategies' building blocks get `--protected "<the config's Protected 
 run's strategy file, `.work/runs/<run id>/merge-strategy`, with `Write`. Without the flag the
 effective setting is the config's `Merge strategy:` line, else `dynamic`.
 
-`--cap <GB|%>` is the run's memory cap (`PAD_MEMORY_CAP`), exported for the watchdog and every
+`--cap <GB|%>` is the run's memory cap (`PAD_MEMORY_CAP`), checked at admission by every
 `pad-test.sh` of the run; without it, the cap is `host.md`'s `Memory cap`, else 85% of total memory.
 
 **The run's merge strategy.** `merge.sh` reads the file at the start of every pass, so a rewrite
@@ -52,12 +52,13 @@ agents: owners talk to each other directly and through the run's channel.
 | `owner` | One ticket from start to merged: its tests (unless protected), its code, its gates, its rebase | You, one per ticket |
 | `test-designer` | A protected ticket's failing tests + stubs, committed red | Its owner, as a blocking child |
 | `evaluator` | A fresh-context verdict on a visual ticket's render against its reference | Its owner |
+| `ci` | One ticket's merge in its own foreground (`merge.sh --ready`): reports the script's last line, triages a red gate once, never edits code or tests | You, one `<KEY>-ci` per `READY` |
 | `tracker` | Tracker reads, ticket creation and links | You and `/tickets` only. Status and comment writes go through `ledger.sh`, for every adapter |
 | `memory-curator` | Keeps the agents' persistent memory clean: keeps, tightens, merges or deletes lessons, never adds them | You, once, at the end of the epic |
 | `suite-owner` | Keeps the test suite healthy: the acceptance tests a wave added, folded into the suite's own shape (sonnet) | You, one `<epic key>-suite-<n>` ticket per wave that added acceptance tests |
 
 You pay per hand-off, not per work: every turn you take re-reads your whole context. So a
-ticket costs you one dispatch, one background `merge.sh` call per `READY`, and nothing in between.
+ticket costs you one dispatch, one `ci` dispatch per `READY`, and nothing in between.
 Structure lives in scripts and files, not in your turns.
 
 **Names and addresses.** Every dispatch gets the fixed name the `addressed-dispatch` rule
@@ -96,10 +97,8 @@ resumes from where it stopped, and fill any slot its dependents open.
 **Pause only when nothing is runnable.** When every ticket left is parked, failed or waiting on
 one of those, and no owner or merge is in flight, pause the run: send one more push notification
 saying the run is paused and which questions hold it, append `PAUSED: <keys>` to the run log,
-stop the watchdog and sweep (`bash .claude/workflow/bin/pad-test.sh --sweep` after removing
-`.work/runs/<run id>/cap-watch.pid`, which ends `cap-watch.sh`; log what it killed as
-`SWEPT <n> processes`), and end your turn. The next answer resumes the run: start the watchdog
-again (section 2, step 7).
+sweep (`bash .claude/workflow/bin/pad-test.sh --sweep`; log what it killed as
+`SWEPT <n> processes`), and end your turn. The next answer resumes the run.
 
 **Log every halt with `halt-log.sh`.** When you park a ticket, and when you pause the run, run
 `bash .claude/workflow/bin/halt-log.sh <run id> <KEY> <class> "<cause>" pending`, with `-` as
@@ -179,11 +178,7 @@ memory.
    `PREFLIGHT FAILED <n>`, stop before any wave and show the operator its `PREFLIGHT FAIL`
    lines (an old PAD version names `/setup-workflow upgrade`). Then run the full suite and
    lint. Log the results with the head sha. Red means stop: later failures can't be
-   attributed. Once green, start each configured preview with
-   `bash .claude/workflow/bin/preview.sh start --surface <name> --worktree <epic worktree>` (a
-   surface with no `Preview start` is a no-op), so each merge shows up live for the operator.
-   Don't restart it yourself: the merge stops a running preview before setup and starts
-   it again whenever a merge touches the surface's `Restart when changed` paths.
+   attributed. Once green, go on.
 6. **Write the brief.** Fill `.claude/workflow/brief-template.md` into
    `.work/runs/<run id>/brief.md` with `Write`: links to the scope, the references and the
    decision record; the system already in the code that owners must reuse; the rule names
@@ -192,12 +187,6 @@ memory.
    Read every plugin the config's `## Plugins` table lists with `Extends` `pad-run`
    (`.claude/workflow/plugins.md`) and carry out the steps it adds where it says, and link in
    the brief each plugin that extends `owner`.
-7. **Start the watchdog.** Export `PAD_MEMORY_CAP` when `--cap` was given, then start
-   `bash .claude/workflow/bin/cap-watch.sh <run id>` in the background, from your own long-lived
-   shell: it ends on its own when its starter is gone or when `.work/runs/<run id>/cap-watch.pid`
-   is removed. It is the only thing that kills a test run for memory; admission
-   (`suite-slot.sh`) still applies without it. Log `WATCHDOG started`. A pause (above) and the
-   end of the run (section 4) stop it and sweep.
 
 ## 3. Run waves until no ticket is left
 
@@ -228,12 +217,12 @@ result line for every ticket it lands: `MERGED|REJECTED|CONFLICT|ERROR <KEY>`. N
 
 | Report | You |
 |---|---|
-| Owner `READY <KEY> <TASK_HEAD> <RED>` | Run `bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>` in the background (`run_in_background`), and end your turn. That is the whole hand-off: one turn. The commands, derived files and a visual ticket's render capture come from the config and the ticket file |
+| Owner `READY <KEY> <TASK_HEAD> <RED>` | Dispatch a `ci` agent named `<KEY>-ci` with the run id and the report's three fields: it runs `bash .claude/workflow/bin/merge.sh --run <run id> --ready <KEY> <TASK_HEAD> <RED>` in its own foreground and reports that script's last line unchanged. You never run a merge yourself. End your turn. That is the whole hand-off: one turn. The commands, derived files and a visual ticket's render capture come from the config and the ticket file |
 | `merge.sh` `QUEUED <KEY>` | Nothing: another call is draining the queue and lands the ticket in a later pass. Its result line arrives from that call |
 | `merge.sh` `MERGED <KEY> <sha>` | Nothing to write: the script recorded it (3e). If the owner's report listed `RESOURCE_PROBES`, run them (below). Fill the free slot (a). Under `dynamic`, consider a strategy switch |
 | `merge.sh` `CONFLICT …` or `REJECTED …` | `SendMessage` the owner that line unchanged. It rebases or fixes, re-gates and reports `READY` again. Under `dynamic`, consider a strategy switch |
 | `merge.sh` `REJECTED <KEY>: flaky <test>` or `FLAKE <test>` | A defect outside the ticket, so no rerun and no second `merge.sh --ready`. Write one reproduction-class fix ticket for that test through `/tickets`' lint (`plan-check.sh`), log `Ruling: fix the flake as its own ticket, a rerun hides it` without waiting for the operator, and let the ticket wait for the fix. Under `dynamic`, write `single` to the strategy file until that fix merges |
-| `merge.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the ticket. Run it once more, from a fresh start in the background; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead. A second `ERROR` is a question (above): park that ticket |
+| `merge.sh` exit 2 (`ERROR <KEY>: …`) | Infrastructure, not the ticket. Dispatch a fresh `ci` agent once more; when the error says the merge is committed locally, the fresh start is the config's `push-epic` move instead. A second `ERROR` is a question (above): park that ticket |
 | Owner `NEEDS_RULING <KEY> <question>` | Answer from the scope and the brief, append the answer to the brief's `## Rulings`, log `Ruling: <decision> — <why> — <cost if wrong>`, and `SendMessage` it to the owner. If it needs the operator, it's a question (above): park the ticket |
 | Owner `FAILED <KEY> <why>` | Record it (3e). Its dependents wait; everything else continues. **Stall rule:** a ticket that fails twice is replanned (3g), never re-dispatched as it is |
 
@@ -250,9 +239,8 @@ that isolates one ticket (below).
 with the fast tier plus the batch's acceptance tests (`merge-gate.sh --gate fast`), as before
 and inside the same lock; `Tiers: none` keeps today's `full` or `affected` gate. The heavy tier
 runs after landing, at your call: when tickets have landed since the last heavy run and the host
-is not busy (after a wave, or after N merges, as the run's cost allows), start
-`bash .claude/workflow/bin/merge-gate.sh --gate heavy --head <epic head sha> --run <run id>` in
-the background. It runs in a side worktree and never blocks the next fast batch. A
+is not busy (after a wave, or after N merges, as the run's cost allows), dispatch a `ci` agent
+(`<epic key>-ci-heavy`) to run `bash .claude/workflow/bin/merge-gate.sh --gate heavy --head <epic head sha> --run <run id>` in its foreground. It runs in a side worktree. A
 `GATE OVER-BUDGET <tier> <wall>/<budget>` line in the run log is a signal for the suite owner,
 not a rejection. A gate that ends with a process still alive prints `LEAK <pid> <command>` lines
 and `REJECTED <KEY>: leak <n>`; send the owner that line like any `REJECTED`.
@@ -314,11 +302,7 @@ so refresh the knowledge layer and write the development record after they land.
    with `--tier fast`, then `--tier heavy`, then `--tier epic`, plus lint and typecheck; otherwise the full suite and lint. Which other epic tier runs happen
    during the run is your call, as the host and the cost allow. Then
    `bash .claude/workflow/bin/surface-checks.sh`: any `SURFACES FAIL <surface>` line fails the
-   gate. Then stop each preview started at the baseline with
-   `bash .claude/workflow/bin/preview.sh stop --surface <name> --worktree <epic worktree>`, so
-   it holds no file in the worktree.
-   When the gates end, stop the watchdog (remove `.work/runs/<run id>/cap-watch.pid`) and
-   sweep (`bash .claude/workflow/bin/pad-test.sh --sweep`): no PAD process from the run is left
+   gate. When the gates end, sweep (`bash .claude/workflow/bin/pad-test.sh --sweep`): no PAD process from the run is left
    alive, and anything swept is logged `SWEPT <n> processes`.
 2. **Final review.** If config sets a level, run `/code-review <level>`; fix only correctness
    findings, test-first: one new ticket and one `owner` per fix, landed by `merge.sh --ready`. In
@@ -353,7 +337,7 @@ body, with the adapter extras `host.md` lists as missing (`Adapter extras:`).
    `project.md` or drop), its `UPSTREAM_FIXES`, its `LOCAL_CANDIDATES` (for `CLAUDE.local.md`)
    and its `REPEATED_RULINGS` (questions for the next `/tickets`), each group listed
    separately. Then have `tracker` move the epic to the review status and comment the PR URL.
-   Stop the local app if you started one.
+  
 8. **Report:** the PR URL, merged / failed counts, and every `Ruling:` line — those are the
    decisions you made on the operator's behalf.
 
@@ -364,7 +348,6 @@ The operator merges the PR, never you. When they tell you it has merged (or a la
 `bash .claude/workflow/bin/cleanup-run.sh --run <run id> --epic-branch <epic branch>`, run from
 the main checkout. It refuses unless the epic is merged (an ancestor of the default branch, or
 `gh` says the PR is `MERGED`, for a squash merge), then removes the run's worktrees, the
-epic's and the owners' local branches, the epic's remote branch, stale merge locks and preview
-pid files, and the run's directory under `.work/runs/`; `.work/tickets/` stays as the ledger.
+epic's and the owners' local branches, the epic's remote branch, stale merge locks, and the run's directory under `.work/runs/`; `.work/tickets/` stays as the ledger.
 It never removes a worktree with uncommitted changes: each `SKIP` line is one for the operator
 to look at. Report its last line.

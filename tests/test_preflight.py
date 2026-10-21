@@ -498,15 +498,11 @@ def baseline_step(skill: str) -> str:
     return step.group(1)
 
 
-def test_o39_pad_run_baseline_runs_preflight_before_the_preview_start(payload_text):
+# ported-from: tests/test_preflight.py::test_o39_pad_run_baseline_runs_preflight_before_the_preview_start
+def test_pad_run_baseline_runs_preflight_before_any_wave(payload_text):
     step = baseline_step(payload_text(SKILL))
-    run = step.find("bash .claude/workflow/bin/preflight.sh")
-    preview = step.find("preview.sh start --surface")
-    assert run != -1, step
-    assert preview != -1, step
-    assert run < preview, step
-    finish = payload_text(SKILL).split("## 4. Finish the epic", 1)[-1]
-    assert "preview.sh stop --surface <name> --worktree <epic worktree>" in finish
+    assert "bash .claude/workflow/bin/preflight.sh" in step, step
+    assert "preview" not in payload_text(SKILL).lower()
 
 
 def test_o39_pad_run_stops_before_any_wave_when_preflight_fails(payload_text):
